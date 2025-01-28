@@ -111,7 +111,7 @@ const app = express();
 
 // Configure CORS options
 const corsOptions = {
-  origin: 'http://localhost:3000', // Allow requests from this origin
+  origin: '*', // Allow requests from this origin
   credentials: true, // Allow credentials (e.g., cookies)
   optionsSuccessStatus: 200, // Set success status for preflight requests
 };
@@ -381,7 +381,7 @@ const processRecentLogs = (messages = []) => {
 
 // Start the server
 const PORT = process.env.PORT || 5000; // Use environment variable for port or default to 5000
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`); // Log server start
   console.log('Environment variables loaded:'); // Log environment variables for debugging
   console.log('GRAYLOG_HOST:', process.env.GRAYLOG_HOST);

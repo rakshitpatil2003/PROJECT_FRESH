@@ -12,6 +12,7 @@ import {
 import { keyframes } from '@emotion/react';
 import logoImage from '../assets/images/vg-logo.png';
 import backgroundImage from '../assets/images/background_2.jpg';
+import config from '../config';
 
 const fadeIn = keyframes`
   from {
@@ -69,7 +70,7 @@ const Login = () => {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${config.API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
