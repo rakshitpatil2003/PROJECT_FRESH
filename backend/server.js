@@ -111,8 +111,11 @@ const app = express();
 
 // Configure CORS options
 const corsOptions = {
-  origin: '*', // Allow requests from this origin
+  origin: ['http://localhost:3000', 'http://192.168.1.113:3000'],
   credentials: true, // Allow credentials (e.g., cookies)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  exposedHeaders: ['Authorization'],
   optionsSuccessStatus: 200, // Set success status for preflight requests
 };
 
@@ -171,22 +174,24 @@ const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
+  console.log('Received token:', token); // Debug log
+
+
   if (!token) {
+    console.log('No token provided');
     return res.status(401).json({ message: 'No token provided' });
   }
 
-  verify(token, process.env.JWT_SECRET || 'fallback_secret', {
-    issuer: 'YourAppName',
-    audience: 'YourAppAudience',
-    // Add more robust verification
-    algorithms: ['HS256']
-  }, (err, user) => {
+  verify(token, process.env.JWT_SECRET || 'VirtualGalaxy%09', (err, user) => {
     if (err) {
+      console.error('Token verification error:', err);
       if (err.name === 'TokenExpiredError') {
         return res.status(401).json({ message: 'Token expired' });
       }
       return res.status(403).json({ message: 'Invalid token' });
     }
+
+    console.log('Token verified, user:', user);
     req.user = user;
     next();
   });
@@ -197,38 +202,49 @@ app.get('/api/test', authenticateToken, (req, res) => {
   res.json({ message: 'API is working' }); // Return a simple JSON response
 });
 
+// In server.js, add this test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Server is running' });
+});
+
+
+
 // Login endpoint
+// In server.js, update the login endpoint
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
-
-  console.log('Login attempt:', { username, password }); // Debug: Log the login attempt
+  console.log('Login request received:', { username });
+  console.log('Environment variables:', {
+    ADMIN_USERNAME: process.env.ADMIN_USERNAME,
+    SERVER_PORT: process.env.PORT,
+    JWT_SECRET: process.env.JWT_SECRET
+  });
 
   try {
     if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-      const token = sign({ username }, process.env.JWT_SECRET || 'fallback_secret', {
-        expiresIn: '24h', // Token expires in 24 hours
-        // Add these for more robust token management
-        issuer: 'YourAppName',
-        audience: 'YourAppAudience'
-      });
-      console.log('Login successful, token generated:', token); // Debug: Log the generated token
+      const token = sign(
+        { username }, 
+        process.env.JWT_SECRET || 'fallback_secret',
+        { expiresIn: '24h' }
+      );
+      console.log('Login successful, sending token');
       res.json({
         success: true,
         token,
-        message: 'Login successful',
+        message: 'Login successful'
       });
     } else {
-      console.log('Invalid credentials'); // Debug: Log invalid credentials
+      console.log('Invalid credentials provided');
       res.status(401).json({
         success: false,
-        message: 'Invalid username or password',
+        message: 'Invalid username or password'
       });
     }
   } catch (error) {
-    console.error('Login error:', error); // Debug: Log login errors
+    console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: 'Internal server error'
     });
   }
 });
@@ -244,6 +260,12 @@ app.get('/api/logs', authenticateToken, async (req, res) => {
     const from = now - parseInt(range);
 
     const graylogUrl = `http://${process.env.GRAYLOG_HOST}:${process.env.GRAYLOG_PORT}/api/search/universal/absolute`;
+
+    console.log('Fetching logs with params:', {
+      from: new Date(from * 1000).toISOString(),
+      to: new Date(now * 1000).toISOString(),
+      streamId: process.env.GRAYLOG_STREAM_ID
+    });
 
     const response = await axios({
       method: 'get',
@@ -264,6 +286,17 @@ app.get('/api/logs', authenticateToken, async (req, res) => {
         Accept: 'application/json',
       },
     });
+
+    // Send sample data if Graylog is not available
+    if (!response.data || !response.data.messages) {
+      console.log('No data from Graylog, sending sample data');
+      return res.json({
+        logsWithGeolocation: [],
+        levelDistribution: [],
+        timeDistribution: [],
+        recentLogs: []
+      });
+    }
 
     // Log a sample message to debug
     if (response.data.messages.length > 0) {
@@ -317,12 +350,19 @@ app.get('/api/logs', authenticateToken, async (req, res) => {
       recentLogs: processedLogs.slice(0, 10),
     });
   } catch (error) {
-    console.error('Error fetching logs:', error);
-    res.status(500).json({ 
-      message: 'Error processing logs',
-      error: error.message 
+    console.error('Error in /api/logs:', error);
+    res.status(500).json({
+      message: 'Error fetching logs',
+      error: error.message
     });
   }
+});
+
+app.get('/api/verify-token', authenticateToken, (req, res) => {
+  res.json({ 
+    message: 'Token valid', 
+    user: req.user 
+  });
 });
 
 // Helper function to process log level distribution

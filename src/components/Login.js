@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../config';  // Import the API URL
 import {
   Box,
   Card,
@@ -12,7 +13,7 @@ import {
 import { keyframes } from '@emotion/react';
 import logoImage from '../assets/images/vg-logo.png';
 import backgroundImage from '../assets/images/background_2.jpg';
-import config from '../config';
+//import config from '../config';
 
 const fadeIn = keyframes`
   from {
@@ -25,19 +26,7 @@ const fadeIn = keyframes`
   }
 `;
 
-// Add global styles to ensure no scrolling or margins
-const globalStyles = {
-  html: {
-    margin: 0,
-    padding: 0,
-    overflow: 'hidden',
-  },
-  body: {
-    margin: 0,
-    padding: 0,
-    overflow: 'hidden',
-  },
-};
+
 
 const Login = () => {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
@@ -69,24 +58,37 @@ const Login = () => {
     e.preventDefault();
     setError('');
 
+    const loginUrl = `${API_URL}/api/auth/login`;
+    console.log('Attempting login to:', loginUrl); // Debug log
+
+    // Debug log
+    console.log('Attempting login to:', `${process.env.REACT_APP_API_URL}/api/auth/login`);
+    console.log('Using credentials:', { username: credentials.username });
+  
     try {
-      const response = await fetch(`${config.API_URL}/api/auth/login`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(credentials)
       });
 
+      console.log('Response status:', response.status);
+  
       const data = await response.json();
+      console.log('Response data:', data);
 
-      if (response.ok) {
+      if (response.ok && data.token) {
         localStorage.setItem('token', data.token);
+        console.log('Token stored:', data.token); // Debug log
         navigate('/dashboard');
       } else {
         setError(data.message || 'Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Login failed. Please try again.');
+      setError('Server connection failed. Please verify the server is running.');
     }
   };
 

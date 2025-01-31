@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../config';  // Add this import
 import { 
   Box, 
   Typography, 
@@ -9,7 +10,6 @@ import {
   Grid, 
   Paper,
   Button,
-  IconButton,
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import Header from '../components/Header';
@@ -39,6 +39,7 @@ const Dashboard = () => {
     navigate('/login');
   };
 
+  useEffect(() => {
   const fetchLogs = async () => {
     const token = localStorage.getItem('token');
     
@@ -51,10 +52,11 @@ const Dashboard = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`http://localhost:5000/api/logs?range=${timeRange}`, {
+      const response = await fetch(`${API_URL}/api/logs?range=${timeRange}`, {
         headers: {
-          Authorization: `Bearer ${token}`,
-        },
+          'Authorization': `Bearer ${token}`, // Make sure the format matches exactly
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -84,7 +86,7 @@ const Dashboard = () => {
     }
   };
 
-  useEffect(() => {
+  //useEffect(() => {
     fetchLogs();
     let intervalId;
 
@@ -97,7 +99,7 @@ const Dashboard = () => {
         clearInterval(intervalId);
       }
     };
-  }, [timeRange, updateInterval, isUpdating]);
+  }, [timeRange, updateInterval, isUpdating, navigate]);
 
   if (loading && !logs.logsWithGeolocation.length) {
     return (
