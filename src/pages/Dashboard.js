@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../config';  // Add this import
+import { API_URL } from '../config';
 import { 
   Box, 
   Typography, 
@@ -18,7 +18,6 @@ import KeyMetrics from '../components/Keymetrics';
 import Charts from '../components/Charts';
 import RecentLogs from '../components/RecentLogs';
 import WorldMap from '../components/WorldMap';
-import { normalizeLogs } from '../utils/normalizeLogs';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -39,44 +38,35 @@ const Dashboard = () => {
     navigate('/login');
   };
 
-  useEffect(() => {
   const fetchLogs = async () => {
     const token = localStorage.getItem('token');
-    
     if (!token) {
       navigate('/login');
       return;
     }
-
+  
     try {
-      setLoading(true);
       setError(null);
-
-      const response = await fetch(`${API_URL}/api/logs?range=${timeRange}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`, // Make sure the format matches exactly
-          'Content-Type': 'application/json'
+      const response = await fetch(
+        `${API_URL}/api/logs?range=${timeRange}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
-      });
-
-      if (response.status === 401 || response.status === 403) {
-        localStorage.removeItem('token');
-        navigate('/login');
-        return;
-      }
-
+      );
+  
       if (!response.ok) {
         throw new Error('Failed to fetch logs');
       }
-
+  
       const data = await response.json();
-      const normalizedLogs = normalizeLogs(data.logsWithGeolocation);
-
       setLogs({
-        logsWithGeolocation: normalizedLogs,
+        logsWithGeolocation: data.logs || [],
         levelDistribution: data.levelDistribution || [],
         timeDistribution: data.timeDistribution || [],
-        recentLogs: data.recentLogs || [],
+        recentLogs: data.recentLogs || [] // Add this
       });
     } catch (error) {
       console.error('Error fetching logs:', error);
@@ -86,7 +76,7 @@ const Dashboard = () => {
     }
   };
 
-  //useEffect(() => {
+  useEffect(() => {
     fetchLogs();
     let intervalId;
 
@@ -99,23 +89,13 @@ const Dashboard = () => {
         clearInterval(intervalId);
       }
     };
-  }, [timeRange, updateInterval, isUpdating, navigate]);
+  }, [timeRange, updateInterval, isUpdating]);
 
   if (loading && !logs.logsWithGeolocation.length) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
         <CircularProgress />
         <Typography variant="body1" sx={{ ml: 2 }}>Loading logs...</Typography>
-      </Box>
-    );
-  }
-
-  if (error && !logs.logsWithGeolocation.length) {
-    return (
-      <Box p={4}>
-        <Alert severity="error">
-          Error loading logs: {error}
-        </Alert>
       </Box>
     );
   }
@@ -131,7 +111,6 @@ const Dashboard = () => {
               color="primary"
               startIcon={<LogoutIcon />}
               onClick={handleLogout}
-              sx={{ ml: 2 }}
             >
               Logout
             </Button>
@@ -148,11 +127,8 @@ const Dashboard = () => {
             />
           </Paper>
 
-          {loading && logs.logsWithGeolocation.length > 0 && (
-            <Alert severity="info" sx={{ mb: 2 }}>Updating data...</Alert>
-          )}
-          {error && logs.logsWithGeolocation.length > 0 && (
-            <Alert severity="error" sx={{ mb: 2 }}>Error updating data: {error}</Alert>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>Error: {error}</Alert>
           )}
 
           <Grid container spacing={3}>
@@ -162,6 +138,15 @@ const Dashboard = () => {
                   Key Metrics
                 </Typography>
                 <KeyMetrics logs={logs.logsWithGeolocation} />
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Paper elevation={2} sx={{ p: 2 }}>
+                <Typography variant="h5" gutterBottom>
+                  Recent Logs
+                </Typography>
+                <RecentLogs logs={logs.recentLogs} />
               </Paper>
             </Grid>
 
@@ -186,15 +171,6 @@ const Dashboard = () => {
                 <Box sx={{ height: '400px', width: '100%' }}>
                   <WorldMap logs={logs.logsWithGeolocation} />
                 </Box>
-              </Paper>
-            </Grid>
-
-            <Grid item xs={12}>
-              <Paper elevation={2} sx={{ p: 2 }}>
-                <Typography variant="h5" gutterBottom>
-                  Recent Logs
-                </Typography>
-                <RecentLogs logs={logs.recentLogs} />
               </Paper>
             </Grid>
           </Grid>

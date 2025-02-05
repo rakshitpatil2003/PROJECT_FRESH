@@ -57,31 +57,31 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-
+  
     const loginUrl = `${API_URL}/api/auth/login`;
-    console.log('Attempting login to:', loginUrl); // Debug log
-
-    // Debug log
-    console.log('Attempting login to:', `${process.env.REACT_APP_API_URL}/api/auth/login`);
-    console.log('Using credentials:', { username: credentials.username });
+    console.log('Attempting login to:', loginUrl);
   
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/auth/login`, {
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(credentials)
       });
-
+  
       console.log('Response status:', response.status);
+  
+      if (!response.ok) {
+        throw new Error('Login failed');
+      }
   
       const data = await response.json();
       console.log('Response data:', data);
-
-      if (response.ok && data.token) {
+  
+      if (data.token) {
         localStorage.setItem('token', data.token);
-        console.log('Token stored:', data.token); // Debug log
+        console.log('Token stored:', data.token);
         navigate('/dashboard');
       } else {
         setError(data.message || 'Login failed');

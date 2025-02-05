@@ -17,30 +17,35 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  IconButton
+  IconButton,
+  Pagination,
+  debounce
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
-import TimeRangeSelector from '../components/TimeRangeSelector';
+import { API_URL } from '../config';
 
 const LogDetails = () => {
   const [logs, setLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeRange, setTimeRange] = useState(3600);
-  const [updateInterval, setUpdateInterval] = useState(10000);
-  const [isUpdating, setIsUpdating] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [selectedLog, setSelectedLog] = useState(null);
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (currentPage, search) => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/logs?range=${timeRange}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${API_URL}/api/logs?page=${currentPage}&limit=1000&search=${search}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Failed to fetch logs');
@@ -48,44 +53,35 @@ const LogDetails = () => {
 
       const data = await response.json();
       setLogs(data.logsWithGeolocation || []);
+      setTotalPages(data.pagination.pages);
     } catch (error) {
       console.error('Error fetching logs:', error);
       setError('Failed to fetch logs. Please try again later.');
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, []);
+
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce((searchValue) => {
+      setPage(1);
+      fetchLogs(1, searchValue);
+    }, 500),
+    []
+  );
 
   useEffect(() => {
-    fetchLogs();
-    let intervalId;
+    debouncedSearch(searchTerm);
+  }, [searchTerm, debouncedSearch]);
 
-    if (isUpdating) {
-      intervalId = setInterval(fetchLogs, updateInterval);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [timeRange, updateInterval, isUpdating, fetchLogs]);
-
-  const filteredLogs = logs.filter((log) => {
-    const searchStr = searchTerm.toLowerCase();
-    const searchableFields = [
-      log.agent?.name,
-      String(log.rule?.level),
-      JSON.stringify(log.rawLog)
-    ].join(' ').toLowerCase();
-    return searchableFields.includes(searchStr);
-  });
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+    fetchLogs(newPage, searchTerm);
+  };
 
   const formatTimestamp = (timestamp) => {
     try {
-      if (typeof timestamp === 'number') {
-        return new Date(timestamp * 1000).toLocaleString();
-      }
       return new Date(timestamp).toLocaleString();
     } catch (error) {
       console.error('Error formatting timestamp:', error);
@@ -101,7 +97,7 @@ const LogDetails = () => {
     setSelectedLog(null);
   };
 
-  if (loading) {
+  if (loading && !logs.length) {
     return (
       <Box p={4} display="flex" justifyContent="center" alignItems="center">
         <CircularProgress />
@@ -109,28 +105,13 @@ const LogDetails = () => {
     );
   }
 
-  if (error) {
-    return (
-      <Box p={4}>
-        <Alert severity="error">{error}</Alert>
-      </Box>
-    );
-  }
-
   return (
     <Box p={4}>
       <Typography variant="h4" gutterBottom>
-        Detailed Log Analysis
+        Log Details
       </Typography>
 
-      <TimeRangeSelector
-        timeRange={timeRange}
-        setTimeRange={setTimeRange}
-        updateInterval={updateInterval}
-        setUpdateInterval={setUpdateInterval}
-        isUpdating={isUpdating}
-        setIsUpdating={setIsUpdating}
-      />
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <TextField
         fullWidth
@@ -156,11 +137,11 @@ const LogDetails = () => {
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent Name</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Rule Level</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Message</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Details</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredLogs.map((log, index) => (
+            {logs.map((log, index) => (
               <TableRow key={index} hover>
                 <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
                 <TableCell>{log.agent?.name || 'N/A'}</TableCell>
@@ -180,6 +161,17 @@ const LogDetails = () => {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {totalPages > 1 && (
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+          <Pagination 
+            count={totalPages} 
+            page={page} 
+            onChange={handlePageChange} 
+            color="primary" 
+          />
+        </Box>
+      )}
 
       <Dialog
         open={Boolean(selectedLog)}
