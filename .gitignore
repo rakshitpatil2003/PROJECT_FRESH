@@ -5,7 +5,7 @@ node_modules/
 backend/geoip/GeoLite2-City.mmdb
 
 # Ignore environment variables
-.env
+#.env
 
 # Ignore IDE and OS-specific files
 .vscode/
