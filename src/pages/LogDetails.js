@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { debounce } from 'lodash';
 import {
   Box,
   Typography,
@@ -19,11 +20,12 @@ import {
   DialogContent,
   IconButton,
   Pagination,
-  debounce
+  Chip
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import { API_URL } from '../config';
+import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
 
 const LogDetails = () => {
   const [logs, setLogs] = useState([]);
@@ -34,12 +36,32 @@ const LogDetails = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [selectedLog, setSelectedLog] = useState(null);
 
+  const getRuleLevelColor = (level) => {
+    const numLevel = parseInt(level);
+    if (numLevel >= 12) return 'error';
+    if (numLevel >= 8) return 'warning';
+    if (numLevel >= 4) return 'info';
+    return 'success';
+  };
+
+  const formatTimestamp = (timestamp) => {
+    try {
+      if (typeof timestamp === 'number') {
+        return new Date(timestamp * 1000).toLocaleString();
+      }
+      return new Date(timestamp).toLocaleString();
+    } catch (error) {
+      console.error('Error formatting timestamp:', error);
+      return 'Invalid Date';
+    }
+  };
+
   const fetchLogs = useCallback(async (currentPage, search) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${API_URL}/api/logs?page=${currentPage}&limit=1000&search=${search}`,
+        `${API_URL}/api/logs?page=${currentPage}&limit=100&search=${search}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -52,7 +74,7 @@ const LogDetails = () => {
       }
 
       const data = await response.json();
-      setLogs(data.logsWithGeolocation || []);
+      setLogs(data.logs || []);
       setTotalPages(data.pagination.pages);
     } catch (error) {
       console.error('Error fetching logs:', error);
@@ -60,15 +82,14 @@ const LogDetails = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [API_URL]);
 
-  // Debounced search function
   const debouncedSearch = useCallback(
     debounce((searchValue) => {
       setPage(1);
       fetchLogs(1, searchValue);
     }, 500),
-    []
+    [fetchLogs]
   );
 
   useEffect(() => {
@@ -80,17 +101,9 @@ const LogDetails = () => {
     fetchLogs(newPage, searchTerm);
   };
 
-  const formatTimestamp = (timestamp) => {
-    try {
-      return new Date(timestamp).toLocaleString();
-    } catch (error) {
-      console.error('Error formatting timestamp:', error);
-      return 'Invalid Date';
-    }
-  };
-
   const handleClickOpen = (log) => {
-    setSelectedLog(log);
+    const parsedLog = parseLogMessage(log);
+    setSelectedLog(parsedLog);
   };
 
   const handleClose = () => {
@@ -137,27 +150,40 @@ const LogDetails = () => {
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent Name</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Rule Level</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Details</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Source IP</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Description</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {logs.map((log, index) => (
-              <TableRow key={index} hover>
-                <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
-                <TableCell>{log.agent?.name || 'N/A'}</TableCell>
-                <TableCell>{log.rule?.level || 'N/A'}</TableCell>
-                <TableCell>
-                  <Link
-                    component="button"
-                    variant="body2"
-                    onClick={() => handleClickOpen(log)}
-                    sx={{ textAlign: 'left', cursor: 'pointer' }}
-                  >
-                    View Details
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
+            {logs.map((log, index) => {
+              const parsedLog = parseLogMessage(log);
+              return (
+                <TableRow key={index} hover>
+                  <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
+                  <TableCell>{parsedLog.agent.name}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={parsedLog.rule.level} 
+                      color={getRuleLevelColor(parsedLog.rule.level)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>{parsedLog.network.srcIp}</TableCell>
+                  <TableCell>{parsedLog.rule.description}</TableCell>
+                  <TableCell>
+                    <Link
+                      component="button"
+                      variant="body2"
+                      onClick={() => handleClickOpen(log)}
+                      sx={{ textAlign: 'left', cursor: 'pointer' }}
+                    >
+                      View Details
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
@@ -190,9 +216,7 @@ const LogDetails = () => {
           </IconButton>
         </DialogTitle>
         <DialogContent>
-          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {selectedLog ? JSON.stringify(selectedLog.rawLog, null, 2) : ''}
-          </pre>
+          <StructuredLogView data={selectedLog} />
         </DialogContent>
       </Dialog>
     </Box>

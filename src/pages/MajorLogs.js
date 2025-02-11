@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -17,82 +17,60 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  IconButton
+  IconButton,
+  Chip
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
-import TimeRangeSelector from '../components/TimeRangeSelector';
+import axios from 'axios';
+import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
+import { API_URL } from '../config';
 
 const MajorLogs = () => {
   const [logs, setLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeRange, setTimeRange] = useState(3600);
-  const [updateInterval, setUpdateInterval] = useState(10000);
-  const [isUpdating, setIsUpdating] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
 
-  const fetchLogs = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/logs?range=${timeRange}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch logs');
-      }
-
-      const data = await response.json();
-      // Filter for major logs (rule level >= 12)
-      const majorLogs = data.logsWithGeolocation.filter(log => {
-        const level = log?.rule?.level;
-        const numLevel = typeof level === 'number' ? level : parseInt(level, 10);
-        return !isNaN(numLevel) && numLevel >= 12;
-      });
-      setLogs(majorLogs);
-    } catch (error) {
-      console.error('Error fetching logs:', error);
-      setError('Failed to fetch logs. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  }, [timeRange]);
-
   useEffect(() => {
-    fetchLogs();
-    let intervalId;
-
-    if (isUpdating) {
-      intervalId = setInterval(fetchLogs, updateInterval);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
+    const fetchMajorLogs = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/api/logs/major`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        setLogs(response.data);
+      } catch (error) {
+        console.error('Error fetching major logs:', error);
+        setError('Failed to fetch major logs. Please try again later.');
+      } finally {
+        setLoading(false);
       }
     };
-  }, [timeRange, updateInterval, isUpdating, fetchLogs]);
+
+    fetchMajorLogs();
+  }, []);
 
   const filteredLogs = logs.filter((log) => {
+    if (!searchTerm) return true;
+    
     const searchStr = searchTerm.toLowerCase();
-    const searchableFields = [
-      log.agent?.name,
-      String(log.rule?.level),
-      log.rule?.description,
-      JSON.stringify(log.rawLog)
-    ].join(' ').toLowerCase();
-    return searchableFields.includes(searchStr);
+    const parsedLog = parseLogMessage(log);
+    
+    return (
+      parsedLog.agent.name.toLowerCase().includes(searchStr) ||
+      parsedLog.rule.level.toString().includes(searchStr) ||
+      parsedLog.rule.description.toLowerCase().includes(searchStr) ||
+      parsedLog.network.srcIp.toLowerCase().includes(searchStr) ||
+      (parsedLog.network.destIp && parsedLog.network.destIp.toLowerCase().includes(searchStr))
+    );
   });
 
   const formatTimestamp = (timestamp) => {
     try {
-      if (typeof timestamp === 'number') {
-        return new Date(timestamp * 1000).toLocaleString();
-      }
       return new Date(timestamp).toLocaleString();
     } catch (error) {
       console.error('Error formatting timestamp:', error);
@@ -100,18 +78,17 @@ const MajorLogs = () => {
     }
   };
 
-  if (loading && !logs.length) {
+  const getRuleLevelColor = (level) => {
+    const numLevel = parseInt(level);
+    if (numLevel >= 15) return 'error';
+    if (numLevel >= 13) return 'warning';
+    return 'info';
+  };
+
+  if (loading) {
     return (
       <Box p={4} display="flex" justifyContent="center" alignItems="center">
         <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error && !logs.length) {
-    return (
-      <Box p={4}>
-        <Alert severity="error">{error}</Alert>
       </Box>
     );
   }
@@ -121,15 +98,6 @@ const MajorLogs = () => {
       <Typography variant="h4" gutterBottom sx={{ color: '#f44336' }}>
         Major Logs Analysis (Rule Level ≥ 12)
       </Typography>
-
-      <TimeRangeSelector
-        timeRange={timeRange}
-        setTimeRange={setTimeRange}
-        updateInterval={updateInterval}
-        setUpdateInterval={setUpdateInterval}
-        isUpdating={isUpdating}
-        setIsUpdating={setIsUpdating}
-      />
 
       <TextField
         fullWidth
@@ -148,8 +116,10 @@ const MajorLogs = () => {
         sx={{ mb: 3 }}
       />
 
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
       <Alert severity="info" sx={{ mb: 3 }}>
-        Showing {logs.length} major logs out of all logs
+        Showing {filteredLogs.length} major logs out of {logs.length} total major logs
       </Alert>
 
       <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
@@ -159,29 +129,40 @@ const MajorLogs = () => {
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Timestamp</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Agent Name</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Rule Level</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Source IP</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Description</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Details</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredLogs.map((log, index) => (
-              <TableRow key={index} hover>
-                <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
-                <TableCell>{log.agent?.name || 'N/A'}</TableCell>
-                <TableCell>{log.rule?.level || 'N/A'}</TableCell>
-                <TableCell>{log.rule?.description || 'N/A'}</TableCell>
-                <TableCell>
-                  <Link
-                    component="button"
-                    variant="body2"
-                    onClick={() => setSelectedLog(log)}
-                    sx={{ textAlign: 'left', cursor: 'pointer' }}
-                  >
-                    View Details
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
+            {filteredLogs.map((log, index) => {
+              const parsedLog = parseLogMessage(log);
+              return (
+                <TableRow key={index} hover>
+                  <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
+                  <TableCell>{parsedLog.agent.name}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={parsedLog.rule.level} 
+                      color={getRuleLevelColor(parsedLog.rule.level)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>{parsedLog.network.srcIp}</TableCell>
+                  <TableCell>{parsedLog.rule.description}</TableCell>
+                  <TableCell>
+                    <Link
+                      component="button"
+                      variant="body2"
+                      onClick={() => setSelectedLog(parsedLog)}
+                      sx={{ textAlign: 'left', cursor: 'pointer' }}
+                    >
+                      View Details
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
@@ -203,9 +184,7 @@ const MajorLogs = () => {
           </IconButton>
         </DialogTitle>
         <DialogContent>
-          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {selectedLog ? JSON.stringify(selectedLog.rawLog, null, 2) : ''}
-          </pre>
+          <StructuredLogView data={selectedLog} />
         </DialogContent>
       </Dialog>
     </Box>

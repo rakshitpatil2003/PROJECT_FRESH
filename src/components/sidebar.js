@@ -7,6 +7,10 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  //IconButton,
+  useTheme,
+  Switch,
+  //Typography,
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -15,17 +19,21 @@ import SecurityIcon from '@mui/icons-material/Security';
 import SpeedIcon from '@mui/icons-material/Speed';
 import ErrorIcon from '@mui/icons-material/Error';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
+import SettingsIcon from '@mui/icons-material/Settings';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
 import logoImage from '../assets/images/vg-logo.png';
 
 const drawerWidth = 240;
 
-const Sidebar = () => {
+const Sidebar = ({ toggleTheme, isDarkMode }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Log Details', icon: <AssessmentIcon />, path: '/logs' },
+    { text: 'Forensic Analysis', icon: <AssessmentIcon />, path: '/logs' },
     { text: 'Advanced Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
     { text: 'Performance Dashboard', icon: <SpeedIcon />, path: '/performance-dashboard' },
     { text: 'Security Score', icon: <SecurityIcon />, path: '/security-score' },
@@ -41,8 +49,8 @@ const Sidebar = () => {
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          backgroundColor: '#f5f5f5',
-          borderRight: '1px solid rgba(0, 0, 0, 0.12)',
+          backgroundColor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5',
+          borderRight: `1px solid ${theme.palette.divider}`,
         },
       }}
     >
@@ -51,7 +59,7 @@ const Sidebar = () => {
           p: 2, 
           display: 'flex', 
           justifyContent: 'center',
-          backgroundColor: 'white',
+          backgroundColor: theme.palette.mode === 'dark' ? '#272727' : 'white',
         }}
       >
         <img
@@ -60,7 +68,8 @@ const Sidebar = () => {
           style={{ 
             width: '200px', 
             height: 'auto',
-            margin: '20px 0'
+            margin: '20px 0',
+            filter: theme.palette.mode === 'dark' ? 'brightness(0.8)' : 'none'
           }}
         />
       </Box>
@@ -85,7 +94,9 @@ const Sidebar = () => {
                 },
               },
               '&:hover': {
-                backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                backgroundColor: theme.palette.mode === 'dark' 
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : 'rgba(25, 118, 210, 0.08)',
               },
             }}
           >
@@ -101,6 +112,31 @@ const Sidebar = () => {
           </ListItem>
         ))}
       </List>
+      <Divider />
+      <Box
+        sx={{
+          p: 2,
+          position: 'fixed',
+          bottom: 0,
+          width: drawerWidth,
+          borderTop: `1px solid ${theme.palette.divider}`,
+          backgroundColor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5',
+        }}
+      >
+        <ListItem>
+          <ListItemIcon>
+            <SettingsIcon />
+          </ListItemIcon>
+          <ListItemText primary="Theme" />
+          <Switch
+            checked={isDarkMode}
+            onChange={toggleTheme}
+            color="primary"
+            icon={<Brightness7Icon />}
+            checkedIcon={<Brightness4Icon />}
+          />
+        </ListItem>
+      </Box>
     </Drawer>
   );
 };

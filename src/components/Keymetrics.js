@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Paper, Grid } from '@mui/material';
+import { Box, Typography, Paper, Grid, Alert } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -11,6 +11,7 @@ const KeyMetrics = () => {
     majorLogs: 0,
     normalLogs: 0
   });
+  const [error, setError] = useState(null);
 
   const fetchMetrics = async () => {
     try {
@@ -23,26 +24,29 @@ const KeyMetrics = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch metrics');
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('Metrics data:', data);
       setMetrics({
         totalLogs: data.totalLogs,
         majorLogs: data.majorLogs,
         normalLogs: data.totalLogs - data.majorLogs
       });
+      setError(null);
     } catch (error) {
       console.error('Error fetching metrics:', error);
+      setError(error.message);
     }
   };
 
   useEffect(() => {
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 10000); // Update every 10 seconds
+    const interval = setInterval(fetchMetrics, 10000);
     return () => clearInterval(interval);
   }, []);
-
+   
   const metricsConfig = [
     {
       title: 'Total Logs',
@@ -69,66 +73,68 @@ const KeyMetrics = () => {
 
   return (
     <Grid container spacing={3}>
-      {metricsConfig.map((metric, index) => {
-        const { Icon } = metric;
-        return (
-          <Grid item xs={12} sm={4} key={index}>
-            <Paper
-              elevation={2}
-              sx={{
-                p: 3,
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%',
-                backgroundColor: 'white',
-                transition: 'transform 0.2s ease-in-out',
-                '&:hover': {
-                  transform: 'translateY(-4px)'
-                }
-              }}
-            >
-              <Box display="flex" alignItems="center" mb={2}>
-                <Box
-                  sx={{
-                    p: 1,
-                    borderRadius: 1,
-                    backgroundColor: metric.bgColor,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Icon
-                    sx={{
-                      color: metric.color,
-                      fontSize: 24
-                    }}
-                  />
-                </Box>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    ml: 2,
-                    color: 'text.primary',
-                    fontWeight: 600
-                  }}
-                >
-                  {metric.title}
-                </Typography>
-              </Box>
-              <Typography
-                variant="h4"
+      {error && (
+        <Grid item xs={12}>
+          <Alert severity="error">{error}</Alert>
+        </Grid>
+      )}
+      {metricsConfig.map((metric, index) => (
+        <Grid item xs={12} sm={4} key={index}>
+          <Paper
+            elevation={2}
+            sx={{
+              p: 3,
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              backgroundColor: 'white',
+              transition: 'transform 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-4px)'
+              }
+            }}
+          >
+            <Box display="flex" alignItems="center" mb={2}>
+              <Box
                 sx={{
-                  fontWeight: 'bold',
-                  color: metric.color
+                  p: 1,
+                  borderRadius: 1,
+                  backgroundColor: metric.bgColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                {metric.value.toLocaleString()}
+                <metric.Icon
+                  sx={{
+                    color: metric.color,
+                    fontSize: 24
+                  }}
+                />
+              </Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  ml: 2,
+                  color: 'text.primary',
+                  fontWeight: 600
+                }}
+              >
+                {metric.title}
               </Typography>
-            </Paper>
-          </Grid>
-        );
-      })}
+            </Box>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 'bold',
+                color: metric.color
+              }}
+            >
+              {metric.value.toLocaleString()}
+            </Typography>
+          </Paper>
+        </Grid>
+      ))}
     </Grid>
   );
 };

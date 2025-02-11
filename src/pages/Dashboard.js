@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { 
@@ -22,76 +22,98 @@ import WorldMap from '../components/WorldMap';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [logs, setLogs] = useState({
-    logsWithGeolocation: [],
-    levelDistribution: [],
-    timeDistribution: [],
-    recentLogs: [],
+    items: [],
+    metrics: {
+      totalLogs: 0,
+      majorLogs: 0,
+      normalLogs: 0
+    },
+    pagination: {
+      total: 0,
+      page: 1,
+      pages: 1
+    }
   });
   const [timeRange, setTimeRange] = useState(3600);
   const [updateInterval, setUpdateInterval] = useState(10000);
   const [isUpdating, setIsUpdating] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const token = localStorage.getItem('token');
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     navigate('/login');
   };
 
-  const fetchLogs = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-  
+  const fetchLogs = useCallback(async () => {
     try {
       setError(null);
-      const response = await fetch(
-        `${API_URL}/api/logs?range=${timeRange}`,
-        {
+      const [logsResponse, metricsResponse] = await Promise.all([
+        fetch(`${API_URL}/api/logs/recent`, {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-  
-      if (!response.ok) {
-        throw new Error('Failed to fetch logs');
+            'Content-Type': 'application/json',
+          },
+        }),
+        fetch(`${API_URL}/api/logs/metrics`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+      ]);
+
+      if (!logsResponse.ok || !metricsResponse.ok) {
+        throw new Error('Failed to fetch data');
       }
-  
-      const data = await response.json();
+
+      const [logsData, metricsData] = await Promise.all([
+        logsResponse.json(),
+        metricsResponse.json()
+      ]);
+
       setLogs({
-        logsWithGeolocation: data.logs || [],
-        levelDistribution: data.levelDistribution || [],
-        timeDistribution: data.timeDistribution || [],
-        recentLogs: data.recentLogs || [] // Add this
+        items: logsData || [],
+        metrics: metricsData || {
+          totalLogs: 0,
+          majorLogs: 0,
+          normalLogs: 0
+        },
+        pagination: {
+          total: logsData.length,
+          page: 1,
+          pages: Math.ceil(logsData.length / 10)
+        }
       });
     } catch (error) {
-      console.error('Error fetching logs:', error);
+      console.error('Error fetching data:', error);
       setError(error.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
-    fetchLogs();
     let intervalId;
+    
+    const initFetch = async () => {
+      await fetchLogs();
+      if (isUpdating) {
+        intervalId = setInterval(fetchLogs, updateInterval);
+      }
+    };
 
-    if (isUpdating) {
-      intervalId = setInterval(fetchLogs, updateInterval);
-    }
+    initFetch();
 
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
     };
-  }, [timeRange, updateInterval, isUpdating]);
+  }, [timeRange, updateInterval, isUpdating, fetchLogs]);
 
-  if (loading && !logs.logsWithGeolocation.length) {
+  if (loading && !logs.items.length) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
         <CircularProgress />
@@ -137,7 +159,7 @@ const Dashboard = () => {
                 <Typography variant="h5" gutterBottom>
                   Key Metrics
                 </Typography>
-                <KeyMetrics logs={logs.logsWithGeolocation} />
+                <KeyMetrics metrics={logs.metrics} />
               </Paper>
             </Grid>
 
@@ -146,7 +168,7 @@ const Dashboard = () => {
                 <Typography variant="h5" gutterBottom>
                   Recent Logs
                 </Typography>
-                <RecentLogs logs={logs.recentLogs} />
+                <RecentLogs logs={logs.items} />
               </Paper>
             </Grid>
 
@@ -156,9 +178,7 @@ const Dashboard = () => {
                   Log Analysis Charts
                 </Typography>
                 <Charts
-                  logs={logs.logsWithGeolocation}
-                  levelDistribution={logs.levelDistribution}
-                  timeDistribution={logs.timeDistribution}
+                  logs={logs.items}
                 />
               </Paper>
             </Grid>
@@ -169,7 +189,7 @@ const Dashboard = () => {
                   Network Traffic Visualization
                 </Typography>
                 <Box sx={{ height: '400px', width: '100%' }}>
-                  <WorldMap logs={logs.logsWithGeolocation} />
+                  <WorldMap logs={logs.items} />
                 </Box>
               </Paper>
             </Grid>

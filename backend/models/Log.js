@@ -1,28 +1,38 @@
-// backend/models/Log.js
 const mongoose = require('mongoose');
 
-//db.logs.createIndex({ timestamp: -1 });
-//db.logs.createIndex({ "rule.level": 1 });
-
 const LogSchema = new mongoose.Schema({
-  timestamp: { type: Date, required: true },
+  timestamp: { type: Date },
   agent: {
-    name: { type: String, required: true }
+    name: { type: String, default: 'unknown' }
   },
   rule: {
-    level: { type: String, required: true },
-    description: { type: String }
+    level: { type: String, default: '0' },
+    description: { type: String, default: 'No description' }
   },
   network: {
     srcIp: { type: String },
     destIp: { type: String },
     protocol: { type: String }
   },
-  rawLog: { type: mongoose.Schema.Types.Mixed, required: true }
+  rawLog: { type: mongoose.Schema.Types.Mixed }
 }, {
   timestamps: true
 });
 
+// Simple index on timestamp only
+LogSchema.index({ timestamp: -1 });
 
+const Log = mongoose.model('Log', LogSchema);
 
-module.exports = mongoose.model('Log', LogSchema);
+// Create indexes function that properly uses the model
+const createIndexes = async () => {
+  try {
+    await Log.syncIndexes(); // This is safer than createIndexes()
+    console.log('Indexes synchronized successfully');
+  } catch (error) {
+    console.error('Error synchronizing indexes:', error);
+  }
+};
+
+module.exports = Log;
+module.exports.createIndexes = createIndexes;

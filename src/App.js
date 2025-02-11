@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import Sidebar from './components/sidebar';
 import Dashboard from './pages/Dashboard';
 import LogDetails from './pages/LogDetails';
@@ -12,7 +12,7 @@ import MajorLogs from './pages/MajorLogs';
 
 import jwtDecode from 'jwt-decode';
 
-const ProtectedLayout = ({ children }) => {
+const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   const token = localStorage.getItem('token');
   if (!token) {
     return <Navigate to="/login" />;
@@ -23,19 +23,27 @@ const ProtectedLayout = ({ children }) => {
     const currentTime = Date.now() / 1000;
 
     if (decoded.exp < currentTime) {
-      localStorage.removeItem('token'); // Remove expired token
+      localStorage.removeItem('token');
       return <Navigate to="/login" />;
     }
   } catch (error) {
     console.error('Error decoding token:', error);
-    localStorage.removeItem('token'); // Remove invalid token
+    localStorage.removeItem('token');
     return <Navigate to="/login" />;
   }
 
   return (
     <Box sx={{ display: 'flex' }}>
-      <Sidebar />
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+      <Sidebar toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
+      <Box 
+        component="main" 
+        sx={{ 
+          flexGrow: 1, 
+          p: 3,
+          backgroundColor: 'background.default',
+          minHeight: '100vh'
+        }}
+      >
         {children}
       </Box>
     </Box>
@@ -43,74 +51,138 @@ const ProtectedLayout = ({ children }) => {
 };
 
 const App = () => {
+  // Theme state management
+  const [mode, setMode] = useState(() => {
+    // Check if there's a saved theme preference
+    const savedMode = localStorage.getItem('themeMode');
+    return savedMode || 'light';
+  });
+
+  // Create theme based on mode
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode,
+          ...(mode === 'dark' ? {
+            primary: {
+              main: '#90caf9',
+            },
+            secondary: {
+              main: '#f48fb1',
+            },
+            background: {
+              default: '#121212',
+              paper: '#1e1e1e',
+            },
+            text: {
+              primary: '#ffffff',
+              secondary: 'rgba(255, 255, 255, 0.7)',
+            },
+          } : {
+            primary: {
+              main: '#1976d2',
+            },
+            secondary: {
+              main: '#dc004e',
+            },
+            background: {
+              default: '#f5f5f5',
+              paper: '#ffffff',
+            },
+          }),
+        },
+        components: {
+          MuiCard: {
+            styleOverrides: {
+              root: {
+                backgroundColor: mode === 'dark' ? '#272727' : '#ffffff',
+              },
+            },
+          },
+        },
+      }),
+    [mode]
+  );
+
+  // Theme toggle handler
+  const toggleTheme = () => {
+    const newMode = mode === 'light' ? 'dark' : 'light';
+    setMode(newMode);
+    localStorage.setItem('themeMode', newMode); // Save theme preference
+  };
+
   return (
-    <Router>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            localStorage.getItem('token') ? (
-              <Navigate to="/dashboard" />
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              localStorage.getItem('token') ? (
+                <Navigate to="/dashboard" />
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
 
-        <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Login />} />
 
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedLayout>
-              <Dashboard />
-            </ProtectedLayout>
-          }
-        />
-        <Route
-          path="/logs"
-          element={
-            <ProtectedLayout>
-              <LogDetails />
-            </ProtectedLayout>
-          }
-        />
-        <Route
-          path="/analytics"
-          element={
-            <ProtectedLayout>
-              <AdvancedAnalytics />
-            </ProtectedLayout>
-          }
-        />
-        <Route
-          path="/performance-dashboard"
-          element={
-            <ProtectedLayout>
-              <PerformanceDashboard />
-            </ProtectedLayout>
-          }
-        />
-        <Route
-          path="/security-score"
-          element={
-            <ProtectedLayout>
-              <SecurityScore />
-            </ProtectedLayout>
-          }
-        />
-        <Route
-          path="/major-logs"
-          element={
-            <ProtectedLayout>
-              <MajorLogs />
-            </ProtectedLayout>
-          }
-        />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Dashboard />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/logs"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <LogDetails />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <AdvancedAnalytics />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/performance-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <PerformanceDashboard />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/security-score"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <SecurityScore />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/major-logs"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <MajorLogs />
+              </ProtectedLayout>
+            }
+          />
 
-        <Route path="*" element={<Navigate to="/login" />} />
-      </Routes>
-    </Router>
+          <Route path="*" element={<Navigate to="/login" />} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
 };
 

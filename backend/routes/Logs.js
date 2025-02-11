@@ -1,177 +1,181 @@
+// backend/routes/Logs.js
 const express = require('express');
-const axios = require('axios');
 const router = express.Router();
-const Log = require('../models/Log');
+const Log = require('../models/Log');  // This is correct
+const axios = require('axios');
 
-// Cache for storing the last fetched timestamp
-let lastFetchTimestamp = new Date();
+// Cache for metrics to avoid frequent recalculations
+let metricsCache = {
+  data: null,
+  lastUpdated: null,
+  TTL: 10000 // 10 seconds
+};
 
-// Function to fetch logs from Graylog
-async function fetchGraylogLogs() {
-  try {
-    const graylogUrl = `http://${process.env.GRAYLOG_HOST}:${process.env.GRAYLOG_PORT}/api/search/universal/absolute`;
-    const response = await axios({
-      method: 'get',
-      url: graylogUrl,
-      params: {
-        query: '*',
-        from: lastFetchTimestamp.toISOString(),
-        to: new Date().toISOString(),
-        limit: 1000,
-        fields: '*',
-      },
-      auth: {
-        username: process.env.GRAYLOG_USERNAME,
-        password: process.env.GRAYLOG_PASSWORD,
-      },
-    });
-
-    return response.data.messages || [];
-  } catch (error) {
-    console.error('Error fetching from Graylog:', error);
-    return [];
-  }
-}
-
-// Function to store logs in MongoDB
-async function storeLogsInMongo(logs) {
-  try {
-    const formattedLogs = logs.map(msg => ({
-      timestamp: new Date(msg.message.timestamp || msg.timestamp),
-      agent: {
-        name: msg.message.agent_name || 'Unknown'
-      },
-      rule: {
-        level: msg.message.rule_level || 'Unknown',
-        description: msg.message.rule?.description || ''
-      },
-      network: {
-        srcIp: msg.message.data?.src_ip || '',
-        destIp: msg.message.data?.dest_ip || '',
-        protocol: msg.message.data?.proto || ''
-      },
-      rawLog: msg.message
-    }));
-
-    if (formattedLogs.length > 0) {
-      await Log.insertMany(formattedLogs, { ordered: false });
-      console.log(`Stored ${formattedLogs.length} new logs`);
-    }
-    
-    lastFetchTimestamp = new Date();
-  } catch (error) {
-    console.error('Error storing logs:', error);
-  }
-}
-
-// Function to clean old logs (keep last 24 hours)
-async function cleanOldLogs() {
-  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  try {
-    const result = await Log.deleteMany({ timestamp: { $lt: twentyFourHoursAgo } });
-    console.log(`Cleaned ${result.deletedCount} old logs`);
-  } catch (error) {
-    console.error('Error cleaning old logs:', error);
-  }
-}
-
-// Initialize periodic tasks
-const FETCH_INTERVAL = 10000; // 10 seconds
-const CLEANUP_INTERVAL = 3600000; // 1 hour
-
-// Set up periodic log fetching
-setInterval(async () => {
-  const logs = await fetchGraylogLogs();
-  await storeLogsInMongo(logs);
-}, FETCH_INTERVAL);
-
-// Set up periodic cleanup
-setInterval(cleanOldLogs, CLEANUP_INTERVAL);
-
-
-// Add this new endpoint in your existing Logs.js file
+// Optimized metrics endpoint with caching
 router.get('/metrics', async (req, res) => {
   try {
-    const [totalLogs, majorLogs] = await Promise.all([
-      Log.countDocuments(),
-      Log.countDocuments({
-        $or: [
-          { 'rule.level': { $gte: '12' } },
-          { 'rule.level': { $gte: 12 } }
-        ]
-      })
+    console.log('Fetching metrics...');
+    // Return cached data if valid
+    if (metricsCache.data && (Date.now() - metricsCache.lastUpdated) < metricsCache.TTL) {
+      return res.json(metricsCache.data);
+    }
+
+    // Use aggregation pipeline for efficient counting
+    const [metrics] = await Log.aggregate([
+      
+      {
+        $match: {
+          "rule.level": { $exists: true, $type: "string", $regex: /^\d+$/ } // Only allow numeric strings
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalLogs: { $sum: 1 },
+          majorLogs: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ["$rule.level", "Unknown"] }, // Exclude 'Unknown'
+                    { $gte: [{ $toInt: "$rule.level" }, 12] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
     ]);
 
-    res.json({
-      totalLogs,
-      majorLogs
-    });
+    console.log('Metrics fetched:', metrics);
+
+    const result = {
+      totalLogs: metrics?.totalLogs || 0,
+      majorLogs: metrics?.majorLogs || 0,
+      normalLogs: (metrics?.totalLogs || 0) - (metrics?.majorLogs || 0)
+    };
+
+    // Update cache
+    metricsCache.data = result;
+    metricsCache.lastUpdated = Date.now();
+
+    res.json(result);
   } catch (error) {
     console.error('Error fetching metrics:', error);
     res.status(500).json({ message: 'Error fetching metrics', error: error.message });
   }
 });
 
-// Route to get logs with pagination and filtering
-// Modify the existing logs endpoint for better search
+// Optimized recent logs endpoint with projection
+router.get('/recent', async (req, res) => {
+  try {
+    console.log('Fetching recent logs...');
+    const recentLogs = await Log.find({}, {
+      timestamp: 1,
+      'agent.name': 1,
+      'rule.level': 1,
+      'rule.description': 1,
+      rawLog: 1
+    })
+      .sort({ timestamp: -1 })
+      .limit(10)
+      .lean();
+    console.log('Recent logs count:', recentLogs.length);
+
+    res.json(recentLogs);
+  } catch (error) {
+    console.error('Error fetching recent logs:', error);
+    res.status(500).json({ message: 'Error fetching recent logs', error: error.message });
+  }
+});
+
+// Optimized major logs endpoint with index usage
+router.get('/major', async (req, res) => {
+  try {
+    const majorLogs = await Log.find(
+      { 'rule.level': { $gte: '12' } },
+      {
+        timestamp: 1,
+        'agent.name': 1,
+        'rule.level': 1,
+        'rule.description': 1,
+        rawLog: 1
+      }
+    )
+      .sort({ timestamp: -1 })
+      .lean();
+
+    res.json(majorLogs);
+  } catch (error) {
+    console.error('Error fetching major logs:', error);
+    res.status(500).json({ message: 'Error fetching major logs', error: error.message });
+  }
+});
+
+router.get('/test', async (req, res) => {
+  try {
+    const log = new Log({
+      timestamp: new Date(),
+      agent: { name: 'test-agent' },
+      rule: { level: '10', description: 'test log' },
+      rawLog: { message: 'test log message' }
+    });
+    await log.save();
+    res.json({ message: 'Log saved successfully', log });
+  } catch (error) {
+    console.error('Error saving log:', error);
+    res.status(500).json({ message: 'Error saving log', error: error.message });
+  }
+});
+
+// Optimized logs endpoint with efficient pagination and filtering
 router.get('/', async (req, res) => {
   try {
     const { 
-      range = 86400, 
       page = 1, 
-      limit = 1000, // Changed default limit to 1000
+      limit = 1000, 
       search = '' 
     } = req.query;
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const timeRange = new Date(Date.now() - range * 1000);
     
     // Build search query
-    let searchQuery = { timestamp: { $gte: timeRange } };
+    let searchQuery = {};
     if (search) {
       searchQuery.$or = [
         { 'agent.name': { $regex: search, $options: 'i' } },
         { 'rule.level': { $regex: search, $options: 'i' } },
-        { 'rule.description': { $regex: search, $options: 'i' } },
-        { 'rawLog.message': { $regex: search, $options: 'i' } },
-        { 'rawLog.full_log': { $regex: search, $options: 'i' } }
+        { 'rule.description': { $regex: search, $options: 'i' } }
       ];
     }
 
-    // Get total count for pagination
-    const total = await Log.countDocuments(searchQuery);
-
-    // Get logs with pagination
-    const logs = await Log.find(searchQuery)
-      .sort({ timestamp: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
-
-    // Get level distribution
-    const levelDistribution = await Log.aggregate([
-      { $match: searchQuery },
-      {
-        $group: {
-          _id: '$rule.level',
-          count: { $sum: 1 }
-        }
-      }
+    // Fetch logs
+    const [total, logs] = await Promise.all([
+      Log.countDocuments(searchQuery),
+      Log.find(searchQuery, {
+        timestamp: 1,
+        'agent.name': 1,
+        'rule.level': 1,
+        'rule.description': 1,
+        rawLog: 1
+      })
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean()
     ]);
 
     res.json({
-      logsWithGeolocation: logs,
-      levelDistribution: levelDistribution.map(item => ({
-        name: item._id,
-        value: item.count
-      })),
+      logs,
       pagination: {
         total,
         page: parseInt(page),
         pages: Math.ceil(total / parseInt(limit))
       }
     });
-
   } catch (error) {
     console.error('Error fetching logs:', error);
     res.status(500).json({ message: 'Error fetching logs', error: error.message });

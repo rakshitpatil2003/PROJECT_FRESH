@@ -19,8 +19,10 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
     "maxmind": "^4.3.18",
-    "mongoose": "^8.9.3"
+    "mongoose": "^8.9.3",
+    "react-window": "^1.8.11"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

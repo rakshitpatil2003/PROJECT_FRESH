@@ -1,11 +1,12 @@
+// RecentLogs.js
 import React, { useState } from 'react';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Paper,
   Typography,
   Box,
@@ -13,22 +14,14 @@ import {
   DialogTitle,
   DialogContent,
   Link,
-  IconButton
+  IconButton,
+  Chip
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
 
 const RecentLogs = ({ logs }) => {
   const [selectedLog, setSelectedLog] = useState(null);
-
-  if (!Array.isArray(logs) || logs.length === 0) {
-    return (
-      <Box p={2}>
-        <Typography variant="body1" color="text.secondary" align="center">
-          No logs available
-        </Typography>
-      </Box>
-    );
-  }
 
   const formatTimestamp = (timestamp) => {
     try {
@@ -42,8 +35,27 @@ const RecentLogs = ({ logs }) => {
     }
   };
 
+  const getRuleLevelColor = (level) => {
+    const numLevel = parseInt(level);
+    if (numLevel >= 12) return 'error';
+    if (numLevel >= 8) return 'warning';
+    if (numLevel >= 4) return 'info';
+    return 'success';
+  };
+
+  if (!Array.isArray(logs) || logs.length === 0) {
+    return (
+      <Box p={2}>
+        <Typography variant="body1" color="text.secondary" align="center">
+          No logs available
+        </Typography>
+      </Box>
+    );
+  }
+
   const handleClickOpen = (log) => {
-    setSelectedLog(log);
+    const parsedLog = parseLogMessage(log);
+    setSelectedLog(parsedLog);
   };
 
   const handleClose = () => {
@@ -59,27 +71,40 @@ const RecentLogs = ({ logs }) => {
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent Name</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Rule Level</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Message</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Source IP</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Description</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {logs.map((log, index) => (
-              <TableRow key={index} hover>
-                <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
-                <TableCell>{log.agent?.name || 'N/A'}</TableCell>
-                <TableCell>{log.rule?.level || 'N/A'}</TableCell>
-                <TableCell>
-                  <Link
-                    component="button"
-                    variant="body2"
-                    onClick={() => handleClickOpen(log)}
-                    sx={{ textAlign: 'left', cursor: 'pointer' }}
-                  >
-                    View Details
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
+            {logs.map((log, index) => {
+              const parsedLog = parseLogMessage(log);
+              return (
+                <TableRow key={index} hover>
+                  <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
+                  <TableCell>{parsedLog.agent.name}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={parsedLog.rule.level} 
+                      color={getRuleLevelColor(parsedLog.rule.level)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>{parsedLog.network.srcIp}</TableCell>
+                  <TableCell>{parsedLog.rule.description}</TableCell>
+                  <TableCell>
+                    <Link
+                      component="button"
+                      variant="body2"
+                      onClick={() => handleClickOpen(log)}
+                      sx={{ textAlign: 'left', cursor: 'pointer' }}
+                    >
+                      View Details
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
@@ -101,9 +126,7 @@ const RecentLogs = ({ logs }) => {
           </IconButton>
         </DialogTitle>
         <DialogContent>
-          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {selectedLog ? JSON.stringify(selectedLog.rawLog, null, 2) : ''}
-          </pre>
+          <StructuredLogView data={selectedLog} />
         </DialogContent>
       </Dialog>
     </>
