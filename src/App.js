@@ -9,6 +9,11 @@ import PerformanceDashboard from './pages/PerformanceDashboard';
 import SecurityScore from './pages/SecurityScore';
 import Login from './components/Login';
 import MajorLogs from './pages/MajorLogs';
+import Footer from './components/Footer';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
+import Disclaimer from './pages/Disclaimer';
+import Policies from './pages/Policies';
 
 import jwtDecode from 'jwt-decode';
 
@@ -33,19 +38,26 @@ const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   }
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <Sidebar toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
-      <Box 
-        component="main" 
-        sx={{ 
-          flexGrow: 1, 
-          p: 3,
-          backgroundColor: 'background.default',
-          minHeight: '100vh'
-        }}
-      >
-        {children}
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box sx={{ display: 'flex', flex: 1 }}>
+        <Sidebar toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
+        <Box 
+          component="main" 
+          sx={{ 
+            flexGrow: 1, 
+            p: 3,
+            backgroundColor: 'background.default',
+            minHeight: '100vh',
+            //mb: '80px', // Add margin bottom for footer
+            width: `calc(100% - 240px)`, // Adjust for sidebar width
+            marginLeft: '0', // Add margin for sidebar
+            paddingBottom: '100px'// Space for footer
+          }}
+        >
+          {children}
+        </Box>
       </Box>
+      <Footer />
     </Box>
   );
 };
@@ -130,6 +142,7 @@ const App = () => {
 
           <Route path="/login" element={<Login />} />
 
+          {/* Protected Routes */}
           <Route
             path="/dashboard"
             element={
@@ -175,6 +188,40 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <MajorLogs />
+              </ProtectedLayout>
+            }
+          />
+
+          {/* Footer Pages Routes */}
+          <Route
+            path="/terms"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Terms />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/privacy"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Privacy />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/disclaimer"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Disclaimer />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/policies"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Policies />
               </ProtectedLayout>
             }
           />

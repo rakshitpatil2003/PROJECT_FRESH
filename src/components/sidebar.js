@@ -54,10 +54,10 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
         },
       }}
     >
-      <Box 
-        sx={{ 
-          p: 2, 
-          display: 'flex', 
+      <Box
+        sx={{
+          p: 2,
+          display: 'flex',
           justifyContent: 'center',
           backgroundColor: theme.palette.mode === 'dark' ? '#272727' : 'white',
         }}
@@ -65,8 +65,8 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
         <img
           src={logoImage}
           alt="VGI Logo"
-          style={{ 
-            width: '200px', 
+          style={{
+            width: '200px',
             height: 'auto',
             margin: '20px 0',
             filter: theme.palette.mode === 'dark' ? 'brightness(0.8)' : 'none'
@@ -94,7 +94,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
                 },
               },
               '&:hover': {
-                backgroundColor: theme.palette.mode === 'dark' 
+                backgroundColor: theme.palette.mode === 'dark'
                   ? 'rgba(255, 255, 255, 0.08)'
                   : 'rgba(25, 118, 210, 0.08)',
               },
@@ -123,20 +123,31 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           backgroundColor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5',
         }}
       >
-        <ListItem>
-          <ListItemIcon>
-            <SettingsIcon />
-          </ListItemIcon>
-          <ListItemText primary="Theme" />
-          <Switch
-            checked={isDarkMode}
-            onChange={toggleTheme}
-            color="primary"
-            icon={<Brightness7Icon />}
-            checkedIcon={<Brightness4Icon />}
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+          <img
+            src={require('../assets/vg-logo-1.jpg')}
+            alt="VG Logo"
+            style={{
+              width: '120px',
+              height: 'auto',
+              filter: theme.palette.mode === 'dark' ? 'brightness(0.8)' : 'none'
+            }}
           />
-        </ListItem>
-      </Box>
+        </Box>
+          <ListItem>
+            <ListItemIcon>
+              <SettingsIcon />
+            </ListItemIcon>
+            <ListItemText primary="Theme" />
+            <Switch
+              checked={isDarkMode}
+              onChange={toggleTheme}
+              color="primary"
+              icon={<Brightness7Icon />}
+              checkedIcon={<Brightness4Icon />}
+            />
+          </ListItem>
+        </Box>
     </Drawer>
   );
 };
