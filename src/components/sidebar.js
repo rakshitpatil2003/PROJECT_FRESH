@@ -7,10 +7,8 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
-  //IconButton,
   useTheme,
   Switch,
-  //Typography,
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -22,6 +20,7 @@ import AnalyticsIcon from '@mui/icons-material/Analytics';
 import SettingsIcon from '@mui/icons-material/Settings';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount'; // New import for Session Logs icon
 import logoImage from '../assets/images/vg-logo.png';
 
 const drawerWidth = 240;
@@ -38,6 +37,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
     { text: 'Performance Dashboard', icon: <SpeedIcon />, path: '/performance-dashboard' },
     { text: 'Security Score', icon: <SecurityIcon />, path: '/security-score' },
     { text: 'Major Logs', icon: <ErrorIcon />, path: '/major-logs' },
+    { text: 'Session Logs', icon: <SupervisorAccountIcon />, path: '/session-logs' }, // New menu item
   ];
 
   return (
@@ -125,29 +125,29 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
       >
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
           <img
-            src={require('../assets/vg-logo-1.jpg')}
+            src={require('../assets/VG_logo.PNG')}
             alt="VG Logo"
             style={{
-              width: '120px',
+              width: '180px',
               height: 'auto',
               filter: theme.palette.mode === 'dark' ? 'brightness(0.8)' : 'none'
             }}
           />
         </Box>
-          <ListItem>
-            <ListItemIcon>
-              <SettingsIcon />
-            </ListItemIcon>
-            <ListItemText primary="Theme" />
-            <Switch
-              checked={isDarkMode}
-              onChange={toggleTheme}
-              color="primary"
-              icon={<Brightness7Icon />}
-              checkedIcon={<Brightness4Icon />}
-            />
-          </ListItem>
-        </Box>
+        <ListItem>
+          <ListItemIcon>
+            <SettingsIcon />
+          </ListItemIcon>
+          <ListItemText primary="Theme" />
+          <Switch
+            checked={isDarkMode}
+            onChange={toggleTheme}
+            color="primary"
+            icon={<Brightness7Icon />}
+            checkedIcon={<Brightness4Icon />}
+          />
+        </ListItem>
+      </Box>
     </Drawer>
   );
 };

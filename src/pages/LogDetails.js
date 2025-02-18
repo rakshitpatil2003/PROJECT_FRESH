@@ -26,6 +26,7 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import { API_URL } from '../config';
 import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
+import LogDetailsView from '../components/LogDetailsView';
 
 const LogDetails = () => {
   const [logs, setLogs] = useState([]);
@@ -216,7 +217,7 @@ const LogDetails = () => {
           </IconButton>
         </DialogTitle>
         <DialogContent>
-          <StructuredLogView data={selectedLog} />
+          <LogDetailsView data={selectedLog} />
         </DialogContent>
       </Dialog>
     </Box>

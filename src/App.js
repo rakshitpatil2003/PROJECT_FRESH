@@ -9,6 +9,7 @@ import PerformanceDashboard from './pages/PerformanceDashboard';
 import SecurityScore from './pages/SecurityScore';
 import Login from './components/Login';
 import MajorLogs from './pages/MajorLogs';
+import SessionLogs from './pages/SessionLogs'; // New import
 import Footer from './components/Footer';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
@@ -48,10 +49,9 @@ const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
             p: 3,
             backgroundColor: 'background.default',
             minHeight: '100vh',
-            //mb: '80px', // Add margin bottom for footer
-            width: `calc(100% - 240px)`, // Adjust for sidebar width
-            marginLeft: '0', // Add margin for sidebar
-            paddingBottom: '100px'// Space for footer
+            width: `calc(100% - 240px)`,
+            marginLeft: '0',
+            paddingBottom: '100px'
           }}
         >
           {children}
@@ -63,14 +63,11 @@ const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
 };
 
 const App = () => {
-  // Theme state management
   const [mode, setMode] = useState(() => {
-    // Check if there's a saved theme preference
     const savedMode = localStorage.getItem('themeMode');
     return savedMode || 'light';
   });
 
-  // Create theme based on mode
   const theme = useMemo(
     () =>
       createTheme({
@@ -117,11 +114,10 @@ const App = () => {
     [mode]
   );
 
-  // Theme toggle handler
   const toggleTheme = () => {
     const newMode = mode === 'light' ? 'dark' : 'light';
     setMode(newMode);
-    localStorage.setItem('themeMode', newMode); // Save theme preference
+    localStorage.setItem('themeMode', newMode);
   };
 
   return (
@@ -188,6 +184,15 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <MajorLogs />
+              </ProtectedLayout>
+            }
+          />
+          {/* New Route for Session Logs */}
+          <Route
+            path="/session-logs"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <SessionLogs />
               </ProtectedLayout>
             }
           />

@@ -1,3 +1,4 @@
+// models/Log.js
 const mongoose = require('mongoose');
 
 const LogSchema = new mongoose.Schema({
@@ -14,25 +15,62 @@ const LogSchema = new mongoose.Schema({
     destIp: { type: String },
     protocol: { type: String }
   },
-  rawLog: { type: mongoose.Schema.Types.Mixed }
+  rawLog: { type: mongoose.Schema.Types.Mixed },
+  // Add a unique compound index
+  uniqueIdentifier: { type: String, unique: true }
 }, {
   timestamps: true
 });
 
-// Simple index on timestamp only
-LogSchema.index({ timestamp: -1 });
+// Update indexes
+LogSchema.index({ timestamp: -1, 'rule.level': 1 });
+LogSchema.index({ uniqueIdentifier: 1 }, { unique: true });
+LogSchema.index({ 'rule.level': 1, 'agent.name': 1 });
+LogSchema.index({ 'rule.level': 1, 'rule.description': 1 });
+
+// Pre-save middleware to generate unique identifier
+LogSchema.pre('save', function(next) {
+  // Create a unique identifier based on timestamp and message content
+  const rawLogStr = JSON.stringify(this.rawLog);
+  this.uniqueIdentifier = `${this.timestamp.toISOString()}_${require('crypto').createHash('md5').update(rawLogStr).digest('hex')}`;
+  next();
+});
 
 const Log = mongoose.model('Log', LogSchema);
+module.exports = Log;
 
-// Create indexes function that properly uses the model
-const createIndexes = async () => {
+// controllers/graylogController.js - Update the log insertion logic
+const insertLogs = async (logsToInsert) => {
   try {
-    await Log.syncIndexes(); // This is safer than createIndexes()
-    console.log('Indexes synchronized successfully');
+    // Use bulkWrite with upsert to prevent duplicates
+    const operations = logsToInsert.map(log => {
+      const rawLogStr = JSON.stringify(log.rawLog);
+      const uniqueIdentifier = `${log.timestamp.toISOString()}_${require('crypto').createHash('md5').update(rawLogStr).digest('hex')}`;
+      
+      return {
+        updateOne: {
+          filter: { uniqueIdentifier },
+          update: { $setOnInsert: { ...log, uniqueIdentifier } },
+          upsert: true
+        }
+      };
+    });
+
+    const result = await Log.bulkWrite(operations, { ordered: false });
+    console.log(`Processed ${operations.length} logs:`, {
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+      upserted: result.upsertedCount
+    });
+    
   } catch (error) {
-    console.error('Error synchronizing indexes:', error);
+    if (error.writeErrors) {
+      const nonDuplicateErrors = error.writeErrors.filter(err => err.code !== 11000);
+      if (nonDuplicateErrors.length > 0) {
+        throw new Error(`Non-duplicate errors occurred: ${JSON.stringify(nonDuplicateErrors)}`);
+      }
+    } else {
+      throw error;
+    }
   }
 };
-
-module.exports = Log;
-module.exports.createIndexes = createIndexes;

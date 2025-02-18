@@ -12,10 +12,16 @@ const KeyMetrics = () => {
     normalLogs: 0
   });
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchMetrics = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
       const response = await fetch(`${API_URL}/api/logs/metrics`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -29,15 +35,20 @@ const KeyMetrics = () => {
 
       const data = await response.json();
       console.log('Metrics data:', data);
+      
+      // Update metrics with the unique counts from backend
       setMetrics({
         totalLogs: data.totalLogs,
         majorLogs: data.majorLogs,
-        normalLogs: data.totalLogs - data.majorLogs
+        normalLogs: data.normalLogs
       });
+      
       setError(null);
     } catch (error) {
       console.error('Error fetching metrics:', error);
       setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -49,21 +60,21 @@ const KeyMetrics = () => {
    
   const metricsConfig = [
     {
-      title: 'Total Logs',
+      title: 'Total Unique Logs',
       value: metrics.totalLogs,
       Icon: AssessmentIcon,
       color: '#2196f3',
       bgColor: '#e3f2fd'
     },
     {
-      title: 'Major Logs',
+      title: 'Major Unique Logs',
       value: metrics.majorLogs,
       Icon: WarningAmberIcon,
       color: '#f44336',
       bgColor: '#ffebee'
     },
     {
-      title: 'Normal Logs',
+      title: 'Normal Unique Logs',
       value: metrics.normalLogs,
       Icon: CheckCircleIcon,
       color: '#4caf50',

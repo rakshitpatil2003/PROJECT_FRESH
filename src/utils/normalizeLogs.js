@@ -1,14 +1,17 @@
 // utils/normalizeLogs.js
 
+
+
 export const parseLogMessage = (logEntry) => {
   if (!logEntry) return null;
   
   try {
-    // First try to parse the rawLog message if it exists
+    // Parse message data
     let messageData;
     if (logEntry.rawLog?.message) {
       try {
-        messageData = JSON.parse(logEntry.rawLog.message);
+        messageData = typeof logEntry.rawLog.message === 'string' ? 
+          JSON.parse(logEntry.rawLog.message) : logEntry.rawLog.message;
       } catch (e) {
         messageData = logEntry.rawLog.message;
       }
@@ -22,50 +25,74 @@ export const parseLogMessage = (logEntry) => {
       messageData = logEntry.message || logEntry;
     }
 
-    // Extract nested data
-    const data = messageData?.data || {};
-    const flow = data?.flow || {};
+    // Extract rule data with new compliance fields
     const ruleData = messageData?.rule || logEntry?.rule || {};
     
     return {
-      timestamp: logEntry.timestamp || messageData?.timestamp || logEntry.rawLog?.timestamp,
+      timestamp: messageData?.data?.timestamp || 
+                messageData?.timestamp || 
+                logEntry?.timestamp || 
+                logEntry?.rawLog?.timestamp,
       agent: {
         name: messageData?.agent?.name || messageData?.manager?.name || logEntry?.agent?.name || 'N/A',
         id: messageData?.agent?.id || 'N/A'
       },
       rule: {
-        level: ruleData?.level || '0',
+        level: String(ruleData?.level || '0'),
         description: ruleData?.description || 'No description',
         id: ruleData?.id || 'N/A',
-        groups: ruleData?.groups || []
+        groups: ruleData?.groups || [],
+        // New compliance and security framework fields
+        hipaa: ruleData?.hipaa || [],
+        pci_dss: ruleData?.pci_dss || [],
+        gdpr: ruleData?.gdpr || [],
+        nist_800_53: ruleData?.nist_800_53 || [],
+        mitre: ruleData?.mitre || {
+          id: [],
+          tactic: [],
+          technique: []
+        },
+        tsc: ruleData?.tsc || [],
+        gpg13: ruleData?.gpg13 || []
       },
       network: {
-        srcIp: data?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
-        srcPort: data?.src_port || 'N/A',
-        destIp: data?.dest_ip || logEntry?.network?.destIp || 'N/A',
-        destPort: data?.dest_port || 'N/A',
-        protocol: data?.proto || logEntry?.network?.protocol || 'N/A',
+        srcIp: messageData?.data?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
+        srcPort: messageData?.data?.src_port || 'N/A',
+        destIp: messageData?.data?.dest_ip || logEntry?.network?.destIp || 'N/A',
+        destPort: messageData?.data?.dest_port || 'N/A',
+        protocol: messageData?.data?.proto || logEntry?.network?.protocol || 'N/A',
         flow: {
-          pktsToServer: flow?.pkts_toserver || 'N/A',
-          pktsToClient: flow?.pkts_toclient || 'N/A',
-          bytesToServer: flow?.bytes_toserver || 'N/A',
-          bytesToClient: flow?.bytes_toclient || 'N/A',
-          state: flow?.state || 'N/A'
+          pktsToServer: messageData?.data?.flow?.pkts_toserver || 'N/A',
+          pktsToClient: messageData?.data?.flow?.pkts_toclient || 'N/A',
+          bytesToServer: messageData?.data?.flow?.bytes_toserver || 'N/A',
+          bytesToClient: messageData?.data?.flow?.bytes_toclient || 'N/A',
+          state: messageData?.data?.flow?.state || 'N/A'
         }
       },
       event: {
-        type: data?.event_type || 'N/A',
-        interface: data?.in_iface || 'N/A'
+        type: messageData?.data?.event_type || 'N/A',
+        interface: messageData?.data?.in_iface || 'N/A'
       },
       rawData: messageData
     };
   } catch (error) {
     console.error('Error parsing log message:', error);
-    // Return a valid object with default values
     return {
       timestamp: logEntry?.timestamp || new Date().toISOString(),
       agent: { name: 'Parse Error', id: 'N/A' },
-      rule: { level: '0', description: 'Error parsing log data', id: 'N/A', groups: [] },
+      rule: {
+        level: '0',
+        description: 'Error parsing log data',
+        id: 'N/A',
+        groups: [],
+        hipaa: [],
+        pci_dss: [],
+        gdpr: [],
+        nist_800_53: [],
+        mitre: { id: [], tactic: [], technique: [] },
+        tsc: [],
+        gpg13: []
+      },
       network: {
         srcIp: 'N/A', srcPort: 'N/A', destIp: 'N/A', destPort: 'N/A', protocol: 'N/A',
         flow: { pktsToServer: 'N/A', pktsToClient: 'N/A', bytesToServer: 'N/A', bytesToClient: 'N/A', state: 'N/A' }
@@ -88,6 +115,39 @@ export const StructuredLogView = ({ data }) => {
     return String(value);
   };
 
+  const renderComplianceSection = (title, items) => {
+    if (!items || items.length === 0) return null;
+    return (
+      <div className="mb-2">
+        <span className="text-gray-600">{title}:</span>
+        <div className="pl-4 flex flex-wrap gap-1">
+          {items.map((item, idx) => (
+            <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderMitreSection = () => {
+    if (!data.rule.mitre || (!data.rule.mitre.id && !data.rule.mitre.tactic && !data.rule.mitre.technique)) {
+      return null;
+    }
+
+    return (
+      <div className="mb-4">
+        <h4 className="text-md font-medium text-gray-700 mb-2">MITRE ATT&CK:</h4>
+        <div className="pl-4">
+          {renderComplianceSection('Techniques', data.rule.mitre.technique)}
+          {renderComplianceSection('Tactics', data.rule.mitre.tactic)}
+          {renderComplianceSection('IDs', data.rule.mitre.id)}
+        </div>
+      </div>
+    );
+  };
+
   const renderSection = (title, content) => {
     if (!content || Object.keys(content).length === 0) return null;
     
@@ -95,32 +155,37 @@ export const StructuredLogView = ({ data }) => {
       <div className="mb-4">
         <h3 className="text-lg font-semibold text-blue-600 mb-2">{title}</h3>
         <div className="pl-4">
-          {Object.entries(content).map(([key, value]) => {
-            if (value === null || value === undefined) return null;
-            
-            if (typeof value === 'object' && !Array.isArray(value)) {
-              return (
-                <div key={key} className="mb-2">
-                  <h4 className="text-md font-medium text-gray-700">{key}:</h4>
-                  <div className="pl-4">
-                    {Object.entries(value).map(([subKey, subValue]) => (
-                      <div key={subKey} className="text-sm">
-                        <span className="text-gray-600">{subKey}:</span>{' '}
-                        <span className="text-gray-900">{renderValue(subValue)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            }
-            
-            return (
+          {title === 'Rule Details' ? (
+            <>
+              <div className="mb-2">
+                <span className="text-gray-600">Level:</span>{' '}
+                <span className="text-gray-900">{content.level}</span>
+              </div>
+              <div className="mb-2">
+                <span className="text-gray-600">Description:</span>{' '}
+                <span className="text-gray-900">{content.description}</span>
+              </div>
+              <div className="mb-2">
+                <span className="text-gray-600">ID:</span>{' '}
+                <span className="text-gray-900">{content.id}</span>
+              </div>
+              {renderComplianceSection('HIPAA', content.hipaa)}
+              {renderComplianceSection('PCI DSS', content.pci_dss)}
+              {renderComplianceSection('GDPR', content.gdpr)}
+              {renderComplianceSection('NIST 800-53', content.nist_800_53)}
+              {renderComplianceSection('TSC', content.tsc)}
+              {renderComplianceSection('GPG13', content.gpg13)}
+              {renderMitreSection()}
+              {renderComplianceSection('Groups', content.groups)}
+            </>
+          ) : (
+            Object.entries(content).map(([key, value]) => (
               <div key={key} className="text-sm">
                 <span className="text-gray-600">{key}:</span>{' '}
                 <span className="text-gray-900">{renderValue(value)}</span>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
       </div>
     );
@@ -143,3 +208,6 @@ export const StructuredLogView = ({ data }) => {
     </div>
   );
 };
+
+// Add this to your normalizeLogs.js file
+
