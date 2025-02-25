@@ -18,22 +18,35 @@ import {
     DialogTitle,
     DialogContent,
     IconButton,
-    Chip
+    Chip,
+    Pagination,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Grid
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import ComplianceIcon from '@mui/icons-material/VerifiedUser';
 import axios from 'axios';
-import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
+import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 
 const SessionLogs = () => {
     const [logs, setLogs] = useState([]);
+    const [filteredLogs, setFilteredLogs] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedLog, setSelectedLog] = useState(null);
+    
+    // Pagination states
+    const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [totalPages, setTotalPages] = useState(0);
+    const [displayedLogs, setDisplayedLogs] = useState([]);
 
     const getRuleLevelColor = (level) => {
         const numLevel = parseInt(level);
@@ -72,22 +85,76 @@ const SessionLogs = () => {
                 .filter(log => log.parsed !== null);
 
             setLogs(parsedLogs);
+            setFilteredLogs(parsedLogs);
+            setTotalPages(Math.ceil(parsedLogs.length / rowsPerPage));
+            setPage(1); // Reset to first page when new data is loaded
         } catch (error) {
             console.error('Error fetching session logs:', error);
             setError(error.response?.data?.message || error.message || 'Failed to fetch session logs');
             setLogs([]);
+            setFilteredLogs([]);
+            setTotalPages(0);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [rowsPerPage]);
 
+    // Client-side filtering
+    useEffect(() => {
+        if (searchTerm.trim() === '') {
+            setFilteredLogs(logs);
+            setTotalPages(Math.ceil(logs.length / rowsPerPage));
+        } else {
+            const lowerSearchTerm = searchTerm.toLowerCase();
+            const filtered = logs.filter(log => {
+                const parsedLog = log.parsed;
+                if (!parsedLog) return false;
+                
+                // Search in raw log message if available
+                if (parsedLog.rawData?.message?.toLowerCase().includes(lowerSearchTerm)) return true;
+                // Search in agent name
+                if (parsedLog.agent?.name?.toLowerCase().includes(lowerSearchTerm)) return true;
+                
+                // Search in rule description
+                if (parsedLog.rule?.description?.toLowerCase().includes(lowerSearchTerm)) return true;
+                
+                // Search in compliance standards
+                const complianceTypes = [
+                    parsedLog.rule?.hipaa?.join(' ') || '',
+                    parsedLog.rule?.gdpr?.join(' ') || '',
+                    parsedLog.rule?.nist_800_53?.join(' ') || '',
+                    parsedLog.rule?.pci_dss?.join(' ') || '',
+                    parsedLog.rule?.tsc?.join(' ') || '',
+                    parsedLog.rule?.gpg13?.join(' ') || ''
+                ].join(' ').toLowerCase();
+                
+                if (complianceTypes.includes(lowerSearchTerm)) return true;
+                
+                
+                return false;
+            });
+            
+            setFilteredLogs(filtered);
+            setTotalPages(Math.ceil(filtered.length / rowsPerPage));
+            setPage(1); // Reset to first page when filter changes
+        }
+    }, [searchTerm, logs, rowsPerPage]);
+
+    // Update displayed logs when page, rowsPerPage or filteredLogs change
+    useEffect(() => {
+        const startIndex = (page - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        setDisplayedLogs(filteredLogs.slice(startIndex, endIndex));
+    }, [page, rowsPerPage, filteredLogs]);
+
+    // Fetch initial data
     useEffect(() => {
         const debounceTimer = setTimeout(() => {
             fetchSessionLogs(searchTerm);
         }, 500);
 
         return () => clearTimeout(debounceTimer);
-    }, [searchTerm, fetchSessionLogs]);
+    }, [fetchSessionLogs]);
 
     const formatTimestamp = (timestamp) => {
         try {
@@ -105,6 +172,15 @@ const SessionLogs = () => {
         // Use the same parsing logic as LogDetails.js
         const parsedLog = parseLogMessage(log);
         setSelectedLog(parsedLog);
+    };
+
+    const handleChangePage = (event, newPage) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(1); // Reset to first page when changing rows per page
     };
 
     if (loading && !logs.length) {
@@ -152,10 +228,10 @@ const SessionLogs = () => {
                 severity="info"
                 sx={{ mb: 3 }}
             >
-                {logs.length} compliance-related logs found
+                {filteredLogs.length} compliance-related logs found
             </Alert>
 
-            <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
+            <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 400px)' }}>
                 <Table stickyHeader>
                     <TableHead>
                         <TableRow>
@@ -168,7 +244,7 @@ const SessionLogs = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {logs.map((log) => {
+                        {displayedLogs.map((log) => {
                             const parsedLog = log.parsed;
                             const rule = parsedLog.rule || {};
 
@@ -222,6 +298,36 @@ const SessionLogs = () => {
                     </TableBody>
                 </Table>
             </TableContainer>
+
+            {/* Pagination Controls */}
+            <Grid container spacing={2} alignItems="center" sx={{ mt: 2 }}>
+                <Grid item xs={12} sm={6} md={4}>
+                    <FormControl variant="outlined" size="small" fullWidth>
+                        <InputLabel id="rows-per-page-label">Rows per page</InputLabel>
+                        <Select
+                            labelId="rows-per-page-label"
+                            value={rowsPerPage}
+                            onChange={handleChangeRowsPerPage}
+                            label="Rows per page"
+                        >
+                            <MenuItem value={10}>10</MenuItem>
+                            <MenuItem value={25}>25</MenuItem>
+                            <MenuItem value={50}>50</MenuItem>
+                            <MenuItem value={100}>100</MenuItem>
+                        </Select>
+                    </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6} md={8} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Pagination 
+                        count={totalPages} 
+                        page={page} 
+                        onChange={handleChangePage} 
+                        color="primary"
+                        showFirstButton
+                        showLastButton
+                    />
+                </Grid>
+            </Grid>
 
             <Dialog
                 open={Boolean(selectedLog)}

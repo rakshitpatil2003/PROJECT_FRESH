@@ -15,6 +15,7 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import Disclaimer from './pages/Disclaimer';
 import Policies from './pages/Policies';
+import HIPAADashboard from './components/HipaaDashboard';
 
 import jwtDecode from 'jwt-decode';
 
@@ -193,6 +194,15 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <SessionLogs />
+              </ProtectedLayout>
+            }
+          />
+          {/*Security Policy Routes*/}
+          <Route
+            path="/hipaa-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <HIPAADashboard />
               </ProtectedLayout>
             }
           />

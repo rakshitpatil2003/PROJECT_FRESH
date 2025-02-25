@@ -1,7 +1,4 @@
 // utils/normalizeLogs.js
-
-
-
 export const parseLogMessage = (logEntry) => {
   if (!logEntry) return null;
   
@@ -210,4 +207,3 @@ export const StructuredLogView = ({ data }) => {
 };
 
 // Add this to your normalizeLogs.js file
-

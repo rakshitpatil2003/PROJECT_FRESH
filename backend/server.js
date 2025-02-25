@@ -115,9 +115,9 @@ if (cluster.isMaster) {
       const corsOptions = {
         origin: [
           'http://localhost:3000',
-          'http://192.168.1.95:3000',
+          'http://192.168.1.151:3000',
           'http://192.168.1.71:3000',
-          'http://192.168.1.95:5000',
+          'http://192.168.1.151:5000',
           'http://192.168.1.71:5000',
           'http://192.168.1.176:3000'
         ],
@@ -170,7 +170,7 @@ if (cluster.isMaster) {
         res.json({ 
           message: 'API is working',
           worker: process.pid,
-          server: '192.168.1.95',
+          server: '192.168.1.151',
           mongodb: '192.168.1.71'
         });
       });

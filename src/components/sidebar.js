@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Drawer,
@@ -9,6 +9,7 @@ import {
   Divider,
   useTheme,
   Switch,
+  Collapse,
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -20,7 +21,11 @@ import AnalyticsIcon from '@mui/icons-material/Analytics';
 import SettingsIcon from '@mui/icons-material/Settings';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
-import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount'; // New import for Session Logs icon
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import PolicyIcon from '@mui/icons-material/Policy';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import logoImage from '../assets/images/vg-logo.png';
 
 const drawerWidth = 240;
@@ -29,6 +34,11 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
+  const [securityPolicyOpen, setSecurityPolicyOpen] = useState(false);
+
+  const handleSecurityPolicyClick = () => {
+    setSecurityPolicyOpen(!securityPolicyOpen);
+  };
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
@@ -37,7 +47,16 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
     { text: 'Performance Dashboard', icon: <SpeedIcon />, path: '/performance-dashboard' },
     { text: 'Security Score', icon: <SecurityIcon />, path: '/security-score' },
     { text: 'Major Logs', icon: <ErrorIcon />, path: '/major-logs' },
-    { text: 'Session Logs', icon: <SupervisorAccountIcon />, path: '/session-logs' }, // New menu item
+    { text: 'Session Logs', icon: <SupervisorAccountIcon />, path: '/session-logs' },
+    //{ text: 'Security Policy', icon: <SupervisorAccountIcon />, path: '/session-logs' },
+  ];
+
+  const securityPolicyItems = [
+    { text: 'HIPAA', path: '/hipaa-dashboard' },
+    { text: 'GDPR', path: '/security-policy/gdpr' },
+    { text: 'NIST', path: '/security-policy/nist' },
+    { text: 'PCI DSS', path: '/security-policy/pcidss' },
+    { text: 'TSC', path: '/security-policy/tsc' },
   ];
 
   return (
@@ -111,6 +130,69 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
             <ListItemText primary={item.text} />
           </ListItem>
         ))}
+
+        {/* Security Policy Dropdown */}
+        <ListItem 
+          button 
+          onClick={handleSecurityPolicyClick}
+          sx={{
+            my: 0.5,
+            backgroundColor: securityPolicyOpen ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+            '&:hover': {
+              backgroundColor: theme.palette.mode === 'dark'
+                ? 'rgba(255, 255, 255, 0.08)'
+                : 'rgba(25, 118, 210, 0.08)',
+            },
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>
+            <PolicyIcon />
+          </ListItemIcon>
+          <ListItemText primary="Security Policy" />
+          {securityPolicyOpen ? <ExpandLess /> : <ExpandMore />}
+        </ListItem>
+        
+        <Collapse in={securityPolicyOpen} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {securityPolicyItems.map((item) => (
+              <ListItem
+                button
+                key={item.text}
+                onClick={() => navigate(item.path)}
+                selected={location.pathname === item.path}
+                sx={{
+                  pl: 4,
+                  my: 0.5,
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.main',
+                    color: 'white',
+                    '&:hover': {
+                      backgroundColor: 'primary.dark',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: 'white',
+                    },
+                  },
+                  '&:hover': {
+                    backgroundColor: theme.palette.mode === 'dark'
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : 'rgba(25, 118, 210, 0.08)',
+                  },
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    color: location.pathname === item.path ? 'white' : 'inherit',
+                    minWidth: 40,
+                  }}
+                >
+                  <VerifiedUserIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
       </List>
       <Divider />
       <Box
