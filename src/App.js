@@ -18,6 +18,10 @@ import Policies from './pages/Policies';
 import HIPAADashboard from './components/HipaaDashboard';
 
 import jwtDecode from 'jwt-decode';
+import GDPRDashboard from './components/GDPRDashboard';
+import NISTDashboard from './components/NISTDashboard';
+import PCIDSSDashboard from './components/PCIDSSDashboard';
+import TSCDashboard from './components/TSCDashboard';
 
 const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   const token = localStorage.getItem('token');
@@ -206,7 +210,39 @@ const App = () => {
               </ProtectedLayout>
             }
           />
-
+          <Route
+            path="/gdpr-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <GDPRDashboard />
+              </ProtectedLayout>
+            }
+          />
+          
+          <Route
+            path="/pcidss-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <PCIDSSDashboard />
+              </ProtectedLayout>
+            }
+          /> 
+          <Route
+            path="/nist-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <NISTDashboard />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/tsc-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <TSCDashboard />
+              </ProtectedLayout>
+            }
+          /> 
           {/* Footer Pages Routes */}
           <Route
             path="/terms"

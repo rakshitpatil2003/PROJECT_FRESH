@@ -53,10 +53,10 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
 
   const securityPolicyItems = [
     { text: 'HIPAA', path: '/hipaa-dashboard' },
-    { text: 'GDPR', path: '/security-policy/gdpr' },
-    { text: 'NIST', path: '/security-policy/nist' },
-    { text: 'PCI DSS', path: '/security-policy/pcidss' },
-    { text: 'TSC', path: '/security-policy/tsc' },
+    { text: 'GDPR', path: '/gdpr-dashboard' },
+    { text: 'NIST', path: '/nist-dashboard' },
+    { text: 'PCI DSS', path: '/pcidss-dashboard' },
+    { text: 'TSC', path: '/tsc-dashboard' },
   ];
 
   return (
