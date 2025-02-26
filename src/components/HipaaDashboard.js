@@ -6,7 +6,6 @@ import {
     Grid,
     Alert,
     CircularProgress,
-    
     Card,
     CardContent,
     Chip,
@@ -19,8 +18,13 @@ import {
     Link,
     TextField,
     InputAdornment,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    IconButton,
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 //import FilterListIcon from '@mui/icons-material/FilterList';
 //import TimelineIcon from '@mui/icons-material/Timeline';
@@ -496,7 +500,11 @@ const HIPAADashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        setSelectedLog(log.parsed);
+        //const severity = getSeverityLabel(log.parsed.rule?.level);
+
+        setSelectedLog({
+            data: log.parsed  // Pass the parsed log data directly as the 'data' prop
+        });
     };
 
     // Filter logs on search
@@ -677,68 +685,86 @@ const HIPAADashboard = () => {
 
                 <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
                     <Table stickyHeader size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
-                        <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent</TableCell>
-                        <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Description</TableCell>
-                        <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Level</TableCell>
-                        <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>HIPAA Controls</TableCell>
-                        <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-
-                    <TableBody>
-                        {hipaaLogs.map((log, index) => (
-                            <TableRow key={index} hover>
-                                <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
-                                <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
-                                <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
-                                <TableCell>
-                                    <Chip
-                                        label={log.parsed.rule?.level || '0'}
-                                        color={getRuleLevelColor(log.parsed.rule?.level)}
-                                        size="small"
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    {log.parsed.rule?.hipaa?.map((control, idx) => (
-                                        <Chip
-                                            key={idx}
-                                            label={control}
-                                            size="small"
-                                            sx={{ m: 0.5 }}
-                                        />
-                                    ))}
-                                </TableCell>
-                                <TableCell>
-                                    <Link
-                                        component="button"
-                                        variant="body2"
-                                        onClick={() => handleViewDetails(log)}
-                                    >
-                                        View Details
-                                    </Link>
-                                </TableCell>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
+                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent</TableCell>
+                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Description</TableCell>
+                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Level</TableCell>
+                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>HIPAA Controls</TableCell>
+                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-        </Box>
-                
-                      {/* Log Details Dialog */ }
-    {
-        selectedLog && (
-            <SessionLogView
-                log={selectedLog}
-                open={Boolean(selectedLog)}
-                onClose={() => setSelectedLog(null)}
-            />
-        )
-    }
-                    </Box >
-                  );
-                };
+                        </TableHead>
+
+                        <TableBody>
+                            {hipaaLogs.map((log, index) => (
+                                <TableRow key={index} hover>
+                                    <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
+                                    <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
+                                    <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            label={log.parsed.rule?.level || '0'}
+                                            color={getRuleLevelColor(log.parsed.rule?.level)}
+                                            size="small"
+                                        />
+                                    </TableCell>
+                                    <TableCell>
+                                        {log.parsed.rule?.hipaa?.map((control, idx) => (
+                                            <Chip
+                                                key={idx}
+                                                label={control}
+                                                size="small"
+                                                sx={{ m: 0.5 }}
+                                            />
+                                        ))}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Link
+                                            component="button"
+                                            variant="body2"
+                                            onClick={() => handleViewDetails(log)}
+                                        >
+                                            View Details
+                                        </Link>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Box>
+
+            {/* Log Details Dialog */}
+            {selectedLog && (
+                <Dialog
+                    open={Boolean(selectedLog)}
+                    onClose={() => setSelectedLog(null)}
+                    maxWidth="md"
+                    fullWidth
+                >
+                    <DialogTitle sx={{
+                        backgroundColor: '#e8f5e9',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <Typography variant="h6">HIPAA Log Details</Typography>
+                        <IconButton
+                            aria-label="close"
+                            onClick={() => setSelectedLog(null)}
+                            size="small"
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent sx={{ mt: 2 }}>
+                        <SessionLogView data={selectedLog.data} />
+                    </DialogContent>
+                </Dialog>
+            )}
+        </Box >
+    );
+};
 
 export default HIPAADashboard;

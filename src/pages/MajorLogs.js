@@ -25,8 +25,9 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import WarningIcon from '@mui/icons-material/Warning';
 import axios from 'axios';
-import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
+import { parseLogMessage } from '../utils/normalizeLogs';
 import { API_URL } from '../config';
+import SessionLogView from '../components/SessionLogView';
 
 const MajorLogs = () => {
   const [logs, setLogs] = useState([]);
@@ -301,7 +302,7 @@ const MajorLogs = () => {
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
-          <StructuredLogView data={selectedLog} />
+          <SessionLogView data={selectedLog} />
         </DialogContent>
       </Dialog>
     </Box>

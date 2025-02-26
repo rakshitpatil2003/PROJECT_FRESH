@@ -18,8 +18,13 @@ import {
     Link,
     TextField,
     InputAdornment,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    IconButton,
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
 import ShieldIcon from '@mui/icons-material/Shield';
 import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
@@ -481,7 +486,12 @@ const GDPRDashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: getSeverityColor(item.level)
+                            color: function getSeverityColor(level) {
+                                if (level >= 12) return '#f44336'; // Red
+                                if (level >= 8) return '#ff9800';  // Orange
+                                if (level >= 4) return '#2196f3';  // Blue
+                                return '#4caf50';                 // Green
+                            }(item.level)
                         }
                     })),
                     emphasis: {
@@ -645,13 +655,13 @@ const GDPRDashboard = () => {
         };
     }, [gdprStats.dataSubjectRequestTypes, loading]);
 
-    function getSeverityColor(level) {
-        if (level >= 12) return '#f44336'; // Red
-        if (level >= 8) return '#ff9800';  // Orange
-        if (level >= 4) return '#2196f3';  // Blue
-        return '#4caf50';                 // Green
-    }
-
+    const getSeverityLabel = (level) => {
+        const numLevel = parseInt(level);
+        if (numLevel >= 12) return 'Critical';
+        if (numLevel >= 8) return 'High';
+        if (numLevel >= 4) return 'Medium';
+        return 'Low';
+    };
     // Format timestamp
     const formatTimestamp = (timestamp) => {
         try {
@@ -667,8 +677,13 @@ const GDPRDashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        setSelectedLog(log.parsed);
+        const severity = getSeverityLabel(log.parsed.rule?.level);
+
+        setSelectedLog({
+            data: log.parsed  // Pass the parsed log data directly as the 'data' prop
+        });
     };
+
 
     // Filter logs on search
     useEffect(() => {
@@ -917,22 +932,34 @@ const GDPRDashboard = () => {
 
             {/* Log Details            {/* Session Log View Dialog */}
             {selectedLog && (
-                <SessionLogView
-                    log={selectedLog}
+                <Dialog
                     open={Boolean(selectedLog)}
                     onClose={() => setSelectedLog(null)}
-                />
+                    maxWidth="md"
+                    fullWidth
+                >
+                    <DialogTitle sx={{
+                        backgroundColor: '#e8f5e9',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <Typography variant="h6">GDPR Log Details</Typography>
+                        <IconButton
+                            aria-label="close"
+                            onClick={() => setSelectedLog(null)}
+                            size="small"
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent sx={{ mt: 2 }}>
+                        <SessionLogView data={selectedLog.data} />
+                    </DialogContent>
+                </Dialog>
             )}
         </Box>
     );
-};
-
-// Helper function to get severity color
-const getSeverityColor = (level) => {
-    if (level >= 12) return '#f44336'; // Red
-    if (level >= 8) return '#ff9800';  // Orange
-    if (level >= 4) return '#2196f3';  // Blue
-    return '#4caf50';                  // Green
 };
 
 // PropTypes validation

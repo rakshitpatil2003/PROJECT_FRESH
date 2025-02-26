@@ -18,8 +18,13 @@ import {
     Link,
     TextField,
     InputAdornment,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    IconButton,
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
@@ -608,7 +613,11 @@ const NISTDashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        setSelectedLog(log.parsed);
+        //const severity = getSeverityLabel(log.parsed.rule?.level);
+
+        setSelectedLog({
+            data: log.parsed  // Pass the parsed log data directly as the 'data' prop
+        });
     };
 
     // Filter logs on search
@@ -846,11 +855,31 @@ const NISTDashboard = () => {
 
             {/* Log Details Dialog */}
             {selectedLog && (
-                <SessionLogView
-                    log={selectedLog}
+                <Dialog
                     open={Boolean(selectedLog)}
                     onClose={() => setSelectedLog(null)}
-                />
+                    maxWidth="md"
+                    fullWidth
+                >
+                    <DialogTitle sx={{
+                        backgroundColor: '#e8f5e9',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <Typography variant="h6">NIST Log Details</Typography>
+                        <IconButton
+                            aria-label="close"
+                            onClick={() => setSelectedLog(null)}
+                            size="small"
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent sx={{ mt: 2 }}>
+                        <SessionLogView data={selectedLog.data} />
+                    </DialogContent>
+                </Dialog>
             )}
         </Box>
     );
