@@ -18,8 +18,13 @@ import {
     Link,
     TextField,
     InputAdornment,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    IconButton,
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
@@ -894,51 +899,77 @@ const PCIDSSDashboard = () => {
                         </TableHead>
 
                         <TableBody>
-                            {pciDssLogs.map((log, index) => (
-                                <TableRow key={index} hover>
-                                    <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
-                                    <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
-                                    <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={log.parsed.rule?.level || '0'}
-                                            color={getRuleLevelColor(log.parsed.rule?.level)}
-                                            size="small"
-                                        />
-                                    </TableCell>
-                                    // Continue from the last TableCell
-                                    <TableCell>
-                                        {log.parsed.rule?.pci_dss?.map((req, i) => (
+                            {pciDssLogs.length > 0 ? (
+                                pciDssLogs.map((log, index) => (
+                                    <TableRow key={index} hover>
+                                        <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
+                                        <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
+                                        <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
+                                        <TableCell>
                                             <Chip
-                                                key={i}
-                                                label={req}
+                                                label={log.parsed.rule?.level || '0'}
+                                                color={getRuleLevelColor(log.parsed.rule?.level)}
                                                 size="small"
-                                                sx={{ m: 0.5 }}
                                             />
-                                        ))}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Link
-                                            component="button"
-                                            variant="body2"
-                                            onClick={() => handleViewDetails(log)}
-                                        >
-                                            View Details
-                                        </Link>
-                                    </TableCell>
+                                        </TableCell>
+                                        <TableCell>{log.parsed.geoip?.country_name || 'Unknown'}</TableCell>
+                                        <TableCell>
+                                            {log.parsed.rule?.pci_dss?.map((req, i) => (
+                                                <Chip
+                                                    key={i}
+                                                    label={req}
+                                                    size="small"
+                                                    sx={{ m: 0.5 }}
+                                                />
+                                            ))}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Link
+                                                component="button"
+                                                variant="body2"
+                                                onClick={() => handleViewDetails(log)}
+                                            >
+                                                View Details
+                                            </Link>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={7} align="center">No PCI DSS logs found</TableCell>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            )}
+                        </TableBody>                    </Table>
                 </TableContainer>
             </Box>
 
             {/* Session Log View Modal */}
             {selectedLog && (
-                <SessionLogView
-                    log={selectedLog}
+                <Dialog
+                    open={Boolean(selectedLog)}
                     onClose={() => setSelectedLog(null)}
-                />
+                    maxWidth="md"
+                    fullWidth
+                >
+                    <DialogTitle sx={{
+                        backgroundColor: '#e8f5e9',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <Typography variant="h6">PCIDSS Log Details</Typography>
+                        <IconButton
+                            aria-label="close"
+                            onClick={() => setSelectedLog(null)}
+                            size="small"
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent sx={{ mt: 2 }}>
+                        <SessionLogView data={selectedLog.data} />
+                    </DialogContent>
+                </Dialog>
             )}
         </Box>
     );

@@ -925,7 +925,7 @@ const TSCDashboard = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center'
                 }}>
-                    <Typography variant="h6">Log Details</Typography>
+                    <Typography variant="h6">TSC Log Details</Typography>
                     <IconButton
                         aria-label="close"
                         onClick={() => setSelectedLog(null)}
