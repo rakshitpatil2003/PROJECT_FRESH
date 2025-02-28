@@ -511,7 +511,12 @@ const PCIDSSDashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: getSeverityColor(item.level)
+                            color: function getRuleLevelColor(level) {
+                                if (level >= 12) return '#f44336'; // Red
+                                if (level >= 8) return '#ff9800';  // Orange
+                                if (level >= 4) return '#2196f3';  // Blue
+                                return '#4caf50';                 // Green
+                            }(item.level)
                         }
                     })),
                     emphasis: {
@@ -674,6 +679,13 @@ const PCIDSSDashboard = () => {
             cardDataChart.dispose();
         };
     }, [pciDssStats.cardDataStatistics, loading]);
+    const getSeverityLabel = (level) => {
+        const numLevel = parseInt(level);
+        if (numLevel >= 12) return 'Critical';
+        if (numLevel >= 8) return 'High';
+        if (numLevel >= 4) return 'Medium';
+        return 'Low';
+    };
 
     // Format timestamp
     const formatTimestamp = (timestamp) => {
@@ -690,7 +702,12 @@ const PCIDSSDashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        setSelectedLog(log.parsed);
+        const severity = getSeverityLabel(log.parsed.rule?.level);
+
+        setSelectedLog({
+            data: log.parsed,  // Pass the parsed log data directly as the 'data' prop
+            severity: severity
+        });
     };
 
     // Filter logs on search
@@ -973,15 +990,6 @@ const PCIDSSDashboard = () => {
             )}
         </Box>
     );
-};
-
-// Helper function for severity colors
-const getSeverityColor = (level) => {
-    const numLevel = parseInt(level);
-    if (numLevel >= 12) return '#FF5722';
-    if (numLevel >= 8) return '#FFA726';
-    if (numLevel >= 4) return '#FDD835';
-    return '#66BB6A';
 };
 
 export default PCIDSSDashboard;

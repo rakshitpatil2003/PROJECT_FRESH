@@ -63,16 +63,104 @@ const NISTDashboard = () => {
         return "success";
     };
 
+    const processNistStats = useCallback((nistLogs) => {
+        // Unique NIST controls
+        const nistControls = new Set();
+    
+        // Agent distribution
+        const agentDistribution = {};
+    
+        // Timeline data (group by day)
+        const timelineMap = {};
+    
+        // Control severity
+        const controlSeverity = {};
+    
+        // Control Families distribution
+        const controlFamilies = {};
+    
+        nistLogs.forEach(log => {
+            const parsedLog = log.parsed;
+            const rule = parsedLog.rule || {};
+    
+            // Process NIST controls
+            if (rule.nist_800_53 && rule.nist_800_53.length) {
+                rule.nist_800_53.forEach(control => {
+                    nistControls.add(control);
+    
+                    // Track control severity
+                    if (!controlSeverity[control]) {
+                        controlSeverity[control] = {
+                            count: 0,
+                            avgLevel: 0,
+                            levels: []
+                        };
+                    }
+    
+                    controlSeverity[control].count++;
+                    controlSeverity[control].levels.push(parseInt(rule.level));
+    
+                    // Track control family
+                    const family = extractFamilyFromControl(control);
+                    if (!controlFamilies[family]) {
+                        controlFamilies[family] = 0;
+                    }
+                    controlFamilies[family]++;
+                });
+            }
+    
+            // Process agent distribution
+            const agentName = parsedLog.agent?.name || 'Unknown';
+            if (!agentDistribution[agentName]) {
+                agentDistribution[agentName] = 0;
+            }
+            agentDistribution[agentName]++;
+    
+            // Process timeline data
+            const timestamp = parsedLog.timestamp;
+    
+            const date = typeof timestamp === 'number'
+                ? new Date(timestamp * 1000).toISOString().split('T')[0]
+                : new Date(timestamp).toISOString().split('T')[0];
+    
+    
+            if (!timelineMap[date]) {
+                timelineMap[date] = 0;
+            }
+            timelineMap[date]++;
+        });
+    
+        // Calculate average severity for each control
+        Object.keys(controlSeverity).forEach(control => {
+            const levels = controlSeverity[control].levels;
+            controlSeverity[control].avgLevel = levels.reduce((sum, level) => sum + level, 0) / levels.length;
+        });
+    
+        // Convert timeline map to array sorted by date
+        const timelineData = Object.entries(timelineMap)
+            .map(([date, count]) => ({ date, count }))
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+        setNistStats({
+            totalCount: nistLogs.length,
+            uniqueNistControls: Array.from(nistControls),
+            agentDistribution,
+            timelineData,
+            controlSeverity,
+            controlFamilies,
+        });
+    }, []);
+    
     const fetchLogs = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
-
+    
             const token = localStorage.getItem('token');
             if (!token) {
                 throw new Error('Authentication token not found');
             }
-
+    
             const response = await axios.get(
                 `${API_URL}/api/logs/session`,
                 {
@@ -82,7 +170,7 @@ const NISTDashboard = () => {
                     }
                 }
             );
-
+    
             // Parse each log with parseLogMessage
             const parsedLogs = response.data
                 .map(log => ({
@@ -90,15 +178,15 @@ const NISTDashboard = () => {
                     parsed: parseLogMessage(log)
                 }))
                 .filter(log => log.parsed !== null);
-
+    
             setLogs(parsedLogs);
-
+    
             // Filter NIST logs
             const nistFilteredLogs = parsedLogs.filter(log => {
                 const parsedLog = log.parsed;
                 return parsedLog?.rule?.nist_800_53 && parsedLog.rule.nist_800_53.length > 0;
             });
-
+    
             setNistLogs(nistFilteredLogs);
             processNistStats(nistFilteredLogs);
         } catch (error) {
@@ -109,7 +197,7 @@ const NISTDashboard = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [processNistStats]);
 
     const extractFamilyFromControl = (control) => {
         // NIST controls typically follow format like AC-1, AU-2, etc.
@@ -142,93 +230,7 @@ const NISTDashboard = () => {
         return familyNames[familyCode] || `${familyCode} Family`;
     };
 
-    const processNistStats = (nistLogs) => {
-        // Unique NIST controls
-        const nistControls = new Set();
-
-        // Agent distribution
-        const agentDistribution = {};
-
-        // Timeline data (group by day)
-        const timelineMap = {};
-
-        // Control severity
-        const controlSeverity = {};
-
-        // Control Families distribution
-        const controlFamilies = {};
-
-        nistLogs.forEach(log => {
-            const parsedLog = log.parsed;
-            const rule = parsedLog.rule || {};
-
-            // Process NIST controls
-            if (rule.nist_800_53 && rule.nist_800_53.length) {
-                rule.nist_800_53.forEach(control => {
-                    nistControls.add(control);
-
-                    // Track control severity
-                    if (!controlSeverity[control]) {
-                        controlSeverity[control] = {
-                            count: 0,
-                            avgLevel: 0,
-                            levels: []
-                        };
-                    }
-
-                    controlSeverity[control].count++;
-                    controlSeverity[control].levels.push(parseInt(rule.level));
-
-                    // Track control family
-                    const family = extractFamilyFromControl(control);
-                    if (!controlFamilies[family]) {
-                        controlFamilies[family] = 0;
-                    }
-                    controlFamilies[family]++;
-                });
-            }
-
-            // Process agent distribution
-            const agentName = parsedLog.agent?.name || 'Unknown';
-            if (!agentDistribution[agentName]) {
-                agentDistribution[agentName] = 0;
-            }
-            agentDistribution[agentName]++;
-
-            // Process timeline data
-            const timestamp = parsedLog.timestamp;
-
-            const date = typeof timestamp === 'number'
-                ? new Date(timestamp * 1000).toISOString().split('T')[0]
-                : new Date(timestamp).toISOString().split('T')[0];
-
-
-            if (!timelineMap[date]) {
-                timelineMap[date] = 0;
-            }
-            timelineMap[date]++;
-        });
-
-        // Calculate average severity for each control
-        Object.keys(controlSeverity).forEach(control => {
-            const levels = controlSeverity[control].levels;
-            controlSeverity[control].avgLevel = levels.reduce((sum, level) => sum + level, 0) / levels.length;
-        });
-
-        // Convert timeline map to array sorted by date
-        const timelineData = Object.entries(timelineMap)
-            .map(([date, count]) => ({ date, count }))
-            .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-        setNistStats({
-            totalCount: nistLogs.length,
-            uniqueNistControls: Array.from(nistControls),
-            agentDistribution,
-            timelineData,
-            controlSeverity,
-            controlFamilies,
-        });
-    };
+    
 
     // Initialize and update charts
     useEffect(() => {
@@ -560,7 +562,12 @@ const NISTDashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: getSeverityColor(item.level)
+                            color: function getRuleLevelColor(level) {
+                                if (level >= 12) return '#f44336'; // Red
+                                if (level >= 8) return '#ff9800';  // Orange
+                                if (level >= 4) return '#2196f3';  // Blue
+                                return '#4caf50';                 // Green
+                            }(item.level)
                         }
                     })),
                     emphasis: {
@@ -591,12 +598,13 @@ const NISTDashboard = () => {
         };
     }, [nistLogs, loading]);
 
-    function getSeverityColor(level) {
-        if (level >= 12) return '#f44336'; // Red
-        if (level >= 8) return '#ff9800';  // Orange
-        if (level >= 4) return '#2196f3';  // Blue
-        return '#4caf50';                 // Green
-    }
+    const getSeverityLabel = (level) => {
+        const numLevel = parseInt(level);
+        if (numLevel >= 12) return 'Critical';
+        if (numLevel >= 8) return 'High';
+        if (numLevel >= 4) return 'Medium';
+        return 'Low';
+    };
 
     // Format timestamp
     const formatTimestamp = (timestamp) => {
@@ -613,10 +621,11 @@ const NISTDashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        //const severity = getSeverityLabel(log.parsed.rule?.level);
+        const severity = getSeverityLabel(log.parsed.rule?.level);
 
         setSelectedLog({
-            data: log.parsed  // Pass the parsed log data directly as the 'data' prop
+            data: log.parsed,  // Pass the parsed log data directly as the 'data' prop
+            severity: severity
         });
     };
 

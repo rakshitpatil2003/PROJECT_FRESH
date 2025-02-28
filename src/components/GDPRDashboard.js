@@ -486,7 +486,7 @@ const GDPRDashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: function getSeverityColor(level) {
+                            color: function getRuleLevelColor(level) {
                                 if (level >= 12) return '#f44336'; // Red
                                 if (level >= 8) return '#ff9800';  // Orange
                                 if (level >= 4) return '#2196f3';  // Blue
@@ -680,7 +680,8 @@ const GDPRDashboard = () => {
         const severity = getSeverityLabel(log.parsed.rule?.level);
 
         setSelectedLog({
-            data: log.parsed  // Pass the parsed log data directly as the 'data' prop
+            data: log.parsed,  // Pass the parsed log data directly as the 'data' prop
+            severity: severity
         });
     };
 
@@ -960,11 +961,6 @@ const GDPRDashboard = () => {
             )}
         </Box>
     );
-};
-
-// PropTypes validation
-GDPRDashboard.propTypes = {
-    // Add any props if needed
 };
 
 export default GDPRDashboard;

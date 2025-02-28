@@ -492,7 +492,12 @@ const TSCDashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: getSeverityColor(item.level)
+                            color: function getRuleLevelColor(level) {
+                                if (level >= 12) return '#f44336'; // Red
+                                if (level >= 8) return '#ff9800';  // Orange
+                                if (level >= 4) return '#2196f3';  // Blue
+                                return '#4caf50';                 // Green
+                            }(item.level)
                         }
                     })),
                     emphasis: {
@@ -636,7 +641,7 @@ const TSCDashboard = () => {
                     barWidth: '60%',
                     data: categoryData.map(item => item.count),
                     itemStyle: {
-                        color: '#3F51B5'
+                        color: '#4CAF50',
                     }
                 }
             ]
@@ -655,6 +660,13 @@ const TSCDashboard = () => {
             categoryChart.dispose();
         };
     }, [tscStats.categoryDistribution, loading]);
+    const getSeverityLabel = (level) => {
+        const numLevel = parseInt(level);
+        if (numLevel >= 12) return 'Critical';
+        if (numLevel >= 8) return 'High';
+        if (numLevel >= 4) return 'Medium';
+        return 'Low';
+    };
 
     // Format timestamp
     const formatTimestamp = (timestamp) => {
@@ -671,7 +683,12 @@ const TSCDashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        setSelectedLog(log.parsed);
+        const severity = getSeverityLabel(log.parsed.rule?.level);
+
+        setSelectedLog({
+            data: log.parsed,  // Pass the parsed log data directly as the 'data' prop
+            severity: severity
+        });
     };
 
     // Filter logs on search
@@ -913,40 +930,35 @@ const TSCDashboard = () => {
             </Box>
 
             {/* Log Details Dialog */}
-            <Dialog
-                open={Boolean(selectedLog)}
-                onClose={() => setSelectedLog(null)}
-                maxWidth="md"
-                fullWidth
-            >
-                <DialogTitle sx={{
-                    backgroundColor: '#f5f5f5',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                }}>
-                    <Typography variant="h6">TSC Log Details</Typography>
-                    <IconButton
-                        aria-label="close"
-                        onClick={() => setSelectedLog(null)}
-                        size="small"
-                    >
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent>
-                    <SessionLogView data={selectedLog} />
-                </DialogContent>
-            </Dialog>
+            {selectedLog && (
+                <Dialog
+                    open={Boolean(selectedLog)}
+                    onClose={() => setSelectedLog(null)}
+                    maxWidth="md"
+                    fullWidth
+                >
+                    <DialogTitle sx={{
+                        backgroundColor: '#e8f5e9',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <Typography variant="h6">TSC Log Details</Typography>
+                        <IconButton
+                            aria-label="close"
+                            onClick={() => setSelectedLog(null)}
+                            size="small"
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent sx={{ mt: 2 }}>
+                        <SessionLogView data={selectedLog.data} />
+                    </DialogContent>
+                </Dialog>
+            )}
         </Box>
     );
-    
-    // Helper function to get severity color
-    function getSeverityColor(level) {
-        if (level >= 12) return '#f44336'; // Red
-        if (level >= 8) return '#ff9800';  // Orange
-        if (level >= 4) return '#2196f3';  // Blue
-        return '#4caf50';                  // Green
-    }
 };
+
 export default TSCDashboard;
