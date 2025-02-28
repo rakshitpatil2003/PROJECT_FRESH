@@ -22,6 +22,7 @@ import GDPRDashboard from './components/GDPRDashboard';
 import NISTDashboard from './components/NISTDashboard';
 import PCIDSSDashboard from './components/PCIDSSDashboard';
 import TSCDashboard from './components/TSCDashboard';
+import NewsTicker from './components/NewsTicker';
 
 const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   const token = localStorage.getItem('token');
@@ -56,12 +57,13 @@ const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
             minHeight: '100vh',
             width: `calc(100% - 240px)`,
             marginLeft: '0',
-            paddingBottom: '100px'
+            paddingBottom: '150px'
           }}
         >
           {children}
         </Box>
       </Box>
+      <NewsTicker/>
       <Footer />
     </Box>
   );
