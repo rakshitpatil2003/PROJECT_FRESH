@@ -3,14 +3,14 @@
     width: 100%;
     background-color: #f1f1f1;
     overflow: hidden;
-    padding: 8px 0;
+    padding: 6px 0;
     border-top: 1px solid #ddd;
     border-bottom: 1px solid #ddd;
   }
   
   .ticker-content {
     white-space: nowrap;
-    animation: ticker 30s linear infinite;
+    animation: ticker 100s linear infinite;
     display: inline-block;
   }
   
