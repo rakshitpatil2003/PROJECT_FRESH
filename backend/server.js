@@ -102,6 +102,7 @@ if (cluster.isMaster) {
   const connectDB = require('./config/db');
   const logsRoutes = require('./routes/Logs');
   const authRoutes = require('./routes/auth');
+  const newsticker = require('./routes/news');
 
   const app = express();
 
@@ -165,6 +166,7 @@ if (cluster.isMaster) {
       // Routes
       app.use('/api/auth', authRoutes);
       app.use('/api/logs', logsRoutes);
+      app.use('/api/news', newsticker);
 
       // Test endpoint
       app.get('/api/test', (req, res) => {
