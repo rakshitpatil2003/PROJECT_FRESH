@@ -4,8 +4,10 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { API_URL } from '../config';
+import { useNavigate } from 'react-router-dom';
 
 const KeyMetrics = () => {
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState({
     totalLogs: 0,
     majorLogs: 0,
@@ -60,27 +62,36 @@ const KeyMetrics = () => {
    
   const metricsConfig = [
     {
-      title: 'Total Unique Logs',
+      title: 'Total Logs',
       value: metrics.totalLogs,
       Icon: AssessmentIcon,
       color: '#2196f3',
-      bgColor: '#e3f2fd'
+      bgColor: '#e3f2fd',
+      link: null
     },
     {
-      title: 'Major Unique Logs',
+      title: 'Major Logs',
       value: metrics.majorLogs,
       Icon: WarningAmberIcon,
       color: '#f44336',
-      bgColor: '#ffebee'
+      bgColor: '#ffebee',
+      link: '/major-logs'
     },
     {
-      title: 'Normal Unique Logs',
+      title: 'Normal Logs',
       value: metrics.normalLogs,
       Icon: CheckCircleIcon,
       color: '#4caf50',
-      bgColor: '#e8f5e9'
+      bgColor: '#e8f5e9',
+      link: null
     }
   ];
+
+  const handleCardClick = (link) => {
+    if (link) {
+      navigate(link);
+    }
+  };
 
   return (
     <Grid container spacing={3}>
@@ -101,9 +112,12 @@ const KeyMetrics = () => {
               backgroundColor: 'white',
               transition: 'transform 0.2s ease-in-out',
               '&:hover': {
-                transform: 'translateY(-4px)'
+                transform: 'translateY(-4px)',
+                cursor: metric.link ? 'pointer' : 'default',
+                boxShadow: metric.link ? 3 : 2
               }
             }}
+            onClick={() => handleCardClick(metric.link)}
           >
             <Box display="flex" alignItems="center" mb={2}>
               <Box

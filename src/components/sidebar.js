@@ -41,7 +41,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
   };
 
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+    { text: 'Security Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Forensic Analysis', icon: <AssessmentIcon />, path: '/logs' },
     { text: 'Advanced Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
     { text: 'Performance Dashboard', icon: <SpeedIcon />, path: '/performance-dashboard' },
