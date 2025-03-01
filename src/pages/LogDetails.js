@@ -20,13 +20,16 @@ import {
   DialogContent,
   IconButton,
   Pagination,
-  Chip
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import { API_URL } from '../config';
 import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
-//import LogDetailsView from '../components/LogDetailsView';
 
 const LogDetails = () => {
   const [logs, setLogs] = useState([]);
@@ -36,6 +39,7 @@ const LogDetails = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [logType, setLogType] = useState('all'); // New state for log type filter
 
   const getRuleLevelColor = (level) => {
     const numLevel = parseInt(level);
@@ -57,12 +61,12 @@ const LogDetails = () => {
     }
   };
 
-  const fetchLogs = useCallback(async (currentPage, search) => {
+  const fetchLogs = useCallback(async (currentPage, search, type) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${API_URL}/api/logs?page=${currentPage}&limit=100&search=${search}`,
+        `${API_URL}/api/logs?page=${currentPage}&limit=100&search=${search}&logType=${type}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -83,23 +87,27 @@ const LogDetails = () => {
     } finally {
       setLoading(false);
     }
-  }, [API_URL]);
+  }, []);
 
   const debouncedSearch = useCallback(
-    debounce((searchValue) => {
+    debounce((searchValue, logTypeValue) => {
       setPage(1);
-      fetchLogs(1, searchValue);
+      fetchLogs(1, searchValue, logTypeValue);
     }, 500),
     [fetchLogs]
   );
 
   useEffect(() => {
-    debouncedSearch(searchTerm);
-  }, [searchTerm, debouncedSearch]);
+    debouncedSearch(searchTerm, logType);
+  }, [searchTerm, logType, debouncedSearch]);
 
   const handlePageChange = (event, newPage) => {
     setPage(newPage);
-    fetchLogs(newPage, searchTerm);
+    fetchLogs(newPage, searchTerm, logType);
+  };
+
+  const handleLogTypeChange = (event) => {
+    setLogType(event.target.value);
   };
 
   const handleClickOpen = (log) => {
@@ -127,22 +135,38 @@ const LogDetails = () => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <TextField
-        fullWidth
-        margin="normal"
-        variant="outlined"
-        placeholder="Search logs..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-        sx={{ mb: 3 }}
-      />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <FormControl variant="outlined" sx={{ minWidth: 200 }}>
+          <InputLabel id="log-type-label">Log Type</InputLabel>
+          <Select
+            labelId="log-type-label"
+            value={logType}
+            onChange={handleLogTypeChange}
+            label="Log Type"
+          >
+            <MenuItem value="all">All Logs</MenuItem>
+            <MenuItem value="fortigate">Fortigate Logs</MenuItem>
+            <MenuItem value="other">Suricata/Sysmon Logs</MenuItem>
+          </Select>
+        </FormControl>
+
+        <TextField
+          fullWidth
+          margin="normal"
+          variant="outlined"
+          placeholder="Search logs..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ my: 0 }}
+        />
+      </Box>
 
       <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
         <Table stickyHeader>
