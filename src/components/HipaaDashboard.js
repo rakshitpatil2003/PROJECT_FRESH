@@ -31,6 +31,7 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const HIPAADashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -48,6 +49,7 @@ const HIPAADashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const controlDistributionChartRef = React.useRef(null);
@@ -567,12 +569,17 @@ const HIPAADashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#2196f3', mb: 2 }}>
                 HIPAA Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     Health Insurance Portability and Accountability Act
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={hipaaLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert

@@ -31,6 +31,7 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const GDPRDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -58,6 +59,7 @@ const GDPRDashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const articleDistributionChartRef = React.useRef(null);
@@ -747,12 +749,17 @@ const GDPRDashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#4CAF50', mb: 2 }}>
                 GDPR Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     General Data Protection Regulation
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={gdprLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert

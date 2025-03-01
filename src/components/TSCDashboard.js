@@ -31,6 +31,7 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const TSCDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -57,6 +58,7 @@ const TSCDashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const criteriaDistributionChartRef = React.useRef(null);
@@ -747,12 +749,17 @@ const TSCDashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#3F51B5', mb: 2 }}>
                 TSC Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     Trust Services Criteria
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={tscLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert

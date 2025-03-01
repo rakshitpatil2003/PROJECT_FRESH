@@ -31,6 +31,7 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const PCIDSSDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -58,6 +59,7 @@ const PCIDSSDashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const requirementDistributionChartRef = React.useRef(null);
@@ -771,12 +773,17 @@ const PCIDSSDashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#FF5722', mb: 2 }}>
                 PCI DSS Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     Payment Card Industry Data Security Standard
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={pciDssLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert

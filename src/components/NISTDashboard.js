@@ -31,6 +31,7 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const NISTDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -49,6 +50,7 @@ const NISTDashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const controlDistributionChartRef = React.useRef(null);
@@ -66,28 +68,28 @@ const NISTDashboard = () => {
     const processNistStats = useCallback((nistLogs) => {
         // Unique NIST controls
         const nistControls = new Set();
-    
+
         // Agent distribution
         const agentDistribution = {};
-    
+
         // Timeline data (group by day)
         const timelineMap = {};
-    
+
         // Control severity
         const controlSeverity = {};
-    
+
         // Control Families distribution
         const controlFamilies = {};
-    
+
         nistLogs.forEach(log => {
             const parsedLog = log.parsed;
             const rule = parsedLog.rule || {};
-    
+
             // Process NIST controls
             if (rule.nist_800_53 && rule.nist_800_53.length) {
                 rule.nist_800_53.forEach(control => {
                     nistControls.add(control);
-    
+
                     // Track control severity
                     if (!controlSeverity[control]) {
                         controlSeverity[control] = {
@@ -96,10 +98,10 @@ const NISTDashboard = () => {
                             levels: []
                         };
                     }
-    
+
                     controlSeverity[control].count++;
                     controlSeverity[control].levels.push(parseInt(rule.level));
-    
+
                     // Track control family
                     const family = extractFamilyFromControl(control);
                     if (!controlFamilies[family]) {
@@ -108,39 +110,39 @@ const NISTDashboard = () => {
                     controlFamilies[family]++;
                 });
             }
-    
+
             // Process agent distribution
             const agentName = parsedLog.agent?.name || 'Unknown';
             if (!agentDistribution[agentName]) {
                 agentDistribution[agentName] = 0;
             }
             agentDistribution[agentName]++;
-    
+
             // Process timeline data
             const timestamp = parsedLog.timestamp;
-    
+
             const date = typeof timestamp === 'number'
                 ? new Date(timestamp * 1000).toISOString().split('T')[0]
                 : new Date(timestamp).toISOString().split('T')[0];
-    
-    
+
+
             if (!timelineMap[date]) {
                 timelineMap[date] = 0;
             }
             timelineMap[date]++;
         });
-    
+
         // Calculate average severity for each control
         Object.keys(controlSeverity).forEach(control => {
             const levels = controlSeverity[control].levels;
             controlSeverity[control].avgLevel = levels.reduce((sum, level) => sum + level, 0) / levels.length;
         });
-    
+
         // Convert timeline map to array sorted by date
         const timelineData = Object.entries(timelineMap)
             .map(([date, count]) => ({ date, count }))
             .sort((a, b) => new Date(a.date) - new Date(b.date));
-    
+
         setNistStats({
             totalCount: nistLogs.length,
             uniqueNistControls: Array.from(nistControls),
@@ -150,17 +152,17 @@ const NISTDashboard = () => {
             controlFamilies,
         });
     }, []);
-    
+
     const fetchLogs = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
-    
+
             const token = localStorage.getItem('token');
             if (!token) {
                 throw new Error('Authentication token not found');
             }
-    
+
             const response = await axios.get(
                 `${API_URL}/api/logs/session`,
                 {
@@ -170,7 +172,7 @@ const NISTDashboard = () => {
                     }
                 }
             );
-    
+
             // Parse each log with parseLogMessage
             const parsedLogs = response.data
                 .map(log => ({
@@ -178,15 +180,15 @@ const NISTDashboard = () => {
                     parsed: parseLogMessage(log)
                 }))
                 .filter(log => log.parsed !== null);
-    
+
             setLogs(parsedLogs);
-    
+
             // Filter NIST logs
             const nistFilteredLogs = parsedLogs.filter(log => {
                 const parsedLog = log.parsed;
                 return parsedLog?.rule?.nist_800_53 && parsedLog.rule.nist_800_53.length > 0;
             });
-    
+
             setNistLogs(nistFilteredLogs);
             processNistStats(nistFilteredLogs);
         } catch (error) {
@@ -204,7 +206,7 @@ const NISTDashboard = () => {
         // The letters before the hyphen represent the family
         if (!control) return 'Unknown';
         const familyCode = control.split('-')[0];
-        
+
         // Map family codes to full names
         const familyNames = {
             'AC': 'Access Control',
@@ -226,11 +228,11 @@ const NISTDashboard = () => {
             'SC': 'System and Communications Protection',
             'SI': 'System and Information Integrity'
         };
-        
+
         return familyNames[familyCode] || `${familyCode} Family`;
     };
 
-    
+
 
     // Initialize and update charts
     useEffect(() => {
@@ -478,7 +480,7 @@ const NISTDashboard = () => {
                 right: 10,
                 top: 'middle',
                 bottom: 20,
-                formatter: function(name) {
+                formatter: function (name) {
                     return name.length > 15 ? name.substring(0, 12) + '...' : name;
                 }
             },
@@ -487,9 +489,9 @@ const NISTDashboard = () => {
                     type: 'pie',
                     radius: '55%',
                     center: ['40%', '50%'],
-                    data: familyData.map(item => ({ 
-                        name: item.family, 
-                        value: item.count 
+                    data: familyData.map(item => ({
+                        name: item.family,
+                        value: item.count
                     })),
                     emphasis: {
                         itemStyle: {
@@ -685,12 +687,17 @@ const NISTDashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#2196f3', mb: 2 }}>
                 NIST 800-53 Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     National Institute of Standards and Technology Special Publication 800-53
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={nistLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert
