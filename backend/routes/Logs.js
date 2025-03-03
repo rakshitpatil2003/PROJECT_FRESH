@@ -142,6 +142,50 @@ router.get('/charts/:chartType', auth, async (req, res) => {
   }
 });
 
+router.get('/debug/structure', auth, async (req, res) => {
+  try {
+    const sampleLog = await Log.findOne().lean();
+    
+    if (!sampleLog) {
+      return res.json({ message: "No logs found in database" });
+    }
+    
+    // Extract the structure of the document
+    const structure = {
+      hasSourceIP: !!sampleLog.sourceIP,
+      hasSourceObject: !!sampleLog.source && !!sampleLog.source.ip,
+      hasFieldsSrcIP: !!sampleLog.fields && !!sampleLog.fields.src_ip,
+      hasSrcIP: !!sampleLog.src_ip,
+      hasNetworkSrcIP: !!sampleLog.network && !!sampleLog.network.srcIp,
+      
+      hasDestinationIP: !!sampleLog.destinationIP,
+      hasDestinationObject: !!sampleLog.destination && !!sampleLog.destination.ip,
+      hasFieldsDstIP: !!sampleLog.fields && !!sampleLog.fields.dst_ip,
+      hasDstIP: !!sampleLog.dst_ip,
+      hasNetworkDestIP: !!sampleLog.network && !!sampleLog.network.destIp,
+      
+      hasProtocol: !!sampleLog.protocol,
+      hasDataProtocol: !!sampleLog.data && !!sampleLog.data.protocol,
+      hasFieldsProtocol: !!sampleLog.fields && !!sampleLog.fields.protocol,
+      hasNetworkProtocol: !!sampleLog.network && !!sampleLog.network.protocol,
+      
+      documentKeys: Object.keys(sampleLog)
+    };
+    
+    return res.json({
+      message: "Document structure analysis",
+      structure,
+      sample: sampleLog
+    });
+  } catch (error) {
+    console.error("Error analyzing document structure:", error);
+    return res.status(500).json({ 
+      message: "Error analyzing document structure", 
+      error: error.message 
+    });
+  }
+});
+
 // Helper function to calculate time filter based on timeRange parameter
 function getTimeFilter(timeRange) {
   const now = new Date();
@@ -247,59 +291,142 @@ async function getLogLevelsOverTime(query, res) {
 }
 
 async function getProtocolDistribution(query, res) {
-  const result = await Log.aggregate([
-    { $match: query },
-    {
-      $group: {
-        _id: "$protocol",
-        count: { $sum: 1 }
+  try {
+    // Use a more comprehensive approach to find protocol data
+    const result = await Log.aggregate([
+      { $match: query },
+      {
+        $project: {
+          protocol: {
+            $cond: [
+              { $ne: ["$protocol", null] },
+              "$protocol",
+              {
+                $cond: [
+                  { $ne: ["$data.protocol", null] },
+                  "$data.protocol",
+                  {
+                    $cond: [
+                      { $ne: ["$fields.protocol", null] },
+                      "$fields.protocol",
+                      {
+                        $cond: [
+                          { $ne: ["$network.protocol", null] },
+                          "$network.protocol",
+                          "Unknown"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$protocol",
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: 0,
+          name: { 
+            $cond: [
+              { $eq: ["$_id", null] },
+              "Unknown",
+              { $cond: [{ $eq: ["$_id", ""] }, "None", "$_id"] }
+            ]
+          },
+          value: "$count"
+        }
       }
-    },
-    { $sort: { count: -1 } },
-    { $limit: 10 },
-    {
-      $project: {
-        _id: 0,
-        name: { $ifNull: ["$_id", "Unknown"] },
-        value: "$count"
-      }
+    ]);
+    
+    // Handle empty results
+    if (result.length === 0) {
+      return res.json([{ name: "No Protocol Data", value: 1 }]);
     }
-  ]);
-  
-  // Handle empty results
-  if (result.length === 0) {
-    return res.json([{ name: "No Data", value: 1 }]);
+    
+    return res.json(result);
+  } catch (error) {
+    console.error("Error in protocol distribution:", error);
+    return res.status(500).json({ message: "Error fetching protocol distribution", error: error.message });
   }
-  
-  return res.json(result);
 }
 
 async function getTopSourceIPs(query, res) {
-  const result = await Log.aggregate([
-    { $match: query },
-    {
-      $group: {
-        _id: "$sourceIP",
-        count: { $sum: 1 }
+  try {
+    // Use a more comprehensive approach to find source IP data
+    const result = await Log.aggregate([
+      { $match: query },
+      {
+        $project: {
+          sourceIP: {
+            $cond: [
+              { $ne: ["$sourceIP", null] },
+              "$sourceIP",
+              {
+                $cond: [
+                  { $ne: ["$source.ip", null] },
+                  "$source.ip",
+                  {
+                    $cond: [
+                      { $ne: ["$fields.src_ip", null] },
+                      "$fields.src_ip",
+                      {
+                        $cond: [
+                          { $ne: ["$src_ip", null] },
+                          "$src_ip",
+                          {
+                            $cond: [
+                              { $ne: ["$network.srcIp", null] },
+                              "$network.srcIp",
+                              "Unknown"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$sourceIP",
+          count: { $sum: 1 }
+        }
+      },
+      { $match: { _id: { $ne: "Unknown" } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: 0,
+          name: "$_id",
+          value: "$count"
+        }
       }
-    },
-    { $sort: { count: -1 } },
-    { $limit: 10 },
-    {
-      $project: {
-        _id: 0,
-        name: { $ifNull: ["$_id", "Unknown"] },
-        value: "$count"
-      }
+    ]);
+    
+    // Handle empty results
+    if (result.length === 0) {
+      return res.json([{ name: "No Source IP Data", value: 1 }]);
     }
-  ]);
-  
-  // Handle empty results
-  if (result.length === 0) {
-    return res.json([{ name: "No Data", value: 0 }]);
+    
+    return res.json(result);
+  } catch (error) {
+    console.error("Error in top source IPs:", error);
+    return res.status(500).json({ message: "Error fetching top source IPs", error: error.message });
   }
-  
-  return res.json(result);
 }
 
 async function getLevelDistribution(query, res) {
@@ -329,69 +456,215 @@ async function getLevelDistribution(query, res) {
   return res.json(result);
 }
 
+function getNestedValue(obj, path) {
+  const parts = path.split('.');
+  let current = obj;
+  
+  for (const part of parts) {
+    if (current === null || current === undefined || typeof current !== 'object') {
+      return null;
+    }
+    current = current[part];
+  }
+  
+  return current;
+}
+
 async function getNetworkConnections(query, res) {
-  // Get top source and destination IPs
-  const topSources = await Log.aggregate([
-    { $match: query },
-    { $group: { _id: "$sourceIP", count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 10 }
-  ]);
-  
-  const topDestinations = await Log.aggregate([
-    { $match: query },
-    { $group: { _id: "$destinationIP", count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 10 }
-  ]);
-  
-  // Get connections between them
-  const topIPs = [...topSources.map(s => s._id), ...topDestinations.map(d => d._id)].filter(Boolean);
-  
-  const connections = await Log.aggregate([
-    { 
-      $match: { 
-        ...query,
-        sourceIP: { $in: topIPs },
-        destinationIP: { $in: topIPs }
-      } 
-    },
-    {
-      $group: {
-        _id: { source: "$sourceIP", target: "$destinationIP" },
-        count: { $sum: 1 }
+  try {
+    // Define all possible field paths
+    const sourceIPPaths = ["sourceIP", "source.ip", "fields.src_ip", "src_ip", "network.srcIp"];
+    const destIPPaths = ["destinationIP", "destination.ip", "fields.dst_ip", "dst_ip", "network.destIp"];
+    
+    // Create projection objects for all possible paths
+    const sourceIPProjection = {};
+    sourceIPPaths.forEach(path => {
+      const parts = path.split('.');
+      let current = sourceIPProjection;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!current[parts[i]]) current[parts[i]] = {};
+        current = current[parts[i]];
       }
-    },
-    { $sort: { count: -1 } }
-  ]);
-  
-  // Format nodes and links for force graph
-  const nodes = [
-    ...topSources.map(s => ({ 
-      name: s._id || "Unknown", 
-      value: s.count,
-      category: "Source"
-    })),
-    ...topDestinations.map(d => ({ 
-      name: d._id || "Unknown", 
-      value: d.count,
-      category: "Target"
-    }))
-  ];
-  
-  // Remove duplicates from nodes
-  const uniqueNodes = Array.from(new Map(nodes.map(node => [node.name, node])).values());
-  
-  const links = connections.map(conn => ({
-    source: conn._id.source || "Unknown",
-    target: conn._id.target || "Unknown",
-    value: conn.count
-  }));
-  
-  return res.json({
-    nodes: uniqueNodes,
-    links
-  });
+      current[parts[parts.length - 1]] = 1;
+    });
+    
+    const destIPProjection = {};
+    destIPPaths.forEach(path => {
+      const parts = path.split('.');
+      let current = destIPProjection;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!current[parts[i]]) current[parts[i]] = {};
+        current = current[parts[i]];
+      }
+      current[parts[parts.length - 1]] = 1;
+    });
+    
+    // Get sample documents to check field paths
+    const sampleDocs = await Log.find(query).limit(10).lean();
+    
+    // Determine which fields actually exist in the documents
+    let sourceIPField = null;
+    let destinationIPField = null;
+    
+    for (const doc of sampleDocs) {
+      // Check source IP fields
+      for (const path of sourceIPPaths) {
+        const value = getNestedValue(doc, path);
+        if (value) {
+          sourceIPField = path;
+          break;
+        }
+      }
+      
+      // Check destination IP fields
+      for (const path of destIPPaths) {
+        const value = getNestedValue(doc, path);
+        if (value) {
+          destinationIPField = path;
+          break;
+        }
+      }
+      
+      if (sourceIPField && destinationIPField) break;
+    }
+    
+    // Default to the first option if no field was found
+    sourceIPField = sourceIPField || sourceIPPaths[0];
+    destinationIPField = destinationIPField || destIPPaths[0];
+    
+    console.log(`Using source IP field: ${sourceIPField}, destination IP field: ${destinationIPField}`);
+    
+    // Get top source IPs
+    const sourceProjection = { source: `$${sourceIPField}` };
+    const topSources = await Log.aggregate([
+      { $match: query },
+      { $project: sourceProjection },
+      { $group: { _id: "$source", count: { $sum: 1 } } },
+      { $match: { _id: { $ne: null, $ne: "" } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+    
+    // Get top destination IPs
+    const destProjection = { destination: `$${destinationIPField}` };
+    const topDestinations = await Log.aggregate([
+      { $match: query },
+      { $project: destProjection },
+      { $group: { _id: "$destination", count: { $sum: 1 } } },
+      { $match: { _id: { $ne: null, $ne: "" } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+    
+    // Get source-destination connections
+    const sourceIDs = topSources.map(s => s._id).filter(Boolean);
+    const destIDs = topDestinations.map(d => d._id).filter(Boolean);
+    
+    let connectionsMatchQuery = { ...query };
+    
+    // Only add path conditions if we have data
+    if (sourceIDs.length > 0) {
+      connectionsMatchQuery[sourceIPField] = { $in: sourceIDs };
+    }
+    
+    if (destIDs.length > 0) {
+      connectionsMatchQuery[destinationIPField] = { $in: destIDs };
+    }
+    
+    const connectionProjection = {
+      source: `$${sourceIPField}`,
+      target: `$${destinationIPField}`
+    };
+    
+    const connections = await Log.aggregate([
+      { $match: connectionsMatchQuery },
+      { $project: connectionProjection },
+      { 
+        $group: {
+          _id: { source: "$source", target: "$target" },
+          count: { $sum: 1 }
+        }
+      },
+      { $match: { "_id.source": { $ne: null }, "_id.target": { $ne: null } } },
+      { $sort: { count: -1 } },
+      { $limit: 50 }
+    ]);
+    
+    // Format for force-directed graph
+    const nodeMap = new Map();
+    
+    // Add source nodes
+    topSources.forEach(source => {
+      if (source._id) {
+        nodeMap.set(source._id, {
+          name: source._id,
+          value: source.count,
+          category: "Source"
+        });
+      }
+    });
+    
+    // Add destination nodes
+    topDestinations.forEach(dest => {
+      if (dest._id) {
+        if (nodeMap.has(dest._id)) {
+          const existingNode = nodeMap.get(dest._id);
+          existingNode.value += dest.count;
+          existingNode.category = "Both";
+        } else {
+          nodeMap.set(dest._id, {
+            name: dest._id,
+            value: dest.count,
+            category: "Target"
+          });
+        }
+      }
+    });
+    
+    const nodes = Array.from(nodeMap.values());
+    
+    // Create links
+    const links = connections
+      .filter(conn => conn._id.source && conn._id.target)
+      .map(conn => ({
+        source: conn._id.source,
+        target: conn._id.target,
+        value: conn.count
+      }));
+    
+    // Handle empty results
+    if (nodes.length === 0) {
+      return res.json({
+        nodes: [
+          { name: "No Source Data", value: 1, category: "Source" },
+          { name: "No Target Data", value: 1, category: "Target" }
+        ],
+        links: [
+          { source: "No Source Data", target: "No Target Data", value: 1 }
+        ]
+      });
+    }
+    
+    // Return the network graph data
+    return res.json({
+      nodes,
+      links: links.length > 0 ? links : [
+        { 
+          source: nodes[0].name,
+          target: nodes.length > 1 ? nodes[1].name : nodes[0].name,
+          value: 1
+        }
+      ]
+    });
+  } catch (error) {
+    console.error("Error in network connections:", error);
+    return res.status(500).json({
+      message: "Error generating network connections graph",
+      error: error.message,
+      nodes: [{ name: "Error", value: 1, category: "Error" }],
+      links: []
+    });
+  }
 }
 
 async function getRuleDescriptions(query, res) {
