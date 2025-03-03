@@ -24,7 +24,7 @@ const LogSchema = new mongoose.Schema({
 
 // Update indexes
 LogSchema.index({ timestamp: -1, 'rule.level': 1 });
-LogSchema.index({ uniqueIdentifier: 1 }, { unique: true });
+//LogSchema.index({ uniqueIdentifier: 1 }, { unique: true });
 LogSchema.index({ 'rule.level': 1, 'agent.name': 1 });
 LogSchema.index({ 'rule.level': 1, 'rule.description': 1 });
 
