@@ -31,6 +31,7 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const NISTDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -49,6 +50,7 @@ const NISTDashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const controlDistributionChartRef = React.useRef(null);
@@ -63,86 +65,7 @@ const NISTDashboard = () => {
         return "success";
     };
 
-    const fetchLogs = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-
-            const token = localStorage.getItem('token');
-            if (!token) {
-                throw new Error('Authentication token not found');
-            }
-
-            const response = await axios.get(
-                `${API_URL}/api/logs/session`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            // Parse each log with parseLogMessage
-            const parsedLogs = response.data
-                .map(log => ({
-                    ...log,
-                    parsed: parseLogMessage(log)
-                }))
-                .filter(log => log.parsed !== null);
-
-            setLogs(parsedLogs);
-
-            // Filter NIST logs
-            const nistFilteredLogs = parsedLogs.filter(log => {
-                const parsedLog = log.parsed;
-                return parsedLog?.rule?.nist_800_53 && parsedLog.rule.nist_800_53.length > 0;
-            });
-
-            setNistLogs(nistFilteredLogs);
-            processNistStats(nistFilteredLogs);
-        } catch (error) {
-            console.error('Error fetching session logs:', error);
-            setError(error.response?.data?.message || error.message || 'Failed to fetch session logs');
-            setLogs([]);
-            setNistLogs([]);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    const extractFamilyFromControl = (control) => {
-        // NIST controls typically follow format like AC-1, AU-2, etc.
-        // The letters before the hyphen represent the family
-        if (!control) return 'Unknown';
-        const familyCode = control.split('-')[0];
-        
-        // Map family codes to full names
-        const familyNames = {
-            'AC': 'Access Control',
-            'AT': 'Awareness and Training',
-            'AU': 'Audit and Accountability',
-            'CA': 'Assessment, Authorization, and Monitoring',
-            'CM': 'Configuration Management',
-            'CP': 'Contingency Planning',
-            'IA': 'Identification and Authentication',
-            'IR': 'Incident Response',
-            'MA': 'Maintenance',
-            'MP': 'Media Protection',
-            'PE': 'Physical and Environmental Protection',
-            'PL': 'Planning',
-            'PM': 'Program Management',
-            'PS': 'Personnel Security',
-            'RA': 'Risk Assessment',
-            'SA': 'System and Services Acquisition',
-            'SC': 'System and Communications Protection',
-            'SI': 'System and Information Integrity'
-        };
-        
-        return familyNames[familyCode] || `${familyCode} Family`;
-    };
-
-    const processNistStats = (nistLogs) => {
+    const processNistStats = useCallback((nistLogs) => {
         // Unique NIST controls
         const nistControls = new Set();
 
@@ -228,7 +151,88 @@ const NISTDashboard = () => {
             controlSeverity,
             controlFamilies,
         });
+    }, []);
+
+    const fetchLogs = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('Authentication token not found');
+            }
+
+            const response = await axios.get(
+                `${API_URL}/api/logs/session`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            // Parse each log with parseLogMessage
+            const parsedLogs = response.data
+                .map(log => ({
+                    ...log,
+                    parsed: parseLogMessage(log)
+                }))
+                .filter(log => log.parsed !== null);
+
+            setLogs(parsedLogs);
+
+            // Filter NIST logs
+            const nistFilteredLogs = parsedLogs.filter(log => {
+                const parsedLog = log.parsed;
+                return parsedLog?.rule?.nist_800_53 && parsedLog.rule.nist_800_53.length > 0;
+            });
+
+            setNistLogs(nistFilteredLogs);
+            processNistStats(nistFilteredLogs);
+        } catch (error) {
+            console.error('Error fetching session logs:', error);
+            setError(error.response?.data?.message || error.message || 'Failed to fetch session logs');
+            setLogs([]);
+            setNistLogs([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [processNistStats]);
+
+    const extractFamilyFromControl = (control) => {
+        // NIST controls typically follow format like AC-1, AU-2, etc.
+        // The letters before the hyphen represent the family
+        if (!control) return 'Unknown';
+        const familyCode = control.split('-')[0];
+
+        // Map family codes to full names
+        const familyNames = {
+            'AC': 'Access Control',
+            'AT': 'Awareness and Training',
+            'AU': 'Audit and Accountability',
+            'CA': 'Assessment, Authorization, and Monitoring',
+            'CM': 'Configuration Management',
+            'CP': 'Contingency Planning',
+            'IA': 'Identification and Authentication',
+            'IR': 'Incident Response',
+            'MA': 'Maintenance',
+            'MP': 'Media Protection',
+            'PE': 'Physical and Environmental Protection',
+            'PL': 'Planning',
+            'PM': 'Program Management',
+            'PS': 'Personnel Security',
+            'RA': 'Risk Assessment',
+            'SA': 'System and Services Acquisition',
+            'SC': 'System and Communications Protection',
+            'SI': 'System and Information Integrity'
+        };
+
+        return familyNames[familyCode] || `${familyCode} Family`;
     };
+
+
 
     // Initialize and update charts
     useEffect(() => {
@@ -476,7 +480,7 @@ const NISTDashboard = () => {
                 right: 10,
                 top: 'middle',
                 bottom: 20,
-                formatter: function(name) {
+                formatter: function (name) {
                     return name.length > 15 ? name.substring(0, 12) + '...' : name;
                 }
             },
@@ -485,9 +489,9 @@ const NISTDashboard = () => {
                     type: 'pie',
                     radius: '55%',
                     center: ['40%', '50%'],
-                    data: familyData.map(item => ({ 
-                        name: item.family, 
-                        value: item.count 
+                    data: familyData.map(item => ({
+                        name: item.family,
+                        value: item.count
                     })),
                     emphasis: {
                         itemStyle: {
@@ -560,7 +564,12 @@ const NISTDashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: getSeverityColor(item.level)
+                            color: function getRuleLevelColor(level) {
+                                if (level >= 12) return '#f44336'; // Red
+                                if (level >= 8) return '#ff9800';  // Orange
+                                if (level >= 4) return '#2196f3';  // Blue
+                                return '#4caf50';                 // Green
+                            }(item.level)
                         }
                     })),
                     emphasis: {
@@ -591,12 +600,13 @@ const NISTDashboard = () => {
         };
     }, [nistLogs, loading]);
 
-    function getSeverityColor(level) {
-        if (level >= 12) return '#f44336'; // Red
-        if (level >= 8) return '#ff9800';  // Orange
-        if (level >= 4) return '#2196f3';  // Blue
-        return '#4caf50';                 // Green
-    }
+    const getSeverityLabel = (level) => {
+        const numLevel = parseInt(level);
+        if (numLevel >= 12) return 'Critical';
+        if (numLevel >= 8) return 'High';
+        if (numLevel >= 4) return 'Medium';
+        return 'Low';
+    };
 
     // Format timestamp
     const formatTimestamp = (timestamp) => {
@@ -613,10 +623,11 @@ const NISTDashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        //const severity = getSeverityLabel(log.parsed.rule?.level);
+        const severity = getSeverityLabel(log.parsed.rule?.level);
 
         setSelectedLog({
-            data: log.parsed  // Pass the parsed log data directly as the 'data' prop
+            data: log.parsed,  // Pass the parsed log data directly as the 'data' prop
+            severity: severity
         });
     };
 
@@ -676,12 +687,17 @@ const NISTDashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#2196f3', mb: 2 }}>
                 NIST 800-53 Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     National Institute of Standards and Technology Special Publication 800-53
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={nistLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert

@@ -31,6 +31,7 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const GDPRDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -58,6 +59,7 @@ const GDPRDashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const articleDistributionChartRef = React.useRef(null);
@@ -486,7 +488,7 @@ const GDPRDashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: function getSeverityColor(level) {
+                            color: function getRuleLevelColor(level) {
                                 if (level >= 12) return '#f44336'; // Red
                                 if (level >= 8) return '#ff9800';  // Orange
                                 if (level >= 4) return '#2196f3';  // Blue
@@ -680,7 +682,8 @@ const GDPRDashboard = () => {
         const severity = getSeverityLabel(log.parsed.rule?.level);
 
         setSelectedLog({
-            data: log.parsed  // Pass the parsed log data directly as the 'data' prop
+            data: log.parsed,  // Pass the parsed log data directly as the 'data' prop
+            severity: severity
         });
     };
 
@@ -746,12 +749,17 @@ const GDPRDashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#4CAF50', mb: 2 }}>
                 GDPR Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     General Data Protection Regulation
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={gdprLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert
@@ -960,11 +968,6 @@ const GDPRDashboard = () => {
             )}
         </Box>
     );
-};
-
-// PropTypes validation
-GDPRDashboard.propTypes = {
-    // Add any props if needed
 };
 
 export default GDPRDashboard;

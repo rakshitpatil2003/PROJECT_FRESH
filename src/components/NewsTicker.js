@@ -23,23 +23,23 @@ const NewsTicker = () => {
 
     fetchNews();
   }, []);
-  
+
   return (
     <Box
       sx={{
         width: '100%',
         bgcolor: theme => theme.palette.mode === 'dark' ? '#FF0000' : '#FF0000',
         color: '#ffffff', // WHITE text for both themes for better contrast
-        py: 1.5,  // More padding for prominence
+        py: 0.5,  // More padding for prominence
         borderTop: '1px solid',
         borderBottom: '1px solid',
         borderColor: theme => theme.palette.mode === 'dark' ? '#D3D3D3' : '#D3D3D3', // Accent border
         overflow: 'hidden',
         position: 'fixed',
-        bottom: '75px', // Position above footer
+        bottom: '70px', // Position above footer
         left: 0,
         zIndex: 1000,
-        boxShadow: '0 -2px 10px rgba(0,0,0,0.1)' // Subtle shadow for depth
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.1)', // Subtle shadow for depth
       }}
     >
       {loading ? (

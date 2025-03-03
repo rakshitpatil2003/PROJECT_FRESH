@@ -31,6 +31,7 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const PCIDSSDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -58,6 +59,7 @@ const PCIDSSDashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const requirementDistributionChartRef = React.useRef(null);
@@ -511,7 +513,12 @@ const PCIDSSDashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: getSeverityColor(item.level)
+                            color: function getRuleLevelColor(level) {
+                                if (level >= 12) return '#f44336'; // Red
+                                if (level >= 8) return '#ff9800';  // Orange
+                                if (level >= 4) return '#2196f3';  // Blue
+                                return '#4caf50';                 // Green
+                            }(item.level)
                         }
                     })),
                     emphasis: {
@@ -674,6 +681,13 @@ const PCIDSSDashboard = () => {
             cardDataChart.dispose();
         };
     }, [pciDssStats.cardDataStatistics, loading]);
+    const getSeverityLabel = (level) => {
+        const numLevel = parseInt(level);
+        if (numLevel >= 12) return 'Critical';
+        if (numLevel >= 8) return 'High';
+        if (numLevel >= 4) return 'Medium';
+        return 'Low';
+    };
 
     // Format timestamp
     const formatTimestamp = (timestamp) => {
@@ -690,7 +704,12 @@ const PCIDSSDashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        setSelectedLog(log.parsed);
+        const severity = getSeverityLabel(log.parsed.rule?.level);
+
+        setSelectedLog({
+            data: log.parsed,  // Pass the parsed log data directly as the 'data' prop
+            severity: severity
+        });
     };
 
     // Filter logs on search
@@ -754,12 +773,17 @@ const PCIDSSDashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#FF5722', mb: 2 }}>
                 PCI DSS Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     Payment Card Industry Data Security Standard
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={pciDssLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert
@@ -973,15 +997,6 @@ const PCIDSSDashboard = () => {
             )}
         </Box>
     );
-};
-
-// Helper function for severity colors
-const getSeverityColor = (level) => {
-    const numLevel = parseInt(level);
-    if (numLevel >= 12) return '#FF5722';
-    if (numLevel >= 8) return '#FFA726';
-    if (numLevel >= 4) return '#FDD835';
-    return '#66BB6A';
 };
 
 export default PCIDSSDashboard;

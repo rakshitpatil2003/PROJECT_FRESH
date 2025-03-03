@@ -26,13 +26,12 @@ import {
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-//import FilterListIcon from '@mui/icons-material/FilterList';
-//import TimelineIcon from '@mui/icons-material/Timeline';
 import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import ExportPDF from '../components/ExportPDF';
 
 const HIPAADashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -50,6 +49,7 @@ const HIPAADashboard = () => {
     });
 
     // Charts references
+    const dashboardRef = React.useRef(null);
     const timelineChartRef = React.useRef(null);
     const agentDistributionChartRef = React.useRef(null);
     const controlDistributionChartRef = React.useRef(null);
@@ -447,7 +447,12 @@ const HIPAADashboard = () => {
                         name: item.level.toString(),
                         value: item.count,
                         itemStyle: {
-                            color: getSeverityColor(item.level)
+                            color: function getRuleLevelColor(level) {
+                                if (level >= 12) return '#f44336'; // Red
+                                if (level >= 8) return '#ff9800';  // Orange
+                                if (level >= 4) return '#2196f3';  // Blue
+                                return '#4caf50';                 // Green
+                            }(item.level)
                         }
                     })),
                     emphasis: {
@@ -477,13 +482,13 @@ const HIPAADashboard = () => {
             severityChart.dispose();
         };
     }, [hipaaLogs, loading]);
-
-    function getSeverityColor(level) {
-        if (level >= 12) return '#f44336'; // Red
-        if (level >= 8) return '#ff9800';  // Orange
-        if (level >= 4) return '#2196f3';  // Blue
-        return '#4caf50';                 // Green
-    }
+    const getSeverityLabel = (level) => {
+        const numLevel = parseInt(level);
+        if (numLevel >= 12) return 'Critical';
+        if (numLevel >= 8) return 'High';
+        if (numLevel >= 4) return 'Medium';
+        return 'Low';
+    };
 
     // Format timestamp
     const formatTimestamp = (timestamp) => {
@@ -500,10 +505,11 @@ const HIPAADashboard = () => {
 
     // Handle view log details
     const handleViewDetails = (log) => {
-        //const severity = getSeverityLabel(log.parsed.rule?.level);
+        const severity = getSeverityLabel(log.parsed.rule?.level);
 
         setSelectedLog({
-            data: log.parsed  // Pass the parsed log data directly as the 'data' prop
+            data: log.parsed,  // Pass the parsed log data directly as the 'data' prop
+            severity: severity
         });
     };
 
@@ -563,12 +569,17 @@ const HIPAADashboard = () => {
     }
 
     return (
-        <Box p={4}>
+        <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#2196f3', mb: 2 }}>
                 HIPAA Compliance Dashboard
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     Health Insurance Portability and Accountability Act
                 </Typography>
+                <ExportPDF
+                    fetchData={fetchLogs}
+                    currentData={hipaaLogs}
+                    dashboardRef={dashboardRef}
+                />
             </Typography>
 
             <Alert
