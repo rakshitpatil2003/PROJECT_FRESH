@@ -299,7 +299,7 @@ const ExportPDF = ({
       }
       
       // Save PDF
-      const filename = `security_compliance_report_${new Date().toISOString().split('T')[0]}.pdf`;
+      const filename = `CS_report${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(filename);
       
       setSnackbar({
