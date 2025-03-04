@@ -16,6 +16,7 @@ import Privacy from './pages/Privacy';
 import Disclaimer from './pages/Disclaimer';
 import Policies from './pages/Policies';
 import HIPAADashboard from './components/HipaaDashboard';
+import MitreAttack from './components/MitreAttack';
 
 import jwtDecode from 'jwt-decode';
 import GDPRDashboard from './components/GDPRDashboard';
@@ -242,6 +243,14 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <TSCDashboard />
+              </ProtectedLayout>
+            }
+          /> 
+          <Route
+            path="/mitre-attack"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <MitreAttack />
               </ProtectedLayout>
             }
           /> 
