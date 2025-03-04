@@ -12,9 +12,10 @@ import {
     MenuItem,
     Chip,
     Divider,
-    CircularProgress,
-    useTheme
+    CircularProgress
+    //useTheme
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import ReactECharts from 'echarts-for-react';
 import SecurityIcon from '@mui/icons-material/Security';
 import GppBadIcon from '@mui/icons-material/GppBad';
@@ -23,6 +24,9 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import TimeRangeSelector from './TimeRangeSelector';
 import axios from 'axios';
 import moment from 'moment';
+import * as echarts from 'echarts';
+//import { useTheme } from '@mui/material/styles';
+
 
 const MitreAttack = () => {
     const theme = useTheme();
@@ -52,18 +56,19 @@ const MitreAttack = () => {
                         endDate: timeRange.endDate.toISOString()
                     }
                 });
-                processMitreData(response.data);
+                const processedData = processMitreData(response.data);
+                setMitreData(processedData); // Properly use setMitreData
             } catch (error) {
                 console.error('Error fetching MITRE data:', error);
-                // Use sample data for development
-                processMitreData(getSampleData());
+                const sampleData = processMitreData(getSampleData());
+                setMitreData(sampleData);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchMitreData();
-    }, [timeRange]);
+    }, [timeRange.startDate, timeRange.endDate]);
 
     // Process the data for visualization
     const processMitreData = (logs) => {
@@ -74,84 +79,110 @@ const MitreAttack = () => {
         const timelineData = {};
 
         logs.forEach(log => {
+            // Get the normalized log data
             const parsed = log.parsedLog || log;
 
-            if (parsed.rule && parsed.rule.mitre) {
+            if (parsed.rule?.mitre) {
+                // Get agent name - handle both direct and nested structures
+                const agentName = parsed.agent?.name ||
+                    parsed.agent_name ||
+                    'Unknown Agent';
+
                 // Process tactics
-                (parsed.rule.mitre.tactic || []).forEach(tactic => {
-                    tactics[tactic] = (tactics[tactic] || 0) + 1;
+                const tacticsList = Array.isArray(parsed.rule.mitre.tactic)
+                    ? parsed.rule.mitre.tactic
+                    : [parsed.rule.mitre.tactic].filter(Boolean);
+
+                tacticsList.forEach(tactic => {
+                    if (tactic) {
+                        tactics[tactic] = (tactics[tactic] || 0) + 1;
+
+                        // Initialize agent data if not exists
+                        if (!byAgent[agentName]) {
+                            byAgent[agentName] = { tactics: {}, techniques: {} };
+                        }
+                        byAgent[agentName].tactics[tactic] = (byAgent[agentName].tactics[tactic] || 0) + 1;
+                    }
                 });
 
                 // Process techniques
-                (parsed.rule.mitre.technique || []).forEach(technique => {
-                    techniques[technique] = (techniques[technique] || 0) + 1;
-                });
+                const techniquesList = Array.isArray(parsed.rule.mitre.technique)
+                    ? parsed.rule.mitre.technique
+                    : [parsed.rule.mitre.technique].filter(Boolean);
 
-                // Process by agent
-                const agentName = parsed.agent?.name || 'Unknown';
-                if (!byAgent[agentName]) {
-                    byAgent[agentName] = { tactics: {}, techniques: {} };
-                }
-
-                (parsed.rule.mitre.tactic || []).forEach(tactic => {
-                    byAgent[agentName].tactics[tactic] = (byAgent[agentName].tactics[tactic] || 0) + 1;
-                });
-
-                (parsed.rule.mitre.technique || []).forEach(technique => {
-                    byAgent[agentName].techniques[technique] = (byAgent[agentName].techniques[technique] || 0) + 1;
+                techniquesList.forEach(technique => {
+                    if (technique) {
+                        techniques[technique] = (techniques[technique] || 0) + 1;
+                        byAgent[agentName].techniques[technique] = (byAgent[agentName].techniques[technique] || 0) + 1;
+                    }
                 });
 
                 // Process by rule level
-                const level = parsed.rule.level || '0';
+                const level = parsed.rule.level?.toString() || 'Unknown';
                 if (!byLevel[level]) {
                     byLevel[level] = { tactics: {}, techniques: {} };
                 }
 
-                (parsed.rule.mitre.tactic || []).forEach(tactic => {
-                    byLevel[level].tactics[tactic] = (byLevel[level].tactics[tactic] || 0) + 1;
-                });
-
-                (parsed.rule.mitre.technique || []).forEach(technique => {
-                    byLevel[level].techniques[technique] = (byLevel[level].techniques[technique] || 0) + 1;
+                tacticsList.forEach(tactic => {
+                    if (tactic) {
+                        byLevel[level].tactics[tactic] = (byLevel[level].tactics[tactic] || 0) + 1;
+                    }
                 });
 
                 // Process timeline data
                 const date = moment(parsed.timestamp).format('YYYY-MM-DD');
                 if (!timelineData[date]) {
-                    timelineData[date] = { count: 0, tactics: {} };
+                    timelineData[date] = {
+                        count: 0,
+                        tactics: {},
+                        byAgent: {}
+                    };
                 }
                 timelineData[date].count += 1;
 
-                (parsed.rule.mitre.tactic || []).forEach(tactic => {
-                    timelineData[date].tactics[tactic] = (timelineData[date].tactics[tactic] || 0) + 1;
+                // Add agent-specific timeline data
+                if (!timelineData[date].byAgent[agentName]) {
+                    timelineData[date].byAgent[agentName] = { count: 0, tactics: {} };
+                }
+                timelineData[date].byAgent[agentName].count += 1;
+
+                tacticsList.forEach(tactic => {
+                    if (tactic) {
+                        timelineData[date].tactics[tactic] = (timelineData[date].tactics[tactic] || 0) + 1;
+                        timelineData[date].byAgent[agentName].tactics[tactic] =
+                            (timelineData[date].byAgent[agentName].tactics[tactic] || 0) + 1;
+                    }
                 });
             }
         });
 
-        // Convert to arrays for charts
-        const tacticsArray = Object.entries(tactics).map(([name, count]) => ({ name, count }));
-        const techniquesArray = Object.entries(techniques).map(([name, count]) => ({ name, count }));
+        // Convert to arrays and sort
+        const tacticsArray = Object.entries(tactics)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
 
-        // Sort by count
-        tacticsArray.sort((a, b) => b.count - a.count);
-        techniquesArray.sort((a, b) => b.count - a.count);
+        const techniquesArray = Object.entries(techniques)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
 
-        // Timeline array
+        // Process timeline data
         const timelineDates = Object.keys(timelineData).sort();
         const timeline = timelineDates.map(date => ({
             date,
             count: timelineData[date].count,
-            tactics: timelineData[date].tactics
+            tactics: timelineData[date].tactics,
+            byAgent: timelineData[date].byAgent
         }));
 
-        setMitreData({
+        return {
             tactics: tacticsArray,
             techniques: techniquesArray,
             byAgent,
             byLevel,
             timeline
-        });
+        };
     };
+
 
     // Get sample data for development (replace with actual API call in production)
     const getSampleData = () => {
@@ -192,6 +223,18 @@ const MitreAttack = () => {
 
     // Chart options
     const getTacticsChartOption = () => {
+        const getColor = (index) => {
+            const colors = [
+                theme.palette.primary.main,
+                theme.palette.secondary.main,
+                theme.palette.error.main,
+                theme.palette.warning.main,
+                theme.palette.info.main,
+                theme.palette.success.main
+            ];
+            return colors[index % colors.length];
+        };
+
         return {
             tooltip: {
                 trigger: 'item',
@@ -211,10 +254,17 @@ const MitreAttack = () => {
                     type: 'pie',
                     radius: ['40%', '70%'],
                     center: ['40%', '50%'],
+                    data: mitreData.tactics.map((item, index) => ({
+                        value: item.count,
+                        name: item.name,
+                        itemStyle: {
+                            color: getColor(index)
+                        }
+                    })),
                     avoidLabelOverlap: false,
                     itemStyle: {
                         borderRadius: 10,
-                        borderColor: '#fff',
+                        borderColor: theme.palette.background.paper,
                         borderWidth: 2
                     },
                     label: {
@@ -230,8 +280,8 @@ const MitreAttack = () => {
                     },
                     labelLine: {
                         show: false
-                    },
-                    data: mitreData.tactics.map(item => ({ value: item.count, name: item.name }))
+                    }
+                    
                 }
             ]
         };
@@ -239,6 +289,10 @@ const MitreAttack = () => {
 
     const getTechniquesChartOption = () => {
         const filteredTechniques = getFilteredData().slice(0, 10); // Top 10 techniques
+        const gradientColors = {
+            start: theme.palette.primary.light || '#90caf9',
+            end: theme.palette.primary.main || '#1976d2'
+        };
 
         return {
             tooltip: {
@@ -274,10 +328,21 @@ const MitreAttack = () => {
                 {
                     name: 'Count',
                     type: 'bar',
-                    data: filteredTechniques.map(item => item.count),
-                    itemStyle: {
-                        color: theme.palette.primary.main
-                    }
+                    data: filteredTechniques.map(item => ({
+                        value: item.count,
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                                {
+                                    offset: 0,
+                                    color: gradientColors.start
+                                },
+                                {
+                                    offset: 1,
+                                    color: gradientColors.end
+                                }
+                            ])
+                        }
+                    }))
                 }
             ]
         };
@@ -286,7 +351,12 @@ const MitreAttack = () => {
     const getTimelineChartOption = () => {
         const dates = mitreData.timeline.map(item => item.date);
         const counts = mitreData.timeline.map(item => item.count);
+        const gradientColors = {
+            start: theme.palette.primary.light || '#90caf9',
+            end: theme.palette.primary.main || '#1976d2'
+        };
 
+    
         return {
             tooltip: {
                 trigger: 'axis',
@@ -311,44 +381,39 @@ const MitreAttack = () => {
             yAxis: {
                 type: 'value'
             },
-            series: [
-                {
-                    name: 'MITRE Alerts',
-                    type: 'line',
-                    stack: 'Total',
-                    areaStyle: {},
-                    emphasis: {
-                        focus: 'series'
-                    },
-                    data: counts,
-                    smooth: true,
-                    lineStyle: {
-                        width: 3
-                    },
-                    itemStyle: {
-                        color: theme.palette.secondary.main
-                    },
-                    areaStyle: {
-                        color: {
-                            type: 'linear',
-                            x: 0,
-                            y: 0,
-                            x2: 0,
-                            y2: 1,
-                            colorStops: [{
-                                offset: 0, color: theme.palette.secondary.light
-                            }, {
-                                offset: 1, color: 'rgba(0,0,0,0)'
-                            }]
+            series: [{
+                name: 'MITRE Alerts',
+                type: 'line',
+                stack: 'Total',
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        {
+                            offset: 0,
+                            color: gradientColors.start
+                        },
+                        {
+                            offset: 1,
+                            color: gradientColors.end
                         }
-                    }
+                    ])
+                },
+                emphasis: {
+                    focus: 'series'
+                },
+                data: counts,
+                smooth: true,
+                lineStyle: {
+                    width: 3,
+                    color: theme.palette.primary.main
+                },
+                itemStyle: {
+                    color: theme.palette.primary.main
                 }
-            ]
+            }]
         };
     };
 
     const getHeatmapOption = () => {
-        // Create heatmap data between tactics and agents
         const agents = Object.keys(mitreData.byAgent);
         const tactics = mitreData.tactics.map(t => t.name);
 
@@ -366,7 +431,10 @@ const MitreAttack = () => {
             tooltip: {
                 position: 'top',
                 formatter: function (params) {
-                    return `Agent: ${agents[params.value[1]]}<br>Tactic: ${tactics[params.value[0]]}<br>Count: ${params.value[2]}`;
+                    const agent = agents[params.value[1]];
+                    const tactic = tactics[params.value[0]];
+                    const count = params.value[2];
+                    return `Agent: ${agent}<br/>Tactic: ${tactic}<br/>Count: ${count}`;
                 }
             },
             grid: {
@@ -399,23 +467,15 @@ const MitreAttack = () => {
                 calculable: true,
                 orient: 'horizontal',
                 left: 'center',
-                bottom: '0%',
-                inRange: {
-                    color: [
-                        '#ebedf0',
-                        '#c6e48b',
-                        '#7bc96f',
-                        '#239a3b',
-                        '#196127'
-                    ]
-                }
+                bottom: '0%'
             },
             series: [{
                 name: 'Tactics by Agent',
                 type: 'heatmap',
                 data: data,
                 label: {
-                    show: false
+                    show: true,
+                    formatter: (params) => params.value[2]
                 },
                 emphasis: {
                     itemStyle: {
@@ -426,6 +486,7 @@ const MitreAttack = () => {
             }]
         };
     };
+
 
     // Summary metrics
     const getSummaryMetrics = () => {
@@ -492,6 +553,7 @@ const MitreAttack = () => {
             </Grid>
 
             {/* Filters */}
+            
             <Paper sx={{ p: 2, mb: 3 }}>
                 <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
@@ -505,7 +567,7 @@ const MitreAttack = () => {
                                 <MenuItem value="all">All Tactics</MenuItem>
                                 {mitreData.tactics.map((tactic) => (
                                     <MenuItem key={tactic.name} value={tactic.name}>
-                                        {tactic.name}
+                                        {tactic.name} ({tactic.count})
                                     </MenuItem>
                                 ))}
                             </Select>
@@ -520,16 +582,21 @@ const MitreAttack = () => {
                                 label="Filter by Agent"
                             >
                                 <MenuItem value="all">All Agents</MenuItem>
-                                {Object.keys(mitreData.byAgent).map((agent) => (
-                                    <MenuItem key={agent} value={agent}>
-                                        {agent}
-                                    </MenuItem>
-                                ))}
+                                {Object.entries(mitreData.byAgent).map(([agent, data]) => {
+                                    const totalAlerts = Object.values(data.tactics)
+                                        .reduce((sum, count) => sum + count, 0);
+                                    return (
+                                        <MenuItem key={agent} value={agent}>
+                                            {agent} ({totalAlerts} alerts)
+                                        </MenuItem>
+                                    );
+                                })}
                             </Select>
                         </FormControl>
                     </Grid>
                 </Grid>
             </Paper>
+
 
             {/* Charts */}
             <Grid container spacing={3}>
