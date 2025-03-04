@@ -49,10 +49,10 @@ const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Box sx={{ display: 'flex', flex: 1 }}>
         <Sidebar toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
-        <Box 
-          component="main" 
-          sx={{ 
-            flexGrow: 1, 
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
             p: 3,
             backgroundColor: 'background.default',
             minHeight: '100vh',
@@ -64,7 +64,7 @@ const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
           {children}
         </Box>
       </Box>
-      <NewsTicker/>
+      <NewsTicker />
       <Footer />
     </Box>
   );
@@ -129,22 +129,22 @@ const App = () => {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <Routes>
-          <Route
-            path="/"
-            element={
-              localStorage.getItem('token') ? (
-                <Navigate to="/dashboard" />
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Router>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                localStorage.getItem('token') ? (
+                  <Navigate to="/dashboard" />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
 
-          <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<Login />} />
 
           {/* Protected Routes */}
           <Route
@@ -288,10 +288,10 @@ const App = () => {
             }
           />
 
-          <Route path="*" element={<Navigate to="/login" />} />
-        </Routes>
-      </Router>
-    </ThemeProvider>
+            <Route path="*" element={<Navigate to="/login" />} />
+          </Routes>
+        </Router>
+      </ThemeProvider>
   );
 };
 
