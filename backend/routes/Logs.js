@@ -12,6 +12,8 @@ let metricsCache = {
   TTL: 10000 // 10 seconds
 };
 
+
+
 router.get('/summary', auth, async (req, res) => {
   try {
     const { timeRange, logType } = req.query;
@@ -292,28 +294,33 @@ async function getLogLevelsOverTime(query, res) {
 
 async function getProtocolDistribution(query, res) {
   try {
-    // Use a more comprehensive approach to find protocol data
     const result = await Log.aggregate([
       { $match: query },
       {
         $project: {
           protocol: {
             $cond: [
-              { $ne: ["$protocol", null] },
-              "$protocol",
+              { $ne: ["$network.protocol", null] },
+              "$network.protocol",
               {
                 $cond: [
-                  { $ne: ["$data.protocol", null] },
-                  "$data.protocol",
+                  { $ne: ["$protocol", null] },
+                  "$protocol",
                   {
                     $cond: [
-                      { $ne: ["$fields.protocol", null] },
-                      "$fields.protocol",
+                      { $ne: ["$rawData.data.proto", null] },
+                      "$rawData.data.proto",
                       {
                         $cond: [
-                          { $ne: ["$network.protocol", null] },
-                          "$network.protocol",
-                          "Unknown"
+                          { $ne: ["$data.protocol", null] },
+                          "$data.protocol",
+                          {
+                            $cond: [
+                              { $ne: ["$fields.protocol", null] },
+                              "$fields.protocol",
+                              "Unknown"
+                            ]
+                          }
                         ]
                       }
                     ]
@@ -347,7 +354,6 @@ async function getProtocolDistribution(query, res) {
       }
     ]);
     
-    // Handle empty results
     if (result.length === 0) {
       return res.json([{ name: "No Protocol Data", value: 1 }]);
     }
@@ -361,31 +367,30 @@ async function getProtocolDistribution(query, res) {
 
 async function getTopSourceIPs(query, res) {
   try {
-    // Use a more comprehensive approach to find source IP data
     const result = await Log.aggregate([
       { $match: query },
       {
         $project: {
           sourceIP: {
             $cond: [
-              { $ne: ["$sourceIP", null] },
-              "$sourceIP",
+              { $ne: ["$network.srcIp", null] },
+              "$network.srcIp",
               {
                 $cond: [
-                  { $ne: ["$source.ip", null] },
-                  "$source.ip",
+                  { $ne: ["$sourceIP", null] },
+                  "$sourceIP",
                   {
                     $cond: [
-                      { $ne: ["$fields.src_ip", null] },
-                      "$fields.src_ip",
+                      { $ne: ["$source.ip", null] },
+                      "$source.ip",
                       {
                         $cond: [
-                          { $ne: ["$src_ip", null] },
-                          "$src_ip",
+                          { $ne: ["$rawData.data.src_ip", null] },
+                          "$rawData.data.src_ip",
                           {
                             $cond: [
-                              { $ne: ["$network.srcIp", null] },
-                              "$network.srcIp",
+                              { $ne: ["$fields.src_ip", null] },
+                              "$fields.src_ip",
                               "Unknown"
                             ]
                           }
@@ -405,7 +410,7 @@ async function getTopSourceIPs(query, res) {
           count: { $sum: 1 }
         }
       },
-      { $match: { _id: { $ne: "Unknown" } } },
+      { $match: { _id: { $ne: "Unknown", $ne: "N/A" } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
       {
@@ -417,7 +422,6 @@ async function getTopSourceIPs(query, res) {
       }
     ]);
     
-    // Handle empty results
     if (result.length === 0) {
       return res.json([{ name: "No Source IP Data", value: 1 }]);
     }
@@ -473,8 +477,8 @@ function getNestedValue(obj, path) {
 async function getNetworkConnections(query, res) {
   try {
     // Define all possible field paths
-    const sourceIPPaths = ["sourceIP", "source.ip", "fields.src_ip", "src_ip", "network.srcIp"];
-    const destIPPaths = ["destinationIP", "destination.ip", "fields.dst_ip", "dst_ip", "network.destIp"];
+    const sourceIPPaths = ["network.srcIp", "sourceIP", "source.ip", "fields.src_ip", "rawData.data.src_ip"];
+    const destIPPaths = ["network.destIp", "destinationIP", "destination.ip", "fields.dst_ip", "rawData.data.dest_ip"];
     
     // Create projection objects for all possible paths
     const sourceIPProjection = {};

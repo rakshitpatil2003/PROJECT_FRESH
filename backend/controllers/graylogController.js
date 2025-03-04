@@ -15,6 +15,47 @@ const handleFetchError = (error) => {
   return errorDetails;
 };
 
+// Extract the insertLogs function from your Log.js file
+const insertLogs = async (logsToInsert) => {
+  try {
+    // Use bulkWrite with upsert to prevent duplicates
+    const operations = logsToInsert.map(log => {
+      const rawLogStr = JSON.stringify(log.rawLog);
+      const uniqueIdentifier = `${log.timestamp.toISOString()}_${require('crypto').createHash('md5').update(rawLogStr).digest('hex')}`;
+      
+      return {
+        updateOne: {
+          filter: { uniqueIdentifier },
+          update: { $setOnInsert: { ...log, uniqueIdentifier } },
+          upsert: true
+        }
+      };
+    });
+
+    const result = await Log.bulkWrite(operations, { ordered: false });
+    console.log(`Processed ${operations.length} logs:`, {
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+      upserted: result.upsertedCount
+    });
+    
+    return result;
+  } catch (error) {
+    if (error.writeErrors) {
+      const nonDuplicateErrors = error.writeErrors.filter(err => err.code !== 11000);
+      if (nonDuplicateErrors.length > 0) {
+        console.error(`Non-duplicate errors occurred: ${JSON.stringify(nonDuplicateErrors)}`);
+        throw new Error(`Non-duplicate errors occurred: ${JSON.stringify(nonDuplicateErrors)}`);
+      } else {
+        console.log(`Ignored ${error.writeErrors.length} duplicate entries`);
+      }
+    } else {
+      console.error('Error during bulk write:', error);
+      throw error;
+    }
+  }
+};
+
 const fetchLogsFromGraylog = async () => {
   try {
     const graylogUrl = `http://${process.env.GRAYLOG_HOST}:${process.env.GRAYLOG_PORT}/api/search/universal/absolute`;
@@ -116,39 +157,16 @@ const fetchLogsFromGraylog = async () => {
 
     if (logsToInsert.length > 0) {
       try {
-        // Use ordered: false to continue insertion even if some documents fail
-        const result = await Log.insertMany(logsToInsert, { 
-          ordered: false,
-          // Add timestamp to track when the log was stored
-          timestamps: true
-        });
-        
-        console.log(`Successfully stored ${result.length} new logs`);
-        console.log('Sample timestamp from stored logs:', 
-          result[0]?.timestamp?.toISOString());
-        
-      } catch (insertError) {
-        // Handle bulk insert errors
-        if (insertError.writeErrors) {
-          console.error(`${insertError.writeErrors.length} errors during log insertion`);
-          insertError.writeErrors.forEach(error => {
-            if (error.code !== 11000) { // Ignore duplicate key errors
-              console.error('Insert error:', error.errmsg);
-            }
-          });
-        } else {
-          throw insertError;
-        }
+        // Use the bulkWrite method instead of insertMany
+        await insertLogs(logsToInsert);
+      } catch (error) {
+        console.error('Failed to insert logs:', error.message);
       }
     }
 
   } catch (error) {
-    console.error('Error in fetchLogsFromGraylog:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data
-    });
+    const errorDetails = handleFetchError(error);
+    console.error('Error in fetchLogsFromGraylog:', errorDetails);
   }
 };
 
