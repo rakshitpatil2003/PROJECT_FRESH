@@ -165,12 +165,8 @@ const fetchLogsFromGraylog = async () => {
     }
 
   } catch (error) {
-    console.error('Error in fetchLogsFromGraylog:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data
-    });
+    const errorDetails = handleFetchError(error);
+    console.error('Error in fetchLogsFromGraylog:', errorDetails);
   }
 };
 
