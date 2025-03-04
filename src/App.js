@@ -15,7 +15,8 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import Disclaimer from './pages/Disclaimer';
 import Policies from './pages/Policies';
-import HIPAADashboard from './components/HipaaDashboard'; 
+import HIPAADashboard from './components/HipaaDashboard';
+import MitreAttack from './components/MitreAttack';
 
 import jwtDecode from 'jwt-decode';
 import GDPRDashboard from './components/GDPRDashboard';
@@ -145,139 +146,147 @@ const App = () => {
 
             <Route path="/login" element={<Login />} />
 
-            {/* Protected Routes */}
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <Dashboard />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/logs"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <LogDetails />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/analytics"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <AdvancedAnalytics />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/performance-dashboard"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <PerformanceDashboard />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/security-score"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <SecurityScore />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/major-logs"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <MajorLogs />
-                </ProtectedLayout>
-              }
-            />
-            {/* New Route for Session Logs */}
-            <Route
-              path="/session-logs"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <SessionLogs />
-                </ProtectedLayout>
-              }
-            />
-            {/*Security Policy Routes*/}
-            <Route
-              path="/hipaa-dashboard"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <HIPAADashboard />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/gdpr-dashboard"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <GDPRDashboard />
-                </ProtectedLayout>
-              }
-            />
-
-            <Route
-              path="/pcidss-dashboard"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <PCIDSSDashboard />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/nist-dashboard"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <NISTDashboard />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/tsc-dashboard"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <TSCDashboard />
-                </ProtectedLayout>
-              }
-            />
-            {/* Footer Pages Routes */}
-            <Route
-              path="/terms"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <Terms />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/privacy"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <Privacy />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/disclaimer"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <Disclaimer />
-                </ProtectedLayout>
-              }
-            />
-            <Route
-              path="/policies"
-              element={
-                <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                  <Policies />
-                </ProtectedLayout>
-              }
-            />
+          {/* Protected Routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Dashboard />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/logs"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <LogDetails />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <AdvancedAnalytics />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/performance-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <PerformanceDashboard />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/security-score"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <SecurityScore />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/major-logs"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <MajorLogs />
+              </ProtectedLayout>
+            }
+          />
+          {/* New Route for Session Logs */}
+          <Route
+            path="/session-logs"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <SessionLogs />
+              </ProtectedLayout>
+            }
+          />
+          {/*Security Policy Routes*/}
+          <Route
+            path="/hipaa-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <HIPAADashboard />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/gdpr-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <GDPRDashboard />
+              </ProtectedLayout>
+            }
+          />
+          
+          <Route
+            path="/pcidss-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <PCIDSSDashboard />
+              </ProtectedLayout>
+            }
+          /> 
+          <Route
+            path="/nist-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <NISTDashboard />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/tsc-dashboard"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <TSCDashboard />
+              </ProtectedLayout>
+            }
+          /> 
+          <Route
+            path="/mitre-attack"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <MitreAttack />
+              </ProtectedLayout>
+            }
+          /> 
+          {/* Footer Pages Routes */}
+          <Route
+            path="/terms"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Terms />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/privacy"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Privacy />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/disclaimer"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Disclaimer />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/policies"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Policies />
+              </ProtectedLayout>
+            }
+          />
 
             <Route path="*" element={<Navigate to="/login" />} />
           </Routes>
