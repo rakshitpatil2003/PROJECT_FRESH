@@ -9,6 +9,8 @@ import {
   Button,
   Typography,
   Alert,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { keyframes } from '@emotion/react';
 import logoImage from '../assets/images/vg-logo.png';
@@ -26,11 +28,10 @@ const fadeIn = keyframes`
   }
 `;
 
-
-
 const Login = () => {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
+  const [tabValue, setTabValue] = useState(0);
   const navigate = useNavigate();
 
   // Add global styles to document
@@ -57,28 +58,39 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-  
+
     const loginUrl = `${API_URL}/api/auth/login`;
     console.log('Attempting login to:', loginUrl);
-  
+
     try {
+      // Additional validation based on current tab
+      if (tabValue === 0 && !credentials.username.toLowerCase().includes('admin')) {
+        setError('Please use an admin account in the Admin Login tab');
+        return;
+      }
+
+      if (tabValue === 1 && credentials.username.toLowerCase().includes('admin')) {
+        setError('Admin accounts cannot login in the User Login tab');
+        return;
+      }
+
       const response = await fetch(loginUrl, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(credentials)
       });
-  
+
       console.log('Response status:', response.status);
-  
+
       if (!response.ok) {
         throw new Error('Login failed');
       }
-  
+
       const data = await response.json();
       console.log('Response data:', data);
-  
+
       if (data.token) {
         localStorage.setItem('token', data.token);
         console.log('Token stored:', data.token);
@@ -90,6 +102,13 @@ const Login = () => {
       console.error('Login error:', error);
       setError('Server connection failed. Please verify the server is running.');
     }
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+    // Reset credentials when switching tabs
+    setCredentials({ username: '', password: '' });
+    setError('');
   };
 
   return (
@@ -135,6 +154,17 @@ const Login = () => {
             />
           </Box>
 
+          {/* Tabs for Login */}
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            centered
+            sx={{ mb: 3 }}
+          >
+            <Tab label="Admin Login" />
+            <Tab label="User Login" />
+          </Tabs>
+
           {error && (
             <Alert severity="error" sx={{ mb: 3 }}>
               {error}
@@ -150,7 +180,7 @@ const Login = () => {
               color: '#333',
             }}
           >
-            Login
+            {tabValue === 0 ? 'Admin Login' : 'User Login'}
           </Typography>
 
           <form onSubmit={handleLogin}>

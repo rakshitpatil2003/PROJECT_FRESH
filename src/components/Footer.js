@@ -4,12 +4,13 @@ import { Link as RouterLink } from 'react-router-dom';
 import InstagramIcon from '@mui/icons-material/Instagram';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
 
+
 const Footer = () => {
   return (
     <Box
       component="footer"
       sx={{
-        py: 3,
+        py: 1, // Minimize height
         px: 2,
         mt: 'auto',
         backgroundColor: (theme) =>
@@ -17,17 +18,15 @@ const Footer = () => {
         borderTop: (theme) => `1px solid ${theme.palette.divider}`,
         position: 'fixed',
         bottom: 0,
-        //width: '100%',
+        width: '100%', // Use full width of the page
         zIndex: 1000,
-        marginLeft: '240px', // Width of sidebar
-        width: 'calc(100% - 240px)' // Adjust width to account for sidebar
       }}
     >
       <Container maxWidth="lg">
         <Box
           sx={{
             display: 'flex',
-            justifyContent: 'space-between',
+            justifyContent: 'space-between', 
             alignItems: 'center',
             flexWrap: 'wrap'
           }}

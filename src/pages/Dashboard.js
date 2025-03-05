@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { API_URL } from '../config';
 import { 
   Box, 
@@ -9,9 +9,7 @@ import {
   Container, 
   Grid, 
   Paper,
-  Button,
 } from '@mui/material';
-import LogoutIcon from '@mui/icons-material/Logout';
 import Header from '../components/Header';
 import TimeRangeSelector from '../components/TimeRangeSelector';
 import KeyMetrics from '../components/Keymetrics';
@@ -20,7 +18,7 @@ import RecentLogs from '../components/RecentLogs';
 import WorldMap from '../components/WorldMap';
 
 const Dashboard = () => {
-  const navigate = useNavigate();
+
   const [logs, setLogs] = useState({
     items: [],
     metrics: {
@@ -41,10 +39,7 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const token = localStorage.getItem('token');
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
-  };
+  
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -128,14 +123,7 @@ const Dashboard = () => {
         <Box p={4}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
             <Header />
-            <Button
-              variant="outlined"
-              color="primary"
-              startIcon={<LogoutIcon />}
-              onClick={handleLogout}
-            >
-              Logout
-            </Button>
+            
           </Box>
 
           <Paper elevation={2} sx={{ p: 2, mb: 4 }}>

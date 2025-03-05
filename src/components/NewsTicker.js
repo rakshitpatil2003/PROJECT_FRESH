@@ -36,7 +36,7 @@ const NewsTicker = () => {
         borderColor: theme => theme.palette.mode === 'dark' ? '#D3D3D3' : '#D3D3D3', // Accent border
         overflow: 'hidden',
         position: 'fixed',
-        bottom: '70px', // Position above footer
+        bottom: '40px', // Position above footer
         left: 0,
         zIndex: 1000,
         boxShadow: '0 -2px 10px rgba(0,0,0,0.1)', // Subtle shadow for depth
