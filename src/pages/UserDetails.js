@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import {
-  Container, Card, CardHeader, CardContent, Grid, CircularProgress,
-  Alert, Typography, Box, Chip, Table, TableBody, TableCell,
+import { 
+  Container, Card, CardHeader, CardContent, Grid, CircularProgress, 
+  Alert, Typography, Box, Chip, Table, TableBody, TableCell, 
   TableContainer, TableHead, TableRow, Paper, Tabs, Tab
 } from '@mui/material';
 import { API_URL } from '../config';
 
 const UserDetails = () => {
   const [user, setUser] = useState(null);
-  const [requestHistory, setRequestHistory] = useState([]);
+  const [requestHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
@@ -19,30 +19,30 @@ const UserDetails = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
-
+        
         if (!token) {
           setError('No authentication token found. Please login again.');
           setLoading(false);
           return;
         }
-
+        
         // Fetch user profile
         const profileResponse = await axios.get(`${API_URL}/api/auth/profile`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
-
+        
         setUser(profileResponse.data);
 
         // Fetch request/token history
-        const historyResponse = await axios.get(`${API_URL}/api/requests/history`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        setRequestHistory(historyResponse.data || []);
+        // const historyResponse = await axios.get(`${API_URL}/api/requests/history`, {
+        //   headers: {
+        //     Authorization: `Bearer ${token}`
+        //   }
+        // });
+        
+        // setRequestHistory(historyResponse.data || []);
         setError(null);
       } catch (err) {
         setError('Failed to fetch user data. Please try again later.');
@@ -51,13 +51,9 @@ const UserDetails = () => {
         setLoading(false);
       }
     };
-
+  
     fetchUserDetails();
   }, []);
-
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-  };
 
   if (loading) {
     return (
@@ -78,14 +74,14 @@ const UserDetails = () => {
   // Determine user status dynamically based on active flag and last activity
   const getUserStatus = () => {
     if (!user) return { label: 'Unknown', color: 'default' };
-
+    
     if (!user.active) return { label: 'Inactive', color: 'error' };
-
+    
     // Check if last login was within the last 30 days
     const lastLoginDate = user.lastLogin ? new Date(user.lastLogin) : null;
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
+    
     if (lastLoginDate && lastLoginDate > thirtyDaysAgo) {
       return { label: 'Active', color: 'success' };
     } else {
@@ -95,14 +91,18 @@ const UserDetails = () => {
 
   const status = getUserStatus();
 
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
   return (
     <Container sx={{ mt: 4 }}>
       <Typography variant="h4" sx={{ mb: 4 }}>User Profile</Typography>
-
+      
       {user && (
         <>
           <Card sx={{ mb: 4 }}>
-            <CardHeader
+            <CardHeader 
               title={<Typography variant="h5">{user.name || 'User'}</Typography>}
             />
             <CardContent>
@@ -118,9 +118,9 @@ const UserDetails = () => {
                   </Typography>
                   <Typography>
                     <Box component="span" fontWeight="bold">Status:</Box>{' '}
-                    <Chip
-                      label={status.label}
-                      color={status.color}
+                    <Chip 
+                      label={status.label} 
+                      color={status.color} 
                       size="small"
                     />
                   </Typography>
@@ -170,9 +170,9 @@ const UserDetails = () => {
                         <TableCell>{req.type}</TableCell>
                         <TableCell>{req.description}</TableCell>
                         <TableCell>
-                          <Chip
-                            label={req.status}
-                            color={req.status === 'Completed' ? 'success' : req.status === 'Failed' ? 'error' : 'warning'}
+                          <Chip 
+                            label={req.status} 
+                            color={req.status === 'Completed' ? 'success' : req.status === 'Failed' ? 'error' : 'warning'} 
                             size="small"
                           />
                         </TableCell>
@@ -209,9 +209,9 @@ const UserDetails = () => {
                         <TableCell>{token.name}</TableCell>
                         <TableCell>{token.expiry ? new Date(token.expiry).toLocaleDateString() : 'Never'}</TableCell>
                         <TableCell>
-                          <Chip
-                            label={token.active ? 'Active' : 'Expired'}
-                            color={token.active ? 'success' : 'error'}
+                          <Chip 
+                            label={token.active ? 'Active' : 'Expired'} 
+                            color={token.active ? 'success' : 'error'} 
                             size="small"
                           />
                         </TableCell>
