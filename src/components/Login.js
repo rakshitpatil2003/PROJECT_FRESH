@@ -93,7 +93,9 @@ const Login = () => {
 
       if (data.token) {
         localStorage.setItem('token', data.token);
+        localStorage.setItem('userInfo', JSON.stringify(data.user));
         console.log('Token stored:', data.token);
+        console.log('User info stored:', data.user);
         navigate('/dashboard');
       } else {
         setError(data.message || 'Login failed');
