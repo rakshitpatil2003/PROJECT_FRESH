@@ -3,7 +3,7 @@ import { Box, Container, Typography, Link } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import InstagramIcon from '@mui/icons-material/Instagram';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
-
+import VGLogo from '../assets/VG_logo.PNG';
 
 const Footer = () => {
   return (
@@ -26,15 +26,25 @@ const Footer = () => {
         <Box
           sx={{
             display: 'flex',
-            justifyContent: 'space-between', 
+            justifyContent: 'space-between',
             alignItems: 'center',
             flexWrap: 'wrap'
           }}
         >
-          <Typography variant="body2" color="text.secondary">
-            Copyright © 2025 Virtual Galaxy Infotech Limited. All rights reserved.
-          </Typography>
-          
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <img
+              src={VGLogo}
+              alt="Virtual Galaxy Logo"
+              style={{
+                height: '24px', // Adjust this value to match footer height
+                marginRight: '10px'
+              }}
+            />
+            <Typography variant="body2" color="text.secondary">
+              Copyright © 2025 Virtual Galaxy Infotech Limited. All rights reserved.
+            </Typography>
+          </Box>
+
           <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Link
@@ -70,7 +80,7 @@ const Footer = () => {
                 Policies
               </Link>
             </Box>
-            
+
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Link
                 href="https://www.instagram.com/virtualgalaxyinfotech"
