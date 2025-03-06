@@ -1,126 +1,125 @@
+// src/components/LogDetailsView.js
 import React from 'react';
-import { Paper, Typography, Grid, Chip, Divider, Box } from '@mui/material';
 import {
-  Shield,
-  FileText,
-  User,
-  Network,
-  Code
-} from 'lucide-react';
+  Box,
+  Paper,
+  Typography,
+  Divider,
+  Chip,
+  Grid
+} from '@mui/material';
+import {
+  Shield as ShieldIcon,
+  Info as InfoIcon,
+  Check as CheckIcon
+} from '@mui/icons-material';
 
 const LogDetailsView = ({ data }) => {
-  if (!data) {
-    return (
-      <Box p={3}>
-        <Typography color="text.secondary">No log data available</Typography>
-      </Box>
-    );
-  }
+  if (!data) return null;
 
-  const renderChips = (items, color = "primary") => {
-    if (!items || !Array.isArray(items) || items.length === 0) return null;
-    
-    return (
-      <Box display="flex" gap={1} flexWrap="wrap">
-        {items.map((item, index) => (
-          <Chip
-            key={index}
-            label={item}
-            size="small"
-            color={color}
-            variant="outlined"
-            className="font-medium"
-          />
-        ))}
-      </Box>
-    );
-  };
+  const renderSection = (title, content, icon, bgcolor) => {
+    if (!content) return null;
 
-  const ComplianceSection = ({ title, items }) => {
-    if (!items || items.length === 0) return null;
-    
     return (
-      <Box className="mb-4">
-        <Typography variant="subtitle2" color="text.secondary" className="mb-2">
-          {title}
-        </Typography>
-        <Box className="pl-4">
-          {renderChips(items)}
+      <Paper 
+        elevation={0} 
+        sx={{ 
+          p: 2, 
+          mb: 2, 
+          bgcolor: bgcolor,
+          borderLeft: '4px solid',
+          borderColor: 'primary.main'
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={1} mb={2}>
+          {icon}
+          <Typography variant="h6">{title}</Typography>
         </Box>
-      </Box>
+        <Grid container spacing={2}>
+          {Object.entries(content).map(([key, value]) => (
+            value && (
+              <Grid item xs={12} sm={6} key={key}>
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography color="text.secondary" variant="body2">
+                    {key}:
+                  </Typography>
+                  <Typography variant="body2">
+                    {Array.isArray(value) ? (
+                      <Box display="flex" gap={0.5} flexWrap="wrap" justifyContent="flex-end">
+                        {value.map((item, index) => (
+                          <Chip
+                            key={index}
+                            label={item}
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                          />
+                        ))}
+                      </Box>
+                    ) : (
+                      String(value)
+                    )}
+                  </Typography>
+                </Box>
+              </Grid>
+            )
+          ))}
+        </Grid>
+      </Paper>
     );
   };
 
-  const SectionCard = ({ icon: Icon, title, children }) => (
-    <Paper elevation={1} className="p-4 mb-4">
-      <Box display="flex" alignItems="center" className="mb-3">
-        <Icon className="w-5 h-5 mr-2" />
-        <Typography variant="h6" color="primary">
-          {title}
-        </Typography>
-      </Box>
-      <Divider className="mb-3" />
-      {children}
-    </Paper>
-  );
+  // Parse the raw log if it exists
+  const rawLog = data.rawLog?.message ? 
+    (typeof data.rawLog.message === 'string' ? 
+      JSON.parse(data.rawLog.message) : 
+      data.rawLog.message) : 
+    data;
 
-  const renderDetailRow = (label, value) => {
-    if (!value) return null;
-    return (
-      <Grid container spacing={2} className="mb-2">
-        <Grid item xs={12} sm={4}>
-          <Typography variant="subtitle2" color="text.secondary">
-            {label}:
-          </Typography>
-        </Grid>
-        <Grid item xs={12} sm={8}>
-          <Typography>{value}</Typography>
-        </Grid>
-      </Grid>
-    );
+  // Extract relevant data
+  const agentInfo = {
+    Name: rawLog.agent?.name || data.agent?.name || 'N/A',
+    ID: rawLog.agent?.id || data.agent?.id || 'N/A',
+    IP: rawLog.agent?.ip || 'N/A'
+  };
+
+  const ruleInfo = {
+    Level: rawLog.rule?.level || data.rule?.level || 'N/A',
+    Description: rawLog.rule?.description || data.rule?.description || 'N/A',
+    ID: rawLog.rule?.id || data.rule?.id || 'N/A',
+    Groups: rawLog.rule?.groups || data.rule?.groups || []
+  };
+
+  const standardsInfo = {
+    HIPAA: rawLog.rule?.hipaa || data.rule?.hipaa || [],
+    'PCI DSS': rawLog.rule?.pci_dss || data.rule?.pci_dss || [],
+    GDPR: rawLog.rule?.gdpr || data.rule?.gdpr || [],
+    'NIST 800-53': rawLog.rule?.nist_800_53 || data.rule?.nist_800_53 || [],
+    TSC: rawLog.rule?.tsc || data.rule?.tsc || []
   };
 
   return (
-    <Box className="p-4">
-      <SectionCard icon={FileText} title="Basic Information">
-        {renderDetailRow("Timestamp", new Date(data.timestamp).toLocaleString())}
-        {renderDetailRow("Rule Level", data.rule?.level)}
-        {renderDetailRow("Rule ID", data.rule?.id)}
-        {renderDetailRow("Description", data.rule?.description)}
-      </SectionCard>
-
-      <SectionCard icon={User} title="Agent Information">
-        {renderDetailRow("Agent Name", data.agent?.name)}
-        {renderDetailRow("Agent ID", data.agent?.id)}
-        {renderDetailRow("Manager", data.manager?.name)}
-      </SectionCard>
-
-      <SectionCard icon={Shield} title="Compliance Standards">
-        <ComplianceSection title="HIPAA" items={data.rule?.hipaa} />
-        <ComplianceSection title="PCI DSS" items={data.rule?.pci_dss} />
-        <ComplianceSection title="GDPR" items={data.rule?.gdpr} />
-        <ComplianceSection title="NIST 800-53" items={data.rule?.nist_800_53} />
-        <ComplianceSection title="TSC" items={data.rule?.tsc} />
-        <ComplianceSection title="GPG13" items={data.rule?.gpg13} />
-      </SectionCard>
-
-      {data.network && (
-        <SectionCard icon={Network} title="Network Information">
-          {renderDetailRow("Source IP", data.network.srcIp)}
-          {renderDetailRow("Source Port", data.network.srcPort)}
-          {renderDetailRow("Destination IP", data.network.destIp)}
-          {renderDetailRow("Destination Port", data.network.destPort)}
-          {renderDetailRow("Protocol", data.network.protocol)}
-        </SectionCard>
+    <Box sx={{ p: 2 }}>
+      {renderSection(
+        'Agent Information',
+        agentInfo,
+        <ShieldIcon color="primary" />,
+        '#f5f5f5'
       )}
-
-      <SectionCard icon={Code} title="Raw Log Data">
-        <Paper variant="outlined" className="p-4 bg-gray-50">
-          <pre className="whitespace-pre-wrap text-sm">
-            {JSON.stringify(data.rawData || data, null, 2)}
-          </pre>
-        </Paper>
-      </SectionCard>
+      
+      {renderSection(
+        'Rule Details',
+        ruleInfo,
+        <InfoIcon color="primary" />,
+        '#fafafa'
+      )}
+      
+      {renderSection(
+        'Compliance Standards',
+        standardsInfo,
+        <CheckIcon color="primary" />,
+        '#f5f5f5'
+      )}
     </Box>
   );
 };

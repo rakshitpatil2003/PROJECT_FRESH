@@ -961,9 +961,137 @@ router.get('/session', async (req, res) => {
   }
 });
 
+// Add this endpoint to your existing Logs.js routes
+router.get('/mitre', async (req, res) => {
+  try {
+      const { 
+          search = '', 
+          page = 1, 
+          limit = 10, 
+          tactic = '', 
+          technique = '', 
+          id = '',
+          startTime = '' 
+      } = req.query;
 
+      // Build search query for Mitre-related logs
+      let searchQuery = { 
+          $or: [
+              // Mitre-specific searches
+              { "rawLog.message.rule.mitre.id": { $exists: true, $ne: [] } },
+              { "rawLog.message.rule.mitre.tactic": { $exists: true, $ne: [] } },
+              { "rawLog.message.rule.mitre.technique": { $exists: true, $ne: [] } },
+              
+              // Technique ID searches
+              { "rule.mitre.id": { $exists: true, $ne: [] } },
+              { "rule.mitre.tactic": { $exists: true, $ne: [] } },
+              { "rule.mitre.technique": { $exists: true, $ne: [] } },
 
+              // Comprehensive text search across raw message
+              { 
+                  "rawLog.message": { 
+                      $regex: /mitre|technique|tactic/i 
+                  } 
+              }
+          ]
+      };
 
+      // Additional filtering based on search term
+      if (search) {
+          searchQuery.$and = [
+              searchQuery,
+              { 
+                  $or: [
+                      // Agent and rule-based searches
+                      { "agent.name": { $regex: search, $options: 'i' } },
+                      { "rule.description": { $regex: search, $options: 'i' } },
+                      
+                      // Raw message searches
+                      { "rawLog.message": { $regex: search, $options: 'i' } },
+                      
+                      // Specific Mitre field searches
+                      { "rule.mitre.id": { $regex: search, $options: 'i' } },
+                      { "rule.mitre.tactic": { $regex: search, $options: 'i' } },
+                      { "rule.mitre.technique": { $regex: search, $options: 'i' } },
+                      
+                      // Comprehensive MITRE-related keyword search
+                      { 
+                          "rawLog.message": { 
+                              $regex: new RegExp(
+                                  search.split(/\s+/).map(term => 
+                                      `(${term}|${term.toLowerCase()}|${term.toUpperCase()})`
+                                  ).join('|'),
+                                  'i'
+                              )
+                          } 
+                      }
+                  ]
+              }
+          ];
+      }
+
+      if (startTime) {
+        searchQuery.timestamp = { $gte: new Date(startTime) };
+        // If your timestamp field is in a different location, adjust accordingly
+        // For example, if it's nested in rawLog:
+        // searchQuery["rawLog.timestamp"] = { $gte: new Date(startTime) };
+      }
+
+      // Specific Mitre filtering
+      if (tactic) {
+          searchQuery.$and = searchQuery.$and || [];
+          searchQuery.$and.push({
+              $or: [
+                  { "rule.mitre.tactic": { $regex: tactic, $options: 'i' } },
+                  { "rawLog.message.rule.mitre.tactic": { $regex: tactic, $options: 'i' } }
+              ]
+          });
+      }
+
+      if (technique) {
+          searchQuery.$and = searchQuery.$and || [];
+          searchQuery.$and.push({
+              $or: [
+                  { "rule.mitre.technique": { $regex: technique, $options: 'i' } },
+                  { "rawLog.message.rule.mitre.technique": { $regex: technique, $options: 'i' } }
+              ]
+          });
+      }
+
+      if (id) {
+          searchQuery.$and = searchQuery.$and || [];
+          searchQuery.$and.push({
+              $or: [
+                  { "rule.mitre.id": { $regex: id, $options: 'i' } },
+                  { "rawLog.message.rule.mitre.id": { $regex: id, $options: 'i' } }
+              ]
+          });
+      }
+
+      // Count total documents for pagination
+      const totalLogs = await Log.countDocuments(searchQuery);
+
+      // Execute query with pagination and sorting
+      const mitreAttackLogs = await Log.find(searchQuery)
+          .sort({ timestamp: -1 })
+          .skip((page - 1) * limit)
+          .limit(Number(limit))
+          .lean();
+
+      res.json({
+          logs: mitreAttackLogs,
+          totalLogs,
+          page: Number(page),
+          totalPages: Math.ceil(totalLogs / limit)
+      });
+  } catch (error) {
+      console.error('Error in /mitre endpoint:', error);
+      res.status(500).json({ 
+          message: 'Error fetching Mitre Attack logs', 
+          error: error.message 
+      });
+  }
+});
 
 router.get('/test', async (req, res) => {
   try {
