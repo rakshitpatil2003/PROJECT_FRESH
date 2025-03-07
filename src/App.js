@@ -90,7 +90,7 @@ const App = () => {
               main: '#f48fb1',
             },
             background: {
-              default: '#121212',
+              default: '#2A4364', // Updated dark mode default background color
               paper: '#1e1e1e',
             },
             text: {
@@ -107,6 +107,10 @@ const App = () => {
             background: {
               default: '#f5f5f5',
               paper: '#ffffff',
+            },
+            text: {
+              primary: '#000000', // Ensure text is viewable in light mode
+              secondary: 'rgba(0, 0, 0, 0.7)',
             },
           }),
         },

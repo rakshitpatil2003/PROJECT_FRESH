@@ -30,6 +30,7 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import { API_URL } from '../config';
 import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
+import { useTheme } from '@mui/material/styles';
 
 const LogDetails = () => {
   const [logs, setLogs] = useState([]);
@@ -40,6 +41,7 @@ const LogDetails = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [selectedLog, setSelectedLog] = useState(null);
   const [logType, setLogType] = useState('all'); // New state for log type filter
+  const theme = useTheme();
 
   const getRuleLevelColor = (level) => {
     const numLevel = parseInt(level);
@@ -172,12 +174,12 @@ const LogDetails = () => {
         <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent Name</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Rule Level</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Source IP</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Description</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Timestamp</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Agent Name</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Rule Level</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Source IP</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Description</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

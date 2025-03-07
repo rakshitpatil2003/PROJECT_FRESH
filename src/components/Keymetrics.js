@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Paper, Grid, Alert } from '@mui/material';
+import { Box, Typography, Paper, Grid, Alert, useTheme } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { API_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
 
-const KeyMetrics = () => {
+const KeyMetrics = ({ toggleTheme }) => {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [metrics, setMetrics] = useState({
     totalLogs: 0,
     majorLogs: 0,
@@ -67,7 +68,8 @@ const KeyMetrics = () => {
       Icon: AssessmentIcon,
       color: '#2196f3',
       bgColor: '#e3f2fd',
-      link: null
+      link: null,
+      titleColor: '#2196f3' // Added title color
     },
     {
       title: 'Major Logs',
@@ -75,7 +77,8 @@ const KeyMetrics = () => {
       Icon: WarningAmberIcon,
       color: '#f44336',
       bgColor: '#ffebee',
-      link: '/major-logs'
+      link: '/major-logs',
+      titleColor: '#f44336' // Added title color
     },
     {
       title: 'Normal Logs',
@@ -83,7 +86,8 @@ const KeyMetrics = () => {
       Icon: CheckCircleIcon,
       color: '#4caf50',
       bgColor: '#e8f5e9',
-      link: null
+      link: null,
+      titleColor: '#4caf50' // Added title color
     }
   ];
 
@@ -109,7 +113,7 @@ const KeyMetrics = () => {
               display: 'flex',
               flexDirection: 'column',
               height: '100%',
-              backgroundColor: 'white',
+              backgroundColor: theme.palette.mode === 'dark' ? '#353536' : 'white', // Updated background color based on theme
               transition: 'transform 0.2s ease-in-out',
               '&:hover': {
                 transform: 'translateY(-4px)',
@@ -141,7 +145,7 @@ const KeyMetrics = () => {
                 variant="h6"
                 sx={{
                   ml: 2,
-                  color: 'text.primary',
+                  color: metric.titleColor, // Updated to use title color
                   fontWeight: 600
                 }}
               >
