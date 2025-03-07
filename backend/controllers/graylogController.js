@@ -107,12 +107,30 @@ const fetchLogsFromGraylog = async () => {
                        msg.message.timestamp;
 
       // Extract rule level with proper fallbacks
-      const ruleLevel = String(
-        parsedMessage?.rule?.level || 
-        msg.message.rule_level || 
-        msg.message.level || 
-        '0'
-      );
+      const ruleLevel = (() => {
+        // Get the raw level value
+        const rawLevel = parsedMessage?.rule?.level || 
+                        msg.message.rule_level || 
+                        msg.message.level || 
+                        '0';
+        
+        // If it's already a number (or numeric string), return it as is
+        if (!isNaN(rawLevel) && rawLevel !== '') {
+          return String(rawLevel);
+        }
+        
+        // Handle text-based severity levels and convert to numeric values
+        switch(String(rawLevel).toLowerCase()) {
+          case 'alert': return '14';
+          case 'critical': return '13';
+          case 'error': return '12';
+          case 'warning': return '8'; 
+          case 'notice': return '5';
+          case 'information': return '3';
+          case 'debug': return '1';
+          default: return '0';
+        }
+      })();
 
       // Log high-level alerts for monitoring
       if (parseInt(ruleLevel) >= 12) {

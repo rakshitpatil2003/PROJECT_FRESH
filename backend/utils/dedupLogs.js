@@ -18,7 +18,8 @@ const removeDuplicateLogs = async () => {
               }
             },
             agentName: '$agent.name',
-            ruleLevel: '$rule.level',
+            // Ensure rule level is stored as string for comparison
+            ruleLevel: { $toString: '$rule.level' },
             ruleDescription: '$rule.description'
           },
           docs: { $push: '$_id' },

@@ -4,6 +4,7 @@ const numCPUs = require('os').cpus().length;
 const { fetchLogsFromGraylog } = require('./controllers/graylogController');
 const cleanupOldLogs = require('./utils/cleanupLogs');
 const removeDuplicateLogs = require('./utils/dedupLogs');
+const normalizeLogLevels = require('./utils/normalizeLogLevels');
 
 if (cluster.isMaster) {
   console.log(`Master ${process.pid} is running`);
@@ -20,6 +21,10 @@ if (cluster.isMaster) {
       
       await connectDB();
       console.log('Master process connected to MongoDB');
+
+      console.log('Running log level normalization...');
+      await normalizeLogLevels();
+      console.log('Log level normalization completed');
       
       // Schedule log fetching every 10 seconds
       setInterval(fetchLogsFromGraylog, 10000);
