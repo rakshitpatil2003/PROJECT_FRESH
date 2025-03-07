@@ -24,6 +24,7 @@ import NISTDashboard from './components/NISTDashboard';
 import PCIDSSDashboard from './components/PCIDSSDashboard';
 import TSCDashboard from './components/TSCDashboard';
 import NewsTicker from './components/NewsTicker';
+import UserDetails from './pages/UserDetails';
 
 const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   const token = localStorage.getItem('token');
@@ -251,6 +252,14 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <MitreAttack />
+              </ProtectedLayout>
+            }
+          /> 
+          <Route
+            path="/profile"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <UserDetails />
               </ProtectedLayout>
             }
           /> 

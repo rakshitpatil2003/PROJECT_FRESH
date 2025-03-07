@@ -3,13 +3,14 @@ import { Box, Container, Typography, Link } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import InstagramIcon from '@mui/icons-material/Instagram';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
+import VGLogo from '../assets/VG_logo.PNG';
 
 const Footer = () => {
   return (
     <Box
       component="footer"
       sx={{
-        py: 3,
+        py: 1, // Minimize height
         px: 2,
         mt: 'auto',
         backgroundColor: (theme) =>
@@ -17,10 +18,8 @@ const Footer = () => {
         borderTop: (theme) => `1px solid ${theme.palette.divider}`,
         position: 'fixed',
         bottom: 0,
-        //width: '100%',
+        width: '100%', // Use full width of the page
         zIndex: 1000,
-        marginLeft: '240px', // Width of sidebar
-        width: 'calc(100% - 240px)' // Adjust width to account for sidebar
       }}
     >
       <Container maxWidth="lg">
@@ -32,10 +31,20 @@ const Footer = () => {
             flexWrap: 'wrap'
           }}
         >
-          <Typography variant="body2" color="text.secondary">
-            Copyright © 2025 Virtual Galaxy Infotech Limited. All rights reserved.
-          </Typography>
-          
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <img
+              src={VGLogo}
+              alt="Virtual Galaxy Logo"
+              style={{
+                height: '24px', // Adjust this value to match footer height
+                marginRight: '10px'
+              }}
+            />
+            <Typography variant="body2" color="text.secondary">
+              Copyright © 2025 Virtual Galaxy Infotech Limited. All rights reserved.
+            </Typography>
+          </Box>
+
           <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Link
@@ -71,7 +80,7 @@ const Footer = () => {
                 Policies
               </Link>
             </Box>
-            
+
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Link
                 href="https://www.instagram.com/virtualgalaxyinfotech"
