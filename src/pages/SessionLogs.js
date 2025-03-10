@@ -33,6 +33,7 @@ import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
+import { useTheme } from '@mui/material/styles';
 
 const SessionLogs = () => {
     const [logs, setLogs] = useState([]);
@@ -41,6 +42,7 @@ const SessionLogs = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedLog, setSelectedLog] = useState(null);
+    const theme = useTheme();
     
     // Pagination states
     const [page, setPage] = useState(1);
@@ -154,7 +156,7 @@ const SessionLogs = () => {
         }, 500);
 
         return () => clearTimeout(debounceTimer);
-    }, [fetchSessionLogs]);
+    }, [fetchSessionLogs,searchTerm]);
 
     const formatTimestamp = (timestamp) => {
         try {
@@ -235,12 +237,12 @@ const SessionLogs = () => {
                 <Table stickyHeader>
                     <TableHead>
                         <TableRow>
-                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
-                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent Name</TableCell>
-                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Rule Level</TableCell>
-                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Description</TableCell>
-                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Compliance</TableCell>
-                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
+                            <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Timestamp</TableCell>
+                            <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Agent Name</TableCell>
+                            <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Rule Level</TableCell>
+                            <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Description</TableCell>
+                            <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Compliance</TableCell>
+                            <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Actions</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>

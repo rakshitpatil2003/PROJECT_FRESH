@@ -28,6 +28,7 @@ import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import { API_URL } from '../config';
 import SessionLogView from '../components/SessionLogView';
+import { useTheme } from '@mui/material/styles';
 
 const MajorLogs = () => {
   const [logs, setLogs] = useState([]);
@@ -35,6 +36,7 @@ const MajorLogs = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedLog, setSelectedLog] = useState(null);
+  const theme = useTheme();
 
   const fetchMajorLogs = useCallback(async (search) => {
     try {
@@ -210,12 +212,12 @@ const MajorLogs = () => {
         <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Timestamp</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Agent Name</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Rule Level</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Severity</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Description</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: '#ffebee' }}>Actions</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Timestamp</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Agent Name</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Rule Level</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Severity</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Description</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
