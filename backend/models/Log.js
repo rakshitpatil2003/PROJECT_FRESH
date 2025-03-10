@@ -15,6 +15,38 @@ const LogSchema = new mongoose.Schema({
     destIp: { type: String },
     protocol: { type: String }
   },
+  data: {
+    vulnerability: {
+      cve: { type: String },
+      package: {
+        name: { type: String },
+        version: { type: String },
+        architecture: { type: String },
+        condition: { type: String }
+      },
+      severity: { type: String },
+      published: { type: Date },
+      updated: { type: Date },
+      title: { type: String },
+      cvss: {
+        cvss3: {
+          base_score: { type: String },
+          vector: {
+            attack_vector: { type: String },
+            availability: { type: String },
+            confidentiality_impact: { type: String },
+            integrity_impact: { type: String },
+            privileges_required: { type: String },
+            scope: { type: String },
+            user_interaction: { type: String }
+          }
+        }
+      },
+      reference: { type: String },
+      rationale: { type: String },
+      status: { type: String }
+    }
+  },
   rawLog: { type: mongoose.Schema.Types.Mixed },
   // Add a unique compound index
   uniqueIdentifier: { type: String, unique: true }

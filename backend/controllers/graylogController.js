@@ -141,6 +141,9 @@ const fetchLogsFromGraylog = async () => {
         });
       }
 
+      // Extract the data field, including vulnerability details
+      const data = parsedMessage?.data || {};
+
       return {
         timestamp: new Date(timestamp), // Store the original timestamp
         agent: { 
@@ -169,6 +172,7 @@ const fetchLogsFromGraylog = async () => {
                    msg.message.protocol || 
                    null
         },
+        data: data, // Explicitly store the data field
         rawLog: parsedMessage || msg.message // Store the complete parsed message
       };
     });
