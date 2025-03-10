@@ -27,6 +27,7 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import axios from 'axios';
+import TablePagination from '@mui/material/TablePagination';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
@@ -48,6 +49,8 @@ const NISTDashboard = () => {
         controlSeverity: {},
         controlFamilies: {},
     });
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
 
     // Charts references
     const dashboardRef = React.useRef(null);
@@ -831,7 +834,9 @@ const NISTDashboard = () => {
                         </TableHead>
 
                         <TableBody>
-                            {nistLogs.map((log, index) => (
+                            {nistLogs
+                            .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                            .map((log, index) => (
                                 <TableRow key={index} hover>
                                     <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
                                     <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
@@ -867,6 +872,18 @@ const NISTDashboard = () => {
                         </TableBody>
                     </Table>
                 </TableContainer>
+                <TablePagination
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    component="div"
+                    count={nistLogs.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={(event, newPage) => setPage(newPage)}
+                    onRowsPerPageChange={(event) => {
+                        setRowsPerPage(parseInt(event.target.value, 10));
+                        setPage(0);
+                    }}
+                />
             </Box>
 
             {/* Log Details Dialog */}

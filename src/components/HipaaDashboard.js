@@ -27,6 +27,7 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import axios from 'axios';
+import TablePagination from '@mui/material/TablePagination';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
@@ -47,6 +48,8 @@ const HIPAADashboard = () => {
         timelineData: [],
         controlSeverity: {},
     });
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
 
     // Charts references
     const dashboardRef = React.useRef(null);
@@ -708,42 +711,56 @@ const HIPAADashboard = () => {
                         </TableHead>
 
                         <TableBody>
-                            {hipaaLogs.map((log, index) => (
-                                <TableRow key={index} hover>
-                                    <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
-                                    <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
-                                    <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={log.parsed.rule?.level || '0'}
-                                            color={getRuleLevelColor(log.parsed.rule?.level)}
-                                            size="small"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        {log.parsed.rule?.hipaa?.map((control, idx) => (
+                            {hipaaLogs
+                                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                                .map((log, index) => (
+                                    <TableRow key={index} hover>
+                                        <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
+                                        <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
+                                        <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
+                                        <TableCell>
                                             <Chip
-                                                key={idx}
-                                                label={control}
+                                                label={log.parsed.rule?.level || '0'}
+                                                color={getRuleLevelColor(log.parsed.rule?.level)}
                                                 size="small"
-                                                sx={{ m: 0.5 }}
                                             />
-                                        ))}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Link
-                                            component="button"
-                                            variant="body2"
-                                            onClick={() => handleViewDetails(log)}
-                                        >
-                                            View Details
-                                        </Link>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                                        </TableCell>
+                                        <TableCell>
+                                            {log.parsed.rule?.hipaa?.map((control, idx) => (
+                                                <Chip
+                                                    key={idx}
+                                                    label={control}
+                                                    size="small"
+                                                    sx={{ m: 0.5 }}
+                                                />
+                                            ))}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Link
+                                                component="button"
+                                                variant="body2"
+                                                onClick={() => handleViewDetails(log)}
+                                            >
+                                                View Details
+                                            </Link>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
                         </TableBody>
                     </Table>
                 </TableContainer>
+                <TablePagination
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    component="div"
+                    count={hipaaLogs.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={(event, newPage) => setPage(newPage)}
+                    onRowsPerPageChange={(event) => {
+                        setRowsPerPage(parseInt(event.target.value, 10));
+                        setPage(0);
+                    }}
+                />
             </Box>
 
             {/* Log Details Dialog */}
