@@ -24,7 +24,8 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Grid
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -45,10 +46,20 @@ const LogDetails = () => {
 
   const getRuleLevelColor = (level) => {
     const numLevel = parseInt(level);
+    if (numLevel >= 17) return 'error'; // Added new severity level
     if (numLevel >= 12) return 'error';
     if (numLevel >= 8) return 'warning';
     if (numLevel >= 4) return 'info';
     return 'success';
+  };
+
+  const getRuleLevelLabel = (level) => {
+    const numLevel = parseInt(level);
+    if (numLevel >= 17) return 'Severe';
+    if (numLevel >= 12) return 'Critical';
+    if (numLevel >= 8) return 'High';
+    if (numLevel >= 4) return 'Medium';
+    return 'Low';
   };
 
   const formatTimestamp = (timestamp) => {
@@ -63,12 +74,12 @@ const LogDetails = () => {
     }
   };
 
-  const fetchLogs = useCallback(async (currentPage, search, type) => {
+  const fetchLogs = useCallback(async (currentPage, search, type, level) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${API_URL}/api/logs?page=${currentPage}&limit=100&search=${search}&logType=${type}`,
+        `${API_URL}/api/logs?page=${currentPage}&limit=100&search=${search}&logType=${type}&ruleLevel=${level}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -92,24 +103,28 @@ const LogDetails = () => {
   }, []);
 
   const debouncedSearch = useCallback(
-    debounce((searchValue, logTypeValue) => {
+    debounce((searchValue, logTypeValue, ruleLevelValue) => {
       setPage(1);
-      fetchLogs(1, searchValue, logTypeValue);
+      fetchLogs(1, searchValue, logTypeValue, ruleLevelValue);
     }, 500),
     [fetchLogs]
   );
 
   useEffect(() => {
-    debouncedSearch(searchTerm, logType);
-  }, [searchTerm, logType, debouncedSearch]);
+    debouncedSearch(searchTerm, logType, ruleLevel);
+  }, [searchTerm, logType, ruleLevel, debouncedSearch]);
 
   const handlePageChange = (event, newPage) => {
     setPage(newPage);
-    fetchLogs(newPage, searchTerm, logType);
+    fetchLogs(newPage, searchTerm, logType, ruleLevel);
   };
 
   const handleLogTypeChange = (event) => {
     setLogType(event.target.value);
+  };
+
+  const handleRuleLevelChange = (event) => {
+    setRuleLevel(event.target.value);
   };
 
   const handleClickOpen = (log) => {
@@ -137,38 +152,59 @@ const LogDetails = () => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <FormControl variant="outlined" sx={{ minWidth: 200 }}>
-          <InputLabel id="log-type-label">Log Type</InputLabel>
-          <Select
-            labelId="log-type-label"
-            value={logType}
-            onChange={handleLogTypeChange}
-            label="Log Type"
-          >
-            <MenuItem value="all">All Logs</MenuItem>
-            <MenuItem value="fortigate">Fortigate Logs</MenuItem>
-            <MenuItem value="other">Suricata/Sysmon Logs</MenuItem>
-          </Select>
-        </FormControl>
-
-        <TextField
-          fullWidth
-          margin="normal"
-          variant="outlined"
-          placeholder="Search logs..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-          sx={{ my: 0 }}
-        />
-      </Box>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={3}>
+          <FormControl variant="outlined" fullWidth>
+            <InputLabel id="log-type-label">Log Type</InputLabel>
+            <Select
+              labelId="log-type-label"
+              value={logType}
+              onChange={handleLogTypeChange}
+              label="Log Type"
+            >
+              <MenuItem value="all">All Logs</MenuItem>
+              <MenuItem value="fortigate">Fortigate Logs</MenuItem>
+              <MenuItem value="other">Suricata/Sysmon Logs</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+        
+        <Grid item xs={12} md={3}>
+          <FormControl variant="outlined" fullWidth>
+            <InputLabel id="rule-level-label">Rule Level</InputLabel>
+            <Select
+              labelId="rule-level-label"
+              value={ruleLevel}
+              onChange={handleRuleLevelChange}
+              label="Rule Level"
+            >
+              <MenuItem value="all">All Levels</MenuItem>
+              <MenuItem value="low">Low (1-3)</MenuItem>
+              <MenuItem value="medium">Medium (4-7)</MenuItem>
+              <MenuItem value="high">High (8-11)</MenuItem>
+              <MenuItem value="critical">Critical (12-16)</MenuItem>
+              <MenuItem value="severe">Severe (17+)</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+        
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder="Search logs..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Grid>
+      </Grid>
 
       <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
         <Table stickyHeader>
@@ -191,7 +227,7 @@ const LogDetails = () => {
                   <TableCell>{parsedLog.agent.name}</TableCell>
                   <TableCell>
                     <Chip 
-                      label={parsedLog.rule.level} 
+                      label={`${parsedLog.rule.level} - ${getRuleLevelLabel(parsedLog.rule.level)}`}
                       color={getRuleLevelColor(parsedLog.rule.level)}
                       size="small"
                     />

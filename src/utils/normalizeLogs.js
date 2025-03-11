@@ -28,104 +28,142 @@ import ShieldIcon from '@mui/icons-material/Shield';
 
 // Keep the parseLogMessage function as it is
 export const parseLogMessage = (logEntry) => {
-  // Existing parseLogMessage implementation...
   if (!logEntry) return null;
   
   try {
-    // Parse message data
-    let messageData;
-    if (logEntry.rawLog?.message) {
-      try {
-        messageData = typeof logEntry.rawLog.message === 'string' ? 
-          JSON.parse(logEntry.rawLog.message) : logEntry.rawLog.message;
-      } catch (e) {
-        messageData = logEntry.rawLog.message;
+      // Parse message data (keep this the same as your original code)
+      let messageData;
+      if (logEntry.rawLog?.message) {
+          try {
+              messageData = typeof logEntry.rawLog.message === 'string' ? 
+                  JSON.parse(logEntry.rawLog.message) : logEntry.rawLog.message;
+          } catch (e) {
+              messageData = logEntry.rawLog.message;
+          }
+      } else if (typeof logEntry.message === 'string') {
+          try {
+              messageData = JSON.parse(logEntry.message);
+          } catch (e) {
+              messageData = logEntry.message;
+          }
+      } else {
+          messageData = logEntry.message || logEntry;
       }
-    } else if (typeof logEntry.message === 'string') {
-      try {
-        messageData = JSON.parse(logEntry.message);
-      } catch (e) {
-        messageData = logEntry.message;
-      }
-    } else {
-      messageData = logEntry.message || logEntry;
-    }
 
-    // Extract rule data with new compliance fields
-    const ruleData = messageData?.rule || logEntry?.rule || {};
-    
-    return {
-      timestamp: messageData?.data?.timestamp || 
-                messageData?.timestamp || 
-                logEntry?.timestamp || 
-                logEntry?.rawLog?.timestamp,
-      agent: {
-        name: messageData?.agent?.name || messageData?.manager?.name || logEntry?.agent?.name || 'N/A',
-        id: messageData?.agent?.id || 'N/A'
-      },
-      rule: {
-        level: String(ruleData?.level || '0'),
-        description: ruleData?.description || 'No description',
-        id: ruleData?.id || 'N/A',
-        groups: ruleData?.groups || [],
-        // New compliance and security framework fields
-        hipaa: ruleData?.hipaa || [],
-        pci_dss: ruleData?.pci_dss || [],
-        gdpr: ruleData?.gdpr || [],
-        nist_800_53: ruleData?.nist_800_53 || [],
-        mitre: ruleData?.mitre || {
-          id: [],
-          tactic: [],
-          technique: []
-        },
-        tsc: ruleData?.tsc || [],
-        gpg13: ruleData?.gpg13 || []
-      },
-      network: {
-        srcIp: messageData?.data?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
-        srcPort: messageData?.data?.src_port || 'N/A',
-        destIp: messageData?.data?.dest_ip || logEntry?.network?.destIp || 'N/A',
-        destPort: messageData?.data?.dest_port || 'N/A',
-        protocol: messageData?.data?.proto || logEntry?.network?.protocol || 'N/A',
-        flow: {
-          pktsToServer: messageData?.data?.flow?.pkts_toserver || 'N/A',
-          pktsToClient: messageData?.data?.flow?.pkts_toclient || 'N/A',
-          bytesToServer: messageData?.data?.flow?.bytes_toserver || 'N/A',
-          bytesToClient: messageData?.data?.flow?.bytes_toclient || 'N/A',
-          state: messageData?.data?.flow?.state || 'N/A'
-        }
-      },
-      event: {
-        type: messageData?.data?.event_type || 'N/A',
-        interface: messageData?.data?.in_iface || 'N/A'
-      },
-      rawData: messageData
-    };
+      // Extract rule data with compliance fields (same as your original code)
+      const ruleData = messageData?.rule || logEntry?.rule || {};
+      
+      // Get the data object - this is the one change we need
+      const dataField = messageData?.data || {};
+      
+      // Keep the same structure as your original return, just add the data field and update references
+      return {
+          timestamp: messageData?.data?.timestamp || 
+                  messageData?.timestamp || 
+                  logEntry?.timestamp || 
+                  logEntry?.rawLog?.timestamp,
+          agent: {
+              name: messageData?.agent?.name || messageData?.manager?.name || logEntry?.agent?.name || 'N/A',
+              id: messageData?.agent?.id || 'N/A'
+          },
+          rule: {
+              level: String(ruleData?.level || '0'),
+              description: ruleData?.description || 'No description',
+              id: ruleData?.id || 'N/A',
+              groups: ruleData?.groups || [],
+              hipaa: ruleData?.hipaa || [],
+              pci_dss: ruleData?.pci_dss || [],
+              gdpr: ruleData?.gdpr || [],
+              nist_800_53: ruleData?.nist_800_53 || [],
+              mitre: ruleData?.mitre || {
+                  id: [],
+                  tactic: [],
+                  technique: []
+              },
+              tsc: ruleData?.tsc || [],
+              gpg13: ruleData?.gpg13 || []
+          },
+          network: {
+              srcIp: messageData?.data?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
+              srcPort: messageData?.data?.src_port || 'N/A',
+              destIp: messageData?.data?.dest_ip || logEntry?.network?.destIp || 'N/A',
+              destPort: messageData?.data?.dest_port || 'N/A',
+              protocol: messageData?.data?.proto || logEntry?.network?.protocol || 'N/A',
+              flow: {
+                  pktsToServer: messageData?.data?.flow?.pkts_toserver || 'N/A',
+                  pktsToClient: messageData?.data?.flow?.pkts_toclient || 'N/A',
+                  bytesToServer: messageData?.data?.flow?.bytes_toserver || 'N/A',
+                  bytesToClient: messageData?.data?.flow?.bytes_toclient || 'N/A',
+                  state: messageData?.data?.flow?.state || 'N/A'
+              }
+          },
+          event: {
+              type: messageData?.data?.event_type || 'N/A',
+              interface: messageData?.data?.in_iface || 'N/A'
+          },
+          // Store all vulnerability info at the top level even though it's inside data
+          // This maintains compatibility with any code using these fields directly
+          vulnerability: {
+              cve: dataField?.vulnerability?.cve || 'N/A',
+              package: dataField?.vulnerability?.package || {
+                  name: 'N/A',
+                  version: 'N/A',
+                  architecture: 'N/A',
+                  condition: 'N/A'
+              },
+              severity: dataField?.vulnerability?.severity || 'N/A',
+              published: dataField?.vulnerability?.published || 'N/A',
+              updated: dataField?.vulnerability?.updated || 'N/A',
+              title: dataField?.vulnerability?.title || 'N/A',
+              cvss: dataField?.vulnerability?.cvss || {
+                  cvss3: { base_score: 'N/A' }
+              },
+              reference: dataField?.vulnerability?.reference || 'N/A',
+              rationale: dataField?.vulnerability?.rationale || 'N/A',
+              status: dataField?.vulnerability?.status || 'N/A'
+          },
+          // Store the complete data field
+          data: dataField,
+          rawData: messageData
+      };
   } catch (error) {
-    console.error('Error parsing log message:', error);
-    return {
-      timestamp: logEntry?.timestamp || new Date().toISOString(),
-      agent: { name: 'Parse Error', id: 'N/A' },
-      rule: {
-        level: '0',
-        description: 'Error parsing log data',
-        id: 'N/A',
-        groups: [],
-        hipaa: [],
-        pci_dss: [],
-        gdpr: [],
-        nist_800_53: [],
-        mitre: { id: [], tactic: [], technique: [] },
-        tsc: [],
-        gpg13: []
-      },
-      network: {
-        srcIp: 'N/A', srcPort: 'N/A', destIp: 'N/A', destPort: 'N/A', protocol: 'N/A',
-        flow: { pktsToServer: 'N/A', pktsToClient: 'N/A', bytesToServer: 'N/A', bytesToClient: 'N/A', state: 'N/A' }
-      },
-      event: { type: 'N/A', interface: 'N/A' },
-      rawData: logEntry
-    };
+      console.error('Error parsing log message:', error);
+      return {
+          timestamp: logEntry?.timestamp || new Date().toISOString(),
+          agent: { name: 'Parse Error', id: 'N/A' },
+          rule: {
+              level: '0',
+              description: 'Error parsing log data',
+              id: 'N/A',
+              groups: [],
+              hipaa: [],
+              pci_dss: [],
+              gdpr: [],
+              nist_800_53: [],
+              mitre: { id: [], tactic: [], technique: [] },
+              tsc: [],
+              gpg13: []
+          },
+          network: {
+              srcIp: 'N/A', srcPort: 'N/A', destIp: 'N/A', destPort: 'N/A', protocol: 'N/A',
+              flow: { pktsToServer: 'N/A', pktsToClient: 'N/A', bytesToServer: 'N/A', bytesToClient: 'N/A', state: 'N/A' }
+          },
+          event: { type: 'N/A', interface: 'N/A' },
+          vulnerability: {
+              cve: 'N/A',
+              package: { name: 'N/A', version: 'N/A', architecture: 'N/A', condition: 'N/A' },
+              severity: 'N/A',
+              published: 'N/A',
+              updated: 'N/A',
+              title: 'N/A',
+              cvss: { cvss3: { base_score: 'N/A' } },
+              reference: 'N/A',
+              rationale: 'N/A',
+              status: 'N/A'
+          },
+          data: {},
+          rawData: logEntry
+      };
   }
 };
 

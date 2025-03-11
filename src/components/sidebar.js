@@ -116,7 +116,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
   const threatIntelItems = [
     { text: 'MITRE ATT&CK', icon: <RadarIcon />, path: '/mitre-attack' },
     { text: 'Threat Hunting', icon: <SearchIcon />, path: '/threat-hunting' },
-    { text: 'Vulnerability Detection', icon: <BugReportIcon />, path: '/vulnerability-detection' },
+    { text: 'Vulnerability Detection', icon: <BugReportIcon />, path: '/vulnerability' },
   ];
 
   // Fetch user profile on component mount
@@ -178,7 +178,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           minHeight: '52px' // Ensure minimum height
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{minHeight: '10px'}}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
