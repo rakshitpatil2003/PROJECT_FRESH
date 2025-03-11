@@ -1093,6 +1093,77 @@ router.get('/mitre', async (req, res) => {
   }
 });
 
+
+// Endpoint to fetch vulnerability logs
+router.get('/vulnerability', async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 10, severity = '', package = '', cve = '', startTime = '' } = req.query;
+
+    let searchQuery = {
+      $or: [
+        { "rule.groups": "vulnerability-detector" },
+        { "data.vulnerability": { $exists: true } },
+        { "rawLog.message": { $regex: /cvss|cvs|assigner/i } }
+      ]
+    };
+
+    if (search) {
+      searchQuery.$and = [
+        searchQuery,
+        {
+          $or: [
+            { "agent.name": { $regex: search, $options: 'i' } },
+            { "rule.description": { $regex: search, $options: 'i' } },
+            { "data.vulnerability.cve": { $regex: search, $options: 'i' } },
+            { "data.vulnerability.package.name": { $regex: search, $options: 'i' } },
+            { "data.vulnerability.severity": { $regex: search, $options: 'i' } },
+            { "rawLog.message": { $regex: search, $options: 'i' } }
+          ]
+        }
+      ];
+    }
+
+    if (startTime) {
+      searchQuery.timestamp = { $gte: new Date(startTime) };
+    }
+
+    if (severity) {
+      searchQuery.$and = searchQuery.$and || [];
+      searchQuery.$and.push({ "data.vulnerability.severity": { $regex: severity, $options: 'i' } });
+    }
+
+    if (package) {
+      searchQuery.$and = searchQuery.$and || [];
+      searchQuery.$and.push({ "data.vulnerability.package.name": { $regex: package, $options: 'i' } });
+    }
+
+    if (cve) {
+      searchQuery.$and = searchQuery.$and || [];
+      searchQuery.$and.push({ "data.vulnerability.cve": { $regex: cve, $options: 'i' } });
+    }
+
+    const totalLogs = await Log.countDocuments(searchQuery);
+    const vulnerabilityLogs = await Log.find(searchQuery)
+      .sort({ timestamp: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .lean();
+
+    console.log('Fetched logs:', vulnerabilityLogs); // Add this line to debug
+
+    res.json({
+      logs: vulnerabilityLogs,
+      totalLogs,
+      page: Number(page),
+      totalPages: Math.ceil(totalLogs / limit)
+    });
+  } catch (error) {
+    console.error('Error in /vulnerability endpoint:', error);
+    res.status(500).json({ message: 'Error fetching vulnerability logs', error: error.message });
+  }
+});
+
+
 router.get('/test', async (req, res) => {
   try {
     const log = new Log({
@@ -1117,7 +1188,8 @@ router.get('/', async (req, res) => {
       page = 1, 
       limit = 1000, 
       search = '',
-      logType = 'all'  // New parameter for log type filtering
+      logType = 'all',
+      ruleLevel = 'all'
     } = req.query;
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -1127,9 +1199,36 @@ router.get('/', async (req, res) => {
     
     // Apply log type filter
     if (logType === 'fortigate') {
-      searchQuery['rawLog.message'] = { $regex: 'FortiGate log received.', $options: 'i' };
+      searchQuery['rawLog.message'] = { $regex: 'FortiGate', $options: 'i' };
     } else if (logType === 'other') {
-      searchQuery['rawLog.message'] = { $not: { $regex: 'FortiGate log received.', $options: 'i' } };
+      searchQuery['rawLog.message'] = { $not: { $regex: 'FortiGate', $options: 'i' } };
+    }
+
+    // Apply rule level filter
+    if (ruleLevel !== 'all') {
+      let ruleLevelRange;
+      
+      switch (ruleLevel) {
+        case 'low':
+          ruleLevelRange = { $gte: 1, $lte: 3 };
+          break;
+        case 'medium':
+          ruleLevelRange = { $gte: 4, $lte: 7 };
+          break;
+        case 'high':
+          ruleLevelRange = { $gte: 8, $lte: 11 };
+          break;
+        case 'critical':
+          ruleLevelRange = { $gte: 12, $lte: 16 };
+          break;
+        case 'severe':
+          ruleLevelRange = { $gte: 17 };
+          break;
+      }
+      
+      if (ruleLevelRange) {
+        searchQuery['rule.level'] = ruleLevelRange;
+      }
     }
     
     // Apply search term filter

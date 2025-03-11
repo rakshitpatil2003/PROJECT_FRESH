@@ -15,7 +15,7 @@ const handleFetchError = (error) => {
   return errorDetails;
 };
 
-// Extract the insertLogs function from your Log.js file
+// Keep the original insertLogs function
 const insertLogs = async (logsToInsert) => {
   try {
     // Use bulkWrite with upsert to prevent duplicates
@@ -66,13 +66,14 @@ const fetchLogsFromGraylog = async () => {
     
     console.log(`Fetching logs from ${from.toISOString()} to ${to.toISOString()}`);
 
+    // Keep using the same request parameters as your original code
     const response = await axios.get(graylogUrl, {
       params: {
         query: '*',
         from: from.toISOString(),
         to: to.toISOString(),
         limit: 1000,
-        // Request all potentially relevant fields
+        // Keep the same fields as before
         fields: 'timestamp,source,level,message,src_ip,dest_ip,protocol,rule_level,rule_description,event_type,agent_name,manager_name'
       },
       auth: {
@@ -106,7 +107,7 @@ const fetchLogsFromGraylog = async () => {
                        parsedMessage?.timestamp || 
                        msg.message.timestamp;
 
-      // Extract rule level with proper fallbacks
+      // Extract rule level with proper fallbacks - same as your original code
       const ruleLevel = (() => {
         // Get the raw level value
         const rawLevel = parsedMessage?.rule?.level || 
@@ -141,8 +142,12 @@ const fetchLogsFromGraylog = async () => {
         });
       }
 
+      // Extract the data field - this is the only addition to your original code
+      const data = parsedMessage?.data || {};
+
+      // Keep the same format as your original code, just add the data field
       return {
-        timestamp: new Date(timestamp), // Store the original timestamp
+        timestamp: new Date(timestamp),
         agent: { 
           name: parsedMessage?.agent?.name || 
                 parsedMessage?.manager?.name || 
@@ -169,13 +174,16 @@ const fetchLogsFromGraylog = async () => {
                    msg.message.protocol || 
                    null
         },
-        rawLog: parsedMessage || msg.message // Store the complete parsed message
+        // Add data field to store the complete data object
+        data: data,
+        // Keep storing rawLog as before
+        rawLog: parsedMessage || msg.message
       };
     });
 
     if (logsToInsert.length > 0) {
       try {
-        // Use the bulkWrite method instead of insertMany
+        // Use the same bulkWrite method as before
         await insertLogs(logsToInsert);
       } catch (error) {
         console.error('Failed to insert logs:', error.message);
