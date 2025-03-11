@@ -31,7 +31,7 @@ export const parseLogMessage = (logEntry) => {
   if (!logEntry) return null;
   
   try {
-      // Parse message data
+      // Parse message data (keep this the same as your original code)
       let messageData;
       if (logEntry.rawLog?.message) {
           try {
@@ -50,9 +50,13 @@ export const parseLogMessage = (logEntry) => {
           messageData = logEntry.message || logEntry;
       }
 
-      // Extract rule data with new compliance fields
+      // Extract rule data with compliance fields (same as your original code)
       const ruleData = messageData?.rule || logEntry?.rule || {};
       
+      // Get the data object - this is the one change we need
+      const dataField = messageData?.data || {};
+      
+      // Keep the same structure as your original return, just add the data field and update references
       return {
           timestamp: messageData?.data?.timestamp || 
                   messageData?.timestamp || 
@@ -97,25 +101,29 @@ export const parseLogMessage = (logEntry) => {
               type: messageData?.data?.event_type || 'N/A',
               interface: messageData?.data?.in_iface || 'N/A'
           },
+          // Store all vulnerability info at the top level even though it's inside data
+          // This maintains compatibility with any code using these fields directly
           vulnerability: {
-              cve: messageData?.data?.vulnerability?.cve || 'N/A',
-              package: messageData?.data?.vulnerability?.package || {
+              cve: dataField?.vulnerability?.cve || 'N/A',
+              package: dataField?.vulnerability?.package || {
                   name: 'N/A',
                   version: 'N/A',
                   architecture: 'N/A',
                   condition: 'N/A'
               },
-              severity: messageData?.data?.vulnerability?.severity || 'N/A',
-              published: messageData?.data?.vulnerability?.published || 'N/A',
-              updated: messageData?.data?.vulnerability?.updated || 'N/A',
-              title: messageData?.data?.vulnerability?.title || 'N/A',
-              cvss: messageData?.data?.vulnerability?.cvss || {
+              severity: dataField?.vulnerability?.severity || 'N/A',
+              published: dataField?.vulnerability?.published || 'N/A',
+              updated: dataField?.vulnerability?.updated || 'N/A',
+              title: dataField?.vulnerability?.title || 'N/A',
+              cvss: dataField?.vulnerability?.cvss || {
                   cvss3: { base_score: 'N/A' }
               },
-              reference: messageData?.data?.vulnerability?.reference || 'N/A',
-              rationale: messageData?.data?.vulnerability?.rationale || 'N/A',
-              status: messageData?.data?.vulnerability?.status || 'N/A'
+              reference: dataField?.vulnerability?.reference || 'N/A',
+              rationale: dataField?.vulnerability?.rationale || 'N/A',
+              status: dataField?.vulnerability?.status || 'N/A'
           },
+          // Store the complete data field
+          data: dataField,
           rawData: messageData
       };
   } catch (error) {
@@ -153,6 +161,7 @@ export const parseLogMessage = (logEntry) => {
               rationale: 'N/A',
               status: 'N/A'
           },
+          data: {},
           rawData: logEntry
       };
   }
