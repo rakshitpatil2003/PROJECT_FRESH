@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Box, Typography } from '@mui/material';
+import { API_URL } from '../config';
 
 const NewsTicker = () => {
   const [news, setNews] = useState([]);
@@ -11,7 +12,7 @@ const NewsTicker = () => {
   useEffect(() => {
     const fetchNews = async () => {
       try {
-        const response = await axios.get('http://192.168.1.151:5000/api/news');
+        const response = await axios.get(`${API_URL}/api/news`);
         setNews(response.data);
         setLoading(false);
       } catch (err) {
