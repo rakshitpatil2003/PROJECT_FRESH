@@ -27,6 +27,7 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import axios from 'axios';
+import TablePagination from '@mui/material/TablePagination';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
@@ -57,6 +58,8 @@ const PCIDSSDashboard = () => {
             'Unauthorized Access': 0
         }
     });
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
 
     // Charts references
     const dashboardRef = React.useRef(null);
@@ -924,7 +927,9 @@ const PCIDSSDashboard = () => {
 
                         <TableBody>
                             {pciDssLogs.length > 0 ? (
-                                pciDssLogs.map((log, index) => (
+                                pciDssLogs
+                                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                                .map((log, index) => (
                                     <TableRow key={index} hover>
                                         <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
                                         <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
@@ -965,6 +970,18 @@ const PCIDSSDashboard = () => {
                             )}
                         </TableBody>                    </Table>
                 </TableContainer>
+                <TablePagination
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    component="div"
+                    count={pciDssLogs.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={(event, newPage) => setPage(newPage)}
+                    onRowsPerPageChange={(event) => {
+                        setRowsPerPage(parseInt(event.target.value, 10));
+                        setPage(0);
+                    }}
+                />
             </Box>
 
             {/* Session Log View Modal */}

@@ -55,6 +55,7 @@ import {
 import { CanvasRenderer } from 'echarts/renderers';
 import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
 import { API_URL } from '../config';
+import { useTheme } from '@mui/material/styles';
 
 echarts.use([
     TitleComponent,
@@ -76,6 +77,7 @@ const MitreAttackLogs = () => {
     const [chartLoading, setChartLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedLog, setSelectedLog] = useState(null);
+    const theme = useTheme();
 
     // Dashboard state
     const [dashboardData, setDashboardData] = useState({
@@ -325,7 +327,7 @@ const MitreAttackLogs = () => {
             return;
           }
 
-    },[renderCharts]);
+    },[renderCharts, timeRange]);
 
     // Fetch ALL Mitre logs for visualization
     const fetchAllMitreLogs = useCallback(async () => {
@@ -736,12 +738,12 @@ const MitreAttackLogs = () => {
                         <Table stickyHeader>
                             <TableHead>
                                 <TableRow>
-                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
-                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent Name</TableCell>
-                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Rule Level</TableCell>
-                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Rule Description</TableCell>
-                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>MITRE Details</TableCell>
-                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
+                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Timestamp</TableCell>
+                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Agent Name</TableCell>
+                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Rule Level</TableCell>
+                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Rule Description</TableCell>
+                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>MITRE Details</TableCell>
+                                    <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Actions</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>

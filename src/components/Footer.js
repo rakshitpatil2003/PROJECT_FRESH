@@ -14,7 +14,7 @@ const Footer = () => {
         px: 2,
         mt: 'auto',
         backgroundColor: (theme) =>
-          theme.palette.mode === 'light' ? '#f5f5f5' : '#1e1e1e',
+          theme.palette.mode === 'light' ? '#f5f5f5' : '#2A4364',
         borderTop: (theme) => `1px solid ${theme.palette.divider}`,
         position: 'fixed',
         bottom: 0,

@@ -1,4 +1,3 @@
-
 import {
   Box,
   Drawer,
@@ -172,9 +171,11 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
         position="fixed"
         sx={{
           zIndex: theme.zIndex.drawer + 1,
-          backgroundColor: theme.palette.mode === 'dark' ? '#272727' : 'white',
+          backgroundColor: theme.palette.mode === 'dark' ? '#2A4364' : 'white',
           color: theme.palette.mode === 'dark' ? 'white' : 'primary.main',
-          boxShadow: 1
+          boxShadow: 1,
+          height: '52px', // Reduced height
+          minHeight: '52px' // Ensure minimum height
         }}
       >
         <Toolbar sx={{minHeight: '10px'}}>
@@ -206,7 +207,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            backgroundColor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5',
+            backgroundColor: theme.palette.mode === 'dark' ? '#2A4364' : '#f5f5f5',
             borderRight: `1px solid ${theme.palette.divider}`,
             overflowX: 'hidden',
             transition: 'width 0.3s ease',
@@ -220,7 +221,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: theme.palette.mode === 'dark' ? '#272727' : 'white',
+            backgroundColor: theme.palette.mode === 'dark' ? '#2A4364' : 'white',
           }}
         >
           <img
@@ -229,7 +230,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
             style={{
               width: '180px',
               height: 'auto',
-              margin: '10px 0',
+              margin: '0px 0',
               filter: theme.palette.mode === 'dark' ? 'brightness(0.8)' : 'none'
             }}
           />
@@ -425,7 +426,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
             p: 2,
             width: '100%',
             borderTop: `1px solid ${theme.palette.divider}`,
-            backgroundColor: theme.palette.mode === 'dark' ? '#272727' : '#f5f5f5',
+            backgroundColor: theme.palette.mode === 'dark' ? '#2A4364' : '#f5f5f5',
           }}
         >
           {loading ? (
