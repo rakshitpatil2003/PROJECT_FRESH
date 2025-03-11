@@ -42,6 +42,8 @@ const LogDetails = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [selectedLog, setSelectedLog] = useState(null);
   const [logType, setLogType] = useState('all'); // New state for log type filter
+  const [ruleLevel, setRuleLevel] = useState('all'); // New state for rule level filter
+
   const theme = useTheme();
 
   const getRuleLevelColor = (level) => {
