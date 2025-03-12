@@ -18,6 +18,7 @@ import Policies from './pages/Policies';
 import HIPAADashboard from './components/HipaaDashboard';
 import MitreAttack from './components/MitreAttack';
 import VulnerabilityDetection from './components/VulnerabilityDetection';
+import ThreatHunting from './components/ThreatHunting';
 
 import jwtDecode from 'jwt-decode';
 import GDPRDashboard from './components/GDPRDashboard';
@@ -257,6 +258,14 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <MitreAttack />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/threat-hunting"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <ThreatHunting />
               </ProtectedLayout>
             }
           />

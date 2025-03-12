@@ -1164,6 +1164,209 @@ router.get('/vulnerability', async (req, res) => {
 });
 
 
+
+router.get('/auth-metrics', async (req, res) => {
+  try {
+    console.log('Fetching authentication metrics...');
+    
+    const authMetrics = await Log.aggregate([
+      {
+        // First match only logs that have data.action field
+        $match: {
+          "data.action": { $exists: true }
+        }
+      },
+      {
+        // Count success and failure authentications
+        $group: {
+          _id: {
+            // If action is "Pass" or "pass", it's a success, otherwise a failure
+            success: {
+              $cond: [
+                { $regexMatch: { input: "$data.action", regex: /^pass$/i } },
+                true,
+                false
+              ]
+            }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        // Reshape the results
+        $project: {
+          _id: 0,
+          type: { $cond: ["$_id.success", "success", "failure"] },
+          count: 1
+        }
+      }
+    ]);
+    
+    // Convert to the expected format
+    const result = {
+      success: 0,
+      failure: 0
+    };
+    
+    authMetrics.forEach(metric => {
+      if (metric.type === 'success') {
+        result.success = metric.count;
+      } else {
+        result.failure = metric.count;
+      }
+    });
+    
+    console.log('Auth metrics calculated:', result);
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching auth metrics:', error);
+    res.status(500).json({ message: 'Error fetching auth metrics', error: error.message });
+  }
+});
+
+// Top agents endpoint
+router.get('/top-agents', async (req, res) => {
+  try {
+    console.log('Fetching top agents...');
+    
+    const topAgents = await Log.aggregate([
+      {
+        // Group by agent name and count logs
+        $group: {
+          _id: "$agent.name",
+          count: { $sum: 1 }
+        }
+      },
+      {
+        // Sort by count in descending order
+        $sort: { count: -1 }
+      },
+      {
+        // Limit to top 5
+        $limit: 5
+      },
+      {
+        // Project to the expected format
+        $project: {
+          _id: 0,
+          name: "$_id",
+          count: 1
+        }
+      }
+    ]);
+    
+    console.log('Top agents calculated:', topAgents);
+    res.json(topAgents);
+  } catch (error) {
+    console.error('Error fetching top agents:', error);
+    res.status(500).json({ message: 'Error fetching top agents', error: error.message });
+  }
+});
+
+// Alert trends endpoint
+router.get('/alert-trends', async (req, res) => {
+  try {
+    console.log('Fetching alert trends...');
+    
+    // Get data for the last 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const alertTrends = await Log.aggregate([
+      {
+        // Match logs from the last 7 days and make sure rule.level exists
+        $match: {
+          timestamp: { $gte: sevenDaysAgo },
+          "rule.level": { $exists: true }
+        }
+      },
+      {
+        // Add a field for the date and numeric level
+        $addFields: {
+          date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+          numericLevel: { 
+            $convert: { 
+              input: "$rule.level", 
+              to: "int", 
+              onError: 0, 
+              onNull: 0 
+            } 
+          }
+        }
+      },
+      {
+        // Group by date and categorize by level
+        $group: {
+          _id: "$date",
+          critical: {
+            $sum: {
+              $cond: [{ $gte: ["$numericLevel", 15] }, 1, 0]
+            }
+          },
+          high: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $gte: ["$numericLevel", 12] },
+                  { $lt: ["$numericLevel", 15] }
+                ]},
+                1, 
+                0
+              ]
+            }
+          },
+          medium: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $gte: ["$numericLevel", 8] },
+                  { $lt: ["$numericLevel", 12] }
+                ]},
+                1, 
+                0
+              ]
+            }
+          },
+          low: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $gte: ["$numericLevel", 1] },
+                  { $lt: ["$numericLevel", 8] }
+                ]},
+                1, 
+                0
+              ]
+            }
+          }
+        }
+      },
+      {
+        // Sort by date
+        $sort: { _id: 1 }
+      },
+      {
+        // Project to the expected format
+        $project: {
+          _id: 0,
+          date: "$_id",
+          critical: 1,
+          high: 1,
+          medium: 1,
+          low: 1
+        }
+      }
+    ]);
+    
+    console.log('Alert trends calculated:', alertTrends);
+    res.json(alertTrends);
+  } catch (error) {
+    console.error('Error fetching alert trends:', error);
+    res.status(500).json({ message: 'Error fetching alert trends', error: error.message });
+  }
+});
+
+
 router.get('/test', async (req, res) => {
   try {
     const log = new Log({
