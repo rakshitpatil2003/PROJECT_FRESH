@@ -17,6 +17,7 @@ const LogSchema = new mongoose.Schema({
   },
   // Store the data field as is
   data: { type: mongoose.Schema.Types.Mixed },
+  syscheck: { type: mongoose.Schema.Types.Mixed },
   // Continue storing rawLog as before
   rawLog: { type: mongoose.Schema.Types.Mixed },
   // Keep using uniqueIdentifier

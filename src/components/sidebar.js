@@ -103,6 +103,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
     { text: 'Performance Dashboard', icon: <SpeedIcon />, path: '/performance-dashboard' },
     { text: 'Major Logs', icon: <ErrorIcon />, path: '/major-logs' },
     { text: 'Session Logs', icon: <SupervisorAccountIcon />, path: '/session-logs' },
+    { text: 'FIM Logs', icon: <SupervisorAccountIcon/>, path: '/fim'},
   ];
 
   const securityPolicyItems = [

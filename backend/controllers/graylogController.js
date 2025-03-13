@@ -177,6 +177,7 @@ const fetchLogsFromGraylog = async () => {
         // Add data field to store the complete data object
         data: data,
         // Keep storing rawLog as before
+        syscheck: parsedMessage?.syscheck || null,
         rawLog: parsedMessage || msg.message
       };
     });

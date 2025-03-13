@@ -27,6 +27,7 @@ import PCIDSSDashboard from './components/PCIDSSDashboard';
 import TSCDashboard from './components/TSCDashboard';
 import NewsTicker from './components/NewsTicker';
 import UserDetails from './pages/UserDetails';
+import FIM from './pages/FIM';
 
 const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   const token = localStorage.getItem('token');
@@ -199,6 +200,14 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <MajorLogs />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/fim"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <FIM />
               </ProtectedLayout>
             }
           />
