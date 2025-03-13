@@ -122,6 +122,23 @@ export const parseLogMessage = (logEntry) => {
               rationale: dataField?.vulnerability?.rationale || 'N/A',
               status: dataField?.vulnerability?.status || 'N/A'
           },
+
+          traffic: {
+            action: dataField?.action || 'N/A',
+            srcCountry: dataField?.srccountry || 'N/A',
+            dstCountry: dataField?.dstcountry || 'N/A',
+            appcat: dataField?.appcat || 'N/A',
+            app: dataField?.app || 'N/A',
+            appid: dataField?.appid || 'N/A',
+            appRisk: dataField?.apprisk || 'N/A',
+            direction: dataField?.direction || 'N/A',
+            service: dataField?.service || 'N/A',
+            devName: dataField?.devname || 'N/A',
+            policyId: dataField?.policyid || 'N/A',
+            msg: dataField?.msg || 'N/A',
+            eventType: dataField?.eventtype || 'N/A',
+            subType: dataField?.subtype || 'N/A'
+            },
           // Store the complete data field
           data: dataField,
           rawData: messageData
@@ -160,6 +177,22 @@ export const parseLogMessage = (logEntry) => {
               reference: 'N/A',
               rationale: 'N/A',
               status: 'N/A'
+          },
+          traffic: {
+            action: 'N/A',
+            srcCountry: 'N/A',
+            dstCountry: 'N/A',
+            appcat: 'N/A',
+            app: 'N/A',
+            appid: 'N/A',
+            appRisk: 'N/A',
+            direction: 'N/A',
+            service: 'N/A',
+            devName: 'N/A',
+            policyId: 'N/A',
+            msg: 'N/A',
+            eventType: 'N/A',
+            subType: 'N/A'
           },
           data: {},
           rawData: logEntry

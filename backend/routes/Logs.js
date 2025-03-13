@@ -1180,10 +1180,10 @@ router.get('/auth-metrics', async (req, res) => {
         // Count success and failure authentications
         $group: {
           _id: {
-            // If action is "Pass" or "pass", it's a success, otherwise a failure
+            // If action is "pass", it's a success, otherwise a failure
             success: {
               $cond: [
-                { $regexMatch: { input: "$data.action", regex: /^pass$/i } },
+                { $eq: [{ $toLower: "$data.action" }, "pass"] },
                 true,
                 false
               ]
