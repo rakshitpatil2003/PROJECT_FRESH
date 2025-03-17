@@ -1273,6 +1273,119 @@ router.get('/mitre', async (req, res) => {
 });
 
 
+router.get('/action-logs', async (req, res) => {
+  try {
+    const { 
+      search = '', 
+      page = 1, 
+      limit = 10,
+      action = '',
+      startTime = '',
+      agentName = ''
+    } = req.query;
+
+    // Build search query for action-related logs
+    let searchQuery = { 
+      "parsedLog.traffic.action": { $exists: true }
+    };
+
+    // Additional filtering based on parameters
+    if (action) {
+      searchQuery["parsedLog.traffic.action"] = { $regex: action, $options: 'i' };
+    }
+
+    if (search) {
+      searchQuery["rawLog.message"] = { $regex: search, $options: 'i' };
+    }
+
+    if (startTime) {
+      searchQuery.timestamp = { $gte: new Date(startTime) };
+    }
+
+    if (agentName) {
+      searchQuery["agent.name"] = { $regex: agentName, $options: 'i' };
+    }
+
+    // Execute aggregation pipelines
+    const [actionLogs, totalLogs, actionMetrics, actionTrends, topAgentsByAction] = await Promise.all([
+      // Get paginated logs
+      Log.find(searchQuery)
+        .sort({ timestamp: -1 })
+        .skip((page - 1) * limit)
+        .limit(Number(limit))
+        .lean(),
+      
+      // Count total logs
+      Log.countDocuments(searchQuery),
+      
+      // Get action metrics
+      Log.aggregate([
+        { $match: { "parsedLog.traffic.action": { $exists: true } } },
+        { $group: { _id: "$parsedLog.traffic.action", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 10 }
+      ]),
+      
+      // Get action trends over time
+      Log.aggregate([
+        { $match: { "parsedLog.traffic.action": { $exists: true } } },
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+              action: "$parsedLog.traffic.action"
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { "_id.date": 1 } }
+      ]),
+      
+      // Get top agents by action
+      Log.aggregate([
+        { $match: { "parsedLog.traffic.action": { $exists: true } } },
+        { $group: { 
+          _id: { agent: "$agent.name", action: "$parsedLog.traffic.action" },
+          count: { $sum: 1 }
+        }},
+        { $sort: { count: -1 } },
+        { $limit: 20 }
+      ])
+    ]);
+
+    // Format trends for chart display
+    const formattedTrends = [];
+    const trendsMap = new Map();
+    
+    actionTrends.forEach(item => {
+      const { date, action } = item._id;
+      if (!trendsMap.has(date)) {
+        trendsMap.set(date, { date });
+      }
+      trendsMap.get(date)[action] = item.count;
+    });
+    
+    trendsMap.forEach(value => formattedTrends.push(value));
+
+    res.json({
+      logs: actionLogs,
+      totalLogs,
+      page: Number(page),
+      totalPages: Math.ceil(totalLogs / limit),
+      actionMetrics,
+      actionTrends: formattedTrends,
+      topAgentsByAction
+    });
+  } catch (error) {
+    console.error('Error in /action-logs endpoint:', error);
+    res.status(500).json({ 
+      message: 'Error fetching action logs', 
+      error: error.message 
+    });
+  }
+});
+
+
 // Endpoint to fetch vulnerability logs
 router.get('/vulnerability', async (req, res) => {
   try {
