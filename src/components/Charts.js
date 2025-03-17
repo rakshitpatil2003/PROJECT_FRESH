@@ -1,80 +1,109 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
+import { API_URL } from '../config';
 
-const Charts = ({ logs }) => {
-  // State for both charts using 10-second windows
-  const [logWindows, setLogWindows] = useState({
-    timestamps: Array(10).fill('').map((_, i) => {
-      const time = new Date(Date.now() - (10 - i) * 10000);
-      return time.toLocaleTimeString();
-    }),
-    counts: Array(10).fill(0)
+const Charts = () => {
+  // State for chart data
+  const [chartData, setChartData] = useState({
+    timestamps: [],
+    newLogCounts: [],
+    totalLogsHistory: []
   });
+  
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const [timeDistribution, setTimeDistribution] = useState({
-    timestamps: Array(10).fill('').map((_, i) => {
-      const time = new Date(Date.now() - (10 - i) * 10000);
-      return time.toLocaleTimeString();
-    }),
-    counts: Array(10).fill(0)
-  });
+  // Function to fetch metrics directly from the API
+  const fetchMetrics = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch(`${API_URL}/api/logs/metrics`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const currentTime = new Date().toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+      });
+      
+      // Update chart data based on the new metrics
+      setChartData(prevData => {
+        // Get previous total logs from history or default to 0
+        const previousTotal = prevData.totalLogsHistory.length > 0 
+          ? prevData.totalLogsHistory[prevData.totalLogsHistory.length - 1] 
+          : 0;
+        
+        // Calculate new logs in this interval
+        const newLogs = Math.max(0, data.totalLogs - previousTotal);
+        
+        // Update timestamps - add new timestamp
+        const newTimestamps = [...prevData.timestamps, currentTime];
+        if (newTimestamps.length > 10) {
+          newTimestamps.shift(); // Remove oldest timestamp if we have more than 10
+        }
+        
+        // Update new logs counts - add new count
+        const newLogCounts = [...prevData.newLogCounts, newLogs];
+        if (newLogCounts.length > 10) {
+          newLogCounts.shift(); // Remove oldest count if we have more than 10
+        }
+        
+        // Update total logs history
+        const newTotalLogsHistory = [...prevData.totalLogsHistory, data.totalLogs];
+        if (newTotalLogsHistory.length > 11) { // Keep 11 to calculate 10 differences
+          newTotalLogsHistory.shift();
+        }
+        
+        return {
+          timestamps: newTimestamps,
+          newLogCounts: newLogCounts,
+          totalLogsHistory: newTotalLogsHistory
+        };
+      });
+      
+      setLoading(false);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching metrics for charts:', error);
+      setError('Failed to load chart data');
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const updateCharts = () => {
-      const now = Date.now();
-      const currentWindow = Math.floor(now / 10000) * 10000;
-      
-      // Create time windows for the last 100 seconds
-      const timeWindows = Array(10).fill(0).map((_, i) => ({
-        start: currentWindow - (10 - i) * 10000,
-        end: currentWindow - (9 - i) * 10000
-      }));
-
-      // Count logs for each window
-      const newCounts = timeWindows.map(window => {
-        return logs.filter(log => {
-          const logTime = new Date(log.timestamp).getTime();
-          return logTime >= window.start && logTime < window.end;
-        }).length;
-      });
-
-      // Update timestamps for both charts
-      const newTimestamps = timeWindows.map(window => 
-        new Date(window.start).toLocaleTimeString([], { 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit' 
-        })
-      );
-
-      // Update first chart
-      setLogWindows({
-        timestamps: newTimestamps,
-        counts: newCounts
-      });
-
-      // Update time distribution
-      setTimeDistribution({
-        timestamps: newTimestamps,
-        counts: newCounts
-      });
-    };
-
-    // Initial update
-    updateCharts();
+    // Initial fetch
+    fetchMetrics();
     
-    // Update every 10 seconds
-    const timer = setInterval(updateCharts, 10000);
+    // Set up interval for updates
+    const interval = setInterval(fetchMetrics, 10000);
+    
+    // Clean up on unmount
+    return () => clearInterval(interval);
+  }, [fetchMetrics]);
 
-    return () => clearInterval(timer);
-  }, [logs]);
-
-  const levelChartData = {
+  const barChartOption = {
     animation: true,
     tooltip: {
       trigger: 'axis',
       axisPointer: {
         type: 'shadow'
+      },
+      formatter: function(params) {
+        const value = params[0].value;
+        return `${params[0].name}: ${value} new logs`;
       }
     },
     grid: {
@@ -85,7 +114,7 @@ const Charts = ({ logs }) => {
     },
     xAxis: {
       type: 'category',
-      data: logWindows.timestamps,
+      data: chartData.timestamps,
       axisLabel: {
         rotate: 45,
         interval: 0
@@ -93,25 +122,43 @@ const Charts = ({ logs }) => {
     },
     yAxis: {
       type: 'value',
-      name: 'Logs in 10s Window'
+      name: 'New Logs Count',
+      minInterval: 1 // Ensure y-axis shows whole numbers
     },
     series: [
       {
-        data: logWindows.counts,
+        name: 'New Logs',
+        data: chartData.newLogCounts,
         type: 'bar',
         itemStyle: {
-          color: '#5470C6'
+          color: function(params) {
+            // Define a color gradient based on the value
+            const value = params.value;
+            if (value === 0) return '#cccccc'; // Grey for zero
+            if (value < 5) return '#91CC75';  // Green for small values
+            if (value < 15) return '#5470C6'; // Blue for medium values
+            return '#EE6666'; // Red for large values
+          }
+        },
+        label: {
+          show: true,
+          position: 'top',
+          formatter: '{c}'
         }
       }
     ]
   };
 
-  const timeChartData = {
+  const lineChartOption = {
     animation: true,
     tooltip: {
       trigger: 'axis',
       axisPointer: {
         type: 'line'
+      },
+      formatter: function(params) {
+        const value = params[0].value;
+        return `${params[0].name}: ${value} new logs`;
       }
     },
     grid: {
@@ -122,7 +169,7 @@ const Charts = ({ logs }) => {
     },
     xAxis: {
       type: 'category',
-      data: timeDistribution.timestamps,
+      data: chartData.timestamps,
       axisLabel: {
         rotate: 45,
         interval: 0
@@ -130,11 +177,13 @@ const Charts = ({ logs }) => {
     },
     yAxis: {
       type: 'value',
-      name: 'Number of Logs'
+      name: 'New Logs Count',
+      minInterval: 1 // Ensure y-axis shows whole numbers
     },
     series: [
       {
-        data: timeDistribution.counts,
+        name: 'New Logs',
+        data: chartData.newLogCounts,
         type: 'line',
         smooth: true,
         lineStyle: {
@@ -150,21 +199,47 @@ const Charts = ({ logs }) => {
     ]
   };
 
+  // If loading and no data yet
+  if (loading && chartData.timestamps.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: '50px' }}>
+        <h2>Loading chart data...</h2>
+        <p>Charts will appear as logs are collected.</p>
+      </div>
+    );
+  }
+
+  // If there's an error
+  if (error && chartData.timestamps.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: '50px', color: '#f44336' }}>
+        <h2>Error loading chart data</h2>
+        <p>{error}</p>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <h2>Log Count per 10-Second Window (Last 100 Seconds)</h2>
+      <h2>New Logs per 10-Second Window (Last 100 Seconds)</h2>
       <ReactECharts 
-        option={levelChartData} 
+        option={barChartOption} 
         style={{ height: '400px', width: '100%' }}
         notMerge={true}
       />
 
-      <h2>Real-time Log Distribution (Last 100 Seconds)</h2>
+      <h2>New Logs Trend (Last 100 Seconds)</h2>
       <ReactECharts 
-        option={timeChartData} 
+        option={lineChartOption} 
         style={{ height: '400px', width: '100%' }}
         notMerge={true}
       />
+      
+      {chartData.newLogCounts.every(count => count === 0) && (
+        <div style={{ textAlign: 'center', marginTop: '20px', color: '#ff9800' }}>
+          <p>No new logs detected in the time window. Charts will update when new logs arrive.</p>
+        </div>
+      )}
     </div>
   );
 };
