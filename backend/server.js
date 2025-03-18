@@ -129,8 +129,8 @@ if (cluster.isMaster) {
           'http://192.168.1.151:5000',
           'http://192.168.1.64:3000',
           'http://192.168.1.64:5000',
-          'http://192.168.1.94:3000',
-          'http://192.168.1.94:5000'
+          'http://192.168.77.78:3000',
+          'http://192.168.77.78:5000'
         ],
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -182,8 +182,8 @@ if (cluster.isMaster) {
         res.json({ 
           message: 'API is working',
           worker: process.pid,
-          server: '192.168.1.64',
-          mongodb: '192.168.1.71'
+          server: '192.168.77.78',
+          mongodb: '192.168.77.78'
         });
       });
 

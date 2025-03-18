@@ -22,17 +22,17 @@ const users = [
   },
   { 
     id: 2, 
-    username: 'rakshit', 
-    password: 'patil',
-    fullName: 'Rakshit Patil',
-    email: 'rakshit.patil@example.com',
+    username: 'YDCC', 
+    password: 'YDCC@1234',
+    fullName: 'YDCC USER',
+    email: 'YDCC@example.com',
     role: 'Security Analyst',
-    avatar: 'R',
+    avatar: 'Y',
     lastLogin: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
     active: true,
     additionalInfo: {
       'Department': 'SOC',
-      'Location': 'Remote'
+      'Location': 'Yavatmal'
     }
   }
 ];
