@@ -41,10 +41,16 @@ const Charts = () => {
       
       // Update chart data based on the new metrics
       setChartData(prevData => {
+
+        // For the first data point, just show 10 new logs rather than the entire history
+        const isFirstDataPoint = prevData.totalLogsHistory.length === 0;
         // Get previous total logs from history or default to 0
-        const previousTotal = prevData.totalLogsHistory.length > 0 
+        // Get previous total logs from history or default to current total minus 10
+        const previousTotal = isFirstDataPoint
+        ? data.totalLogs - 10  // This will make the first bar show exactly 10
+        : (prevData.totalLogsHistory.length > 0 
           ? prevData.totalLogsHistory[prevData.totalLogsHistory.length - 1] 
-          : 0;
+          : 0);
         
         // Calculate new logs in this interval
         const newLogs = Math.max(0, data.totalLogs - previousTotal);

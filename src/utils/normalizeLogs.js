@@ -84,7 +84,7 @@ export const parseLogMessage = (logEntry) => {
               gpg13: ruleData?.gpg13 || []
           },
           network: {
-              srcIp: messageData?.data?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
+              srcIp: messageData?.data?.src_ip || dataField?.srcip || dataField?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
               srcPort: messageData?.data?.src_port || 'N/A',
               destIp: messageData?.data?.dest_ip || logEntry?.network?.destIp || 'N/A',
               destPort: messageData?.data?.dest_port || 'N/A',
