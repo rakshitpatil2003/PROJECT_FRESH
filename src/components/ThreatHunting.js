@@ -57,53 +57,58 @@ const ThreatHunting = () => {
   const [selectedDstCountry, setSelectedDstCountry] = useState('');
 
   // Fetch logs from API
-  useEffect(() => {
-    const fetchThreatLogs = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch paginated logs for the table
-        const response = await axios.get(`${API_URL}/api/logs/threats`, {
-          params: {
-            page: page,
-            limit: rowsPerPage,
-            search: searchTerm,
-            action: selectedAction,
-            srcCountry: selectedSrcCountry,
-            dstCountry: selectedDstCountry
-          }
-        });
-        
-        // Parse logs through our normalization function
-        const normalizedLogs = response.data.logs.map(log => parseLogMessage(log));
-        
-        setLogs(normalizedLogs);
-        // Calculate total pages based on response
-        setTotalPages(Math.ceil(response.data.total / rowsPerPage) || 1);
-        
-        // Fetch all logs for visualization (with a higher limit or no pagination)
-        const allLogsResponse = await axios.get(`${API_URL}/api/logs/threats`, {
-          params: {
-            limit: 1000 // Adjust based on your data size
-          }
-        });
-        
-        const allNormalizedLogs = allLogsResponse.data.logs.map(log => parseLogMessage(log));
-        setAllLogs(allNormalizedLogs);
-        
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching threat logs:', err);
-        setError('Failed to fetch threat logs. Please try again.');
-        setLogs([]);
-        setAllLogs([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Modify the useEffect function to fetch all logs for visualization
+useEffect(() => {
+  const fetchThreatLogs = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch paginated logs for the table
+      const response = await axios.get(`${API_URL}/api/logs/threats`, {
+        params: {
+          page: page,
+          limit: rowsPerPage,
+          search: searchTerm,
+          action: selectedAction,
+          srcCountry: selectedSrcCountry,
+          dstCountry: selectedDstCountry
+        }
+      });
+      
+      // Parse logs through our normalization function
+      const normalizedLogs = response.data.logs.map(log => parseLogMessage(log));
+      
+      setLogs(normalizedLogs);
+      // Calculate total pages based on response
+      setTotalPages(Math.ceil(response.data.total / rowsPerPage) || 1);
+      
+      // Fetch ALL logs for visualization without pagination
+      const allLogsResponse = await axios.get(`${API_URL}/api/logs/threats`, {
+        params: {
+          limit: 0, // Set limit to 0 to fetch all logs
+          search: searchTerm,
+          action: selectedAction,
+          srcCountry: selectedSrcCountry,
+          dstCountry: selectedDstCountry
+        }
+      });
+      
+      const allNormalizedLogs = allLogsResponse.data.logs.map(log => parseLogMessage(log));
+      setAllLogs(allNormalizedLogs);
+      
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching threat logs:', err);
+      setError('Failed to fetch threat logs. Please try again.');
+      setLogs([]);
+      setAllLogs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchThreatLogs();
-  }, [page, rowsPerPage, searchTerm, selectedAction, selectedSrcCountry, selectedDstCountry]);
+  fetchThreatLogs();
+}, [page, rowsPerPage, searchTerm, selectedAction, selectedSrcCountry, selectedDstCountry]);
 
   // Handler for viewing log details
   const handleViewDetails = (log) => {
@@ -560,32 +565,128 @@ const ThreatHunting = () => {
     ]
   };
 
+  // Replace the Sankey chart with a Chord diagram
   const connectionMapOption = {
     title: {
-      text: 'Connection Map',
+      text: 'Country Connection Map',
       left: 'center'
     },
     tooltip: {
+      trigger: 'item',
       formatter: function(param) {
-        return `${param.data.source} → ${param.data.target}: ${param.data.value} event(s)`;
+        if (param.data && param.data.source && param.data.target) {
+          return `${param.data.source} → ${param.data.target}: ${param.data.value} event(s)`;
+        }
+        return param.name;
+      }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: Array.from(new Set([
+        ...(visualizationData?.connectionData || []).map(item => item.source),
+        ...(visualizationData?.connectionData || []).map(item => item.target)
+      ])).sort(),
+      axisLabel: {
+        interval: 0,
+        rotate: 45
+      }
+    },
+    yAxis: {
+      type: 'category',
+      data: Array.from(new Set([
+        ...(visualizationData?.connectionData || []).map(item => item.source),
+        ...(visualizationData?.connectionData || []).map(item => item.target)
+      ])).sort(),
+      axisLabel: {
+        interval: 0
       }
     },
     series: [
       {
-        type: 'sankey',
-        left: 50,
-        right: 150,
-        data: (visualizationData?.connectionCountries || []).map(name => ({
-          name: name
-        })),
-        links: visualizationData?.connectionData || [],
+        name: 'Connections',
+        type: 'scatter',
+        symbolSize: function(val) {
+          return Math.sqrt(val[2]) * 3;
+        },
+        data: (visualizationData?.connectionData || []).map(item => {
+          const srcIndex = Array.from(new Set([
+            ...(visualizationData?.connectionData || []).map(i => i.source),
+            ...(visualizationData?.connectionData || []).map(i => i.target)
+          ])).sort().indexOf(item.source);
+          
+          const targetIndex = Array.from(new Set([
+            ...(visualizationData?.connectionData || []).map(i => i.source),
+            ...(visualizationData?.connectionData || []).map(i => i.target)
+          ])).sort().indexOf(item.target);
+          
+          return [srcIndex, targetIndex, item.value, item.source, item.target];
+        }),
         emphasis: {
-          focus: 'adjacency'
+          label: {
+            show: true,
+            formatter: function(param) {
+              return param.data[3] + ' → ' + param.data[4];
+            },
+            position: 'top'
+          }
+        },
+        label: {
+          show: false
+        },
+        itemStyle: {
+          color: function(params) {
+            return '#' + 
+              Math.floor(Math.random() * 256).toString(16).padStart(2, '0') + 
+              Math.floor(Math.random() * 256).toString(16).padStart(2, '0') + 
+              Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+          }
+        }
+      },
+      {
+        name: 'Lines',
+        type: 'lines',
+        coordinateSystem: 'cartesian2d',
+        zlevel: 1,
+        effect: {
+          show: true,
+          smooth: true,
+          period: 6,
+          trailLength: 0.5,
+          symbol: 'arrow',
+          symbolSize: 8
         },
         lineStyle: {
-          color: 'gradient',
+          width: function(params) {
+            return Math.log(params.data.value) + 1;
+          },
+          color: 'rgb(200, 45, 45)',
+          opacity: 0.6,
           curveness: 0.5
-        }
+        },
+        data: (visualizationData?.connectionData || []).map(item => {
+          const srcIndex = Array.from(new Set([
+            ...(visualizationData?.connectionData || []).map(i => i.source),
+            ...(visualizationData?.connectionData || []).map(i => i.target)
+          ])).sort().indexOf(item.source);
+          
+          const targetIndex = Array.from(new Set([
+            ...(visualizationData?.connectionData || []).map(i => i.source),
+            ...(visualizationData?.connectionData || []).map(i => i.target)
+          ])).sort().indexOf(item.target);
+          
+          return {
+            coords: [[srcIndex, targetIndex], [targetIndex, srcIndex]],
+            value: item.value,
+            source: item.source,
+            target: item.target
+          };
+        })
       }
     ]
   };
@@ -726,16 +827,25 @@ const ThreatHunting = () => {
               
               {/* Connection Map Tab */}
               {activeTab === 4 && (
-                <Grid container spacing={3}>
-                  <Grid item xs={12}>
-                    <Card>
-                      <CardContent>
-                        <ReactECharts option={connectionMapOption} style={{ height: '600px' }} />
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                </Grid>
-              )}
+  <Grid container spacing={3}>
+    <Grid item xs={12}>
+      <Card>
+        <CardContent>
+          {visualizationData?.connectionData && visualizationData.connectionData.length > 0 ? (
+            <ReactECharts option={connectionMapOption} style={{ height: '600px' }} />
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '600px' }}>
+              <CircularProgress />
+              <Typography variant="body1" sx={{ ml: 2 }}>
+                Loading connection data...
+              </Typography>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+    </Grid>
+  </Grid>
+)}
             </Paper>
           )}
 

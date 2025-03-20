@@ -1394,20 +1394,30 @@ router.get('/threats', async (req, res) => {
     }
     
     const totalLogs = await Log.countDocuments(searchQuery);
-    const threatLogs = await Log.find(searchQuery)
-      .sort({ timestamp: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit))
-      .lean();
-    
-    console.log('Fetched threat logs:', threatLogs.length); // For debugging
-    
-    res.json({
-      logs: threatLogs,
-      total: totalLogs,
-      page: Number(page),
-      totalPages: Math.ceil(totalLogs / limit)
-    });
+    const logQuery = Log.find(searchQuery).sort({ timestamp: -1 });
+    if (Number(limit) === 0) {
+      // Fetch all logs (may need to be careful with large datasets)
+      const threatLogs = await logQuery.lean();
+      res.json({
+        logs: threatLogs,
+        total: totalLogs,
+        page: 1,
+        totalPages: 1
+      });
+    } else {
+      // Paginate as usual
+      const threatLogs = await logQuery
+        .skip((page - 1) * limit)
+        .limit(Number(limit))
+        .lean();
+      
+      res.json({
+        logs: threatLogs,
+        total: totalLogs,
+        page: Number(page),
+        totalPages: Math.ceil(totalLogs / limit)
+      });
+    }
   } catch (error) {
     console.error('Error in /threats endpoint:', error);
     res.status(500).json({ message: 'Error fetching threat logs', error: error.message });
