@@ -1,554 +1,460 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import {
-    Box,
-    Typography,
-    Paper,
-    Table,
-    TableContainer,
-    TableHead,
-    TableBody,
-    TableRow,
-    TableCell,
-    Chip,
-    Grid,
-    Link,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    IconButton,
-    CircularProgress,
-    Pagination,
-    Alert,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    TextField,
-    InputAdornment
+import { 
+  Typography, Box, Paper, Grid, Table, TableBody, TableCell, TableContainer, 
+  TableHead, TableRow, Button, Dialog, DialogContent,
+  DialogTitle, IconButton, Chip, Tooltip,
+  List, ListItem, ListItemText, Divider, LinearProgress, TextField
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
-
-// Define API URL from environment or default
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+import { StructuredLogView, parseLogMessage } from '../utils/normalizeLogs';
 
 const FIM = () => {
-    // State variables
-    const [logs, setLogs] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [selectedLog, setSelectedLog] = useState(null);
-    const [page, setPage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [totalPages, setTotalPages] = useState(1);
-    const [eventFilter, setEventFilter] = useState(''); // Filter by event type
-    const [pathFilter, setPathFilter] = useState(''); // Filter by file path
-    const [searchQuery, setSearchQuery] = useState(''); // General search
-    const [eventCounts, setEventCounts] = useState({
-        added: 0,
-        modified: 0,
-        deleted: 0
-    });
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  
+  // State variables
+  const [logs, setLogs] = useState([]);
+  const [filteredLogs, setFilteredLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedLog, setSelectedLog] = useState(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [parsedLog, setParsedLog] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('');
+  const [eventCounts, setEventCounts] = useState({ added: 0, modified: 0, deleted: 0 });
+  const [uniqueDescriptions, setUniqueDescriptions] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
-    // Fetch logs from API
-    useEffect(() => {
-        const fetchFIMLogs = async () => {
-            try {
-                setLoading(true);
-
-                // Fetch paginated logs for the table with filters
-                const response = await axios.get(`${API_URL}/api/logs/fim`, {
-                    params: {
-                        page: page,
-                        limit: rowsPerPage,
-                        event: eventFilter,
-                        path: pathFilter,
-                        search: searchQuery
-                    }
-                });
-
-                setLogs(response.data.logs || []);
-                // Calculate total pages based on response
-                setTotalPages(Math.ceil(response.data.totalLogs / rowsPerPage) || 1);
-                // Set event counts for summary
-                setEventCounts(response.data.eventCounts || {
-                    added: 0,
-                    modified: 0,
-                    deleted: 0
-                });
-
-                setError(null);
-            } catch (err) {
-                console.error('Error fetching FIM logs:', err);
-                setError('Failed to fetch File Integrity Monitoring logs. Please try again.');
-                setLogs([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchFIMLogs();
-    }, [page, rowsPerPage, eventFilter, pathFilter, searchQuery]);
-
-    // Handler for viewing log details
-    const handleViewDetails = (log) => {
-        setSelectedLog(log);
-    };
-
-    // Format timestamp to be more readable
-    const formatTimestamp = (timestamp) => {
-        if (!timestamp) return 'N/A';
-        try {
-            const date = new Date(timestamp);
-            return date.toLocaleString();
-        } catch (e) {
-            return timestamp;
+  // Fetch all logs from the API
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      // Removed pagination parameters, requesting all logs at once
+      const response = await axios.get(`${API_URL}/api/logs/fim`, {
+        params: {
+          // Only keep the event filter if active
+          event: activeFilter,
+          // Set a very high limit to get all logs
+          limit: 10000
         }
-    };
+      });
+      
+      const fetchedLogs = response.data.logs;
+      setLogs(fetchedLogs);
+      applyFilters(fetchedLogs, activeFilter, searchTerm);
+      
+    } catch (error) {
+      console.error('Error fetching FIM logs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Get color for event type
-    const getEventColor = (event) => {
-        if (!event) return 'default';
+  // Calculate stats and apply filters
+  const applyFilters = (logsData, eventFilter, search) => {
+    // Apply search filter if provided
+    let filtered = logsData;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = logsData.filter(log => {
+        const logString = JSON.stringify(log).toLowerCase();
+        return logString.includes(searchLower);
+      });
+    }
 
-        const eventLower = String(event).toLowerCase();
-        if (eventLower === 'added') return 'success';
-        if (eventLower === 'modified') return 'warning';
-        if (eventLower === 'deleted') return 'error';
-        return 'default';
-    };
+    // Calculate event counts
+    const counts = { added: 0, modified: 0, deleted: 0 };
+    const descriptions = new Set();
+    
+    logsData.forEach(log => {
+      const parsedLogData = parseLogMessage(log);
+      const eventType = parsedLogData?.syscheck?.event || getSyscheckEvent(log);
+      if (eventType && counts[eventType.toLowerCase()] !== undefined) {
+        counts[eventType.toLowerCase()]++;
+      }
+      
+      // Extract rule descriptions
+      const description = parsedLogData?.rule?.description || 
+                       (log.rule && log.rule.description) || 
+                       (log.rawLog && log.rawLog.rule && log.rawLog.rule.description);
+      if (description && description !== 'No description') {
+        descriptions.add(description);
+      }
+    });
+    
+    setEventCounts(counts);
+    setUniqueDescriptions([...descriptions]);
+    setFilteredLogs(filtered);
+  };
 
-    // Handle search input changes with debounce
-    const handleSearchChange = (event) => {
-        setSearchQuery(event.target.value);
-        setPage(1); // Reset to first page when searching
-    };
+  // Initial fetch
+  useEffect(() => {
+    fetchLogs();
+  }, [activeFilter]);
 
-    // Handle path filter changes
-    const handlePathFilterChange = (event) => {
-        setPathFilter(event.target.value);
-        setPage(1); // Reset to first page when changing filter
-    };
+  // Apply search filter without refetching
+  useEffect(() => {
+    if (logs.length > 0) {
+      applyFilters(logs, activeFilter, searchTerm);
+    }
+  }, [searchTerm]);
+
+  // Open log details dialog
+  const handleViewLog = (log) => {
+    setSelectedLog(log);
+    const normalized = parseLogMessage(log);
+    setParsedLog(normalized);
+    setOpenDialog(true);
+  };
+
+  // Close log details dialog
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setSelectedLog(null);
+  };
+
+  // Handle filter click
+  const handleFilterClick = (filter) => {
+    setActiveFilter(activeFilter === filter ? '' : filter);
+  };
+
+  // Handle search change
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  // Execute client-side search for specific events
+  const handleSearchExecute = () => {
+    applyFilters(logs, activeFilter, searchTerm);
+  };
+
+  // Get event type chip color
+  const getEventColor = (event) => {
+    if (!event) return '#9e9e9e';
+    
+    switch(event.toLowerCase()) {
+      case 'added':
+        return '#4caf50';
+      case 'modified':
+        return '#2196f3';
+      case 'deleted':
+        return '#f44336';
+      default:
+        return '#9e9e9e';
+    }
+  };
+
+  // Extract syscheck event from log
+  const getSyscheckEvent = (log) => {
+    if (log.syscheck && log.syscheck.event) {
+      return log.syscheck.event;
+    }
+    if (log.rawLog && log.rawLog.syscheck && log.rawLog.syscheck.event) {
+      return log.rawLog.syscheck.event;
+    }
+    if (log.data && log.data.syscheck && log.data.syscheck.event) {
+      return log.data.syscheck.event;
+    }
+    if (log.message && log.message.syscheck && log.message.syscheck.event) {
+      return log.message.syscheck.event;
+    }
+    // Check in rawLog.message for keywords
+    if (log.rawLog && log.rawLog.message) {
+      const message = log.rawLog.message.toLowerCase();
+      if (message.includes('added')) return 'added';
+      if (message.includes('modified')) return 'modified';
+      if (message.includes('deleted')) return 'deleted';
+    }
+    return 'unknown';
+  };
+
+  // Extract syscheck path from log
+  const getSyscheckPath = (log) => {
+    if (log.syscheck && log.syscheck.path) {
+      return log.syscheck.path;
+    }
+    if (log.rawLog && log.rawLog.syscheck && log.rawLog.syscheck.path) {
+      return log.rawLog.syscheck.path;
+    }
+    if (log.data && log.data.syscheck && log.data.syscheck.path) {
+      return log.data.syscheck.path;
+    }
+    if (log.message && log.message.syscheck && log.message.syscheck.path) {
+      return log.message.syscheck.path;
+    }
+    return 'N/A';
+  };
+
+  // Format timestamp
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    } catch (e) {
+      return timestamp;
+    }
+  };
+
+  // Calculate percentage for visualization
+  const calculatePercentage = (count) => {
+    const total = eventCounts.added + eventCounts.modified + eventCounts.deleted;
+    return total ? Math.round((count / total) * 100) : 0;
+  };
+
+  // Render event stats cards
+  const renderEventStats = () => {
+    const eventTypes = [
+      { type: 'added', label: 'Added', icon: <PlaylistAddCheckIcon />, color: '#4caf50' },
+      { type: 'modified', label: 'Modified', icon: <EditIcon />, color: '#2196f3' },
+      { type: 'deleted', label: 'Deleted', icon: <DeleteIcon />, color: '#f44336' }
+    ];
 
     return (
-        <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>
-                File Integrity Monitoring
-            </Typography>
-
-            {/* Event counts summary */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={4}>
-                    <Paper
-                        sx={{
-                            p: 2,
-                            textAlign: 'center',
-                            backgroundColor: '#e8f5e9',
-                            borderLeft: '4px solid #4caf50'
-                        }}
-                    >
-                        <Typography variant="h6">Added Files</Typography>
-                        <Typography variant="h4">{eventCounts.added}</Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                    <Paper
-                        sx={{
-                            p: 2,
-                            textAlign: 'center',
-                            backgroundColor: '#fff8e1',
-                            borderLeft: '4px solid #ff9800'
-                        }}
-                    >
-                        <Typography variant="h6">Modified Files</Typography>
-                        <Typography variant="h4">{eventCounts.modified}</Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                    <Paper
-                        sx={{
-                            p: 2,
-                            textAlign: 'center',
-                            backgroundColor: '#ffebee',
-                            borderLeft: '4px solid #f44336'
-                        }}
-                    >
-                        <Typography variant="h6">Deleted Files</Typography>
-                        <Typography variant="h4">{eventCounts.deleted}</Typography>
-                    </Paper>
-                </Grid>
-            </Grid>
-
-            {error && (
-                <Alert severity="error" sx={{ mb: 3 }}>
-                    {error}
-                </Alert>
-            )}
-
-            {/* Filter controls */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={4}>
-                    <FormControl variant="outlined" size="small" fullWidth>
-                        <InputLabel id="event-filter-label">Filter by Event</InputLabel>
-                        <Select
-                            labelId="event-filter-label"
-                            value={eventFilter}
-                            onChange={(e) => {
-                                setEventFilter(e.target.value);
-                                setPage(1); // Reset to first page when changing filter
-                            }}
-                            label="Filter by Event"
-                        >
-                            <MenuItem value="">All Events</MenuItem>
-                            <MenuItem value="added">Added</MenuItem>
-                            <MenuItem value="modified">Modified</MenuItem>
-                            <MenuItem value="deleted">Deleted</MenuItem>
-                        </Select>
-                    </FormControl>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        label="Filter by Path"
-                        value={pathFilter}
-                        onChange={handlePathFilterChange}
-                        placeholder="e.g. /users/downloads"
-                    />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        label="Search"
-                        value={searchQuery}
-                        onChange={handleSearchChange}
-                        placeholder="Search in logs..."
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
-                </Grid>
-            </Grid>
-
-            {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-                    <CircularProgress />
+      <Grid container spacing={3}>
+        {eventTypes.map((event) => {
+          const count = eventCounts[event.type];
+          const percentage = calculatePercentage(count);
+          
+          return (
+            <Grid item xs={12} md={4} key={event.type}>
+              <Paper 
+                elevation={activeFilter === event.type ? 3 : 1}
+                sx={{ 
+                  p: 2, 
+                  cursor: 'pointer',
+                  border: activeFilter === event.type ? `2px solid ${event.color}` : 'none',
+                  transition: 'all 0.3s ease'
+                }}
+                onClick={() => handleFilterClick(event.type)}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Box sx={{ 
+                    p: 1, 
+                    borderRadius: '50%', 
+                    bgcolor: `${event.color}15`,
+                    color: event.color,
+                    mr: 1
+                  }}>
+                    {event.icon}
+                  </Box>
+                  <Typography variant="h6" component="div">
+                    {event.label}
+                  </Typography>
                 </Box>
-            ) : (
-                <>
-                    {logs.length === 0 ? (
-                        <Paper sx={{ p: 3, textAlign: 'center' }}>
-                            <Typography variant="h6">No FIM logs found</Typography>
-                            <Typography variant="body2" color="textSecondary">
-                                There are currently no file integrity monitoring logs that match your filter criteria.
-                            </Typography>
-                        </Paper>
-                    ) : (
-                        <>
-                            <TableContainer component={Paper} sx={{ mb: 3 }}>
-                                <Table sx={{ minWidth: 650 }} aria-label="file integrity monitoring logs table">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
-                                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Event</TableCell>
-                                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Path</TableCell>
-                                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent</TableCell>
-                                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Rule Level</TableCell>
-                                            <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {logs.map((log) => (
-                                            <TableRow key={log._id || log.id || Math.random().toString()} hover>
-                                                <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
-                                                <TableCell>
-                                                    <Chip
-                                                        label={log.event || 'Unknown'}
-                                                        color={getEventColor(log.event)}
-                                                        size="small"
-                                                    />
-                                                </TableCell>
-                                                <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {log.path || 'N/A'}
-                                                </TableCell>
-                                                <TableCell>{log.agent || 'Unknown'}</TableCell>
-                                                <TableCell>{log.ruleLevel || 'N/A'}</TableCell>
-                                                <TableCell>
-                                                    <Link
-                                                        component="button"
-                                                        variant="body2"
-                                                        onClick={() => handleViewDetails(log)}
-                                                        sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
-                                                    >
-                                                        View Details
-                                                    </Link>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-
-                            {/* Pagination Controls */}
-                            <Grid container spacing={2} alignItems="center" sx={{ mt: 2 }}>
-                                <Grid item xs={12} sm={6} md={4}>
-                                    <FormControl variant="outlined" size="small" fullWidth>
-                                        <InputLabel id="rows-per-page-label">Rows per page</InputLabel>
-                                        <Select
-                                            labelId="rows-per-page-label"
-                                            value={rowsPerPage}
-                                            onChange={(e) => {
-                                                setRowsPerPage(parseInt(e.target.value, 10));
-                                                setPage(1); // Reset to first page when changing rows per page
-                                            }}
-                                            label="Rows per page"
-                                        >
-                                            <MenuItem value={10}>10</MenuItem>
-                                            <MenuItem value={25}>25</MenuItem>
-                                            <MenuItem value={50}>50</MenuItem>
-                                            <MenuItem value={100}>100</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={8} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                    <Pagination
-                                        count={totalPages}
-                                        page={page}
-                                        onChange={(e, newPage) => setPage(newPage)}
-                                        color="primary"
-                                        showFirstButton
-                                        showLastButton
-                                    />
-                                </Grid>
-                            </Grid>
-
-                            {/* Log Details Dialog */}
-                            <Dialog
-                                open={Boolean(selectedLog)}
-                                onClose={() => setSelectedLog(null)}
-                                maxWidth="md"
-                                fullWidth
-                            >
-                                <DialogTitle sx={{
-                                    backgroundColor: '#f5f5f5',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}>
-                                    <Typography variant="h6">FIM Log Details</Typography>
-                                    <IconButton
-                                        aria-label="close"
-                                        onClick={() => setSelectedLog(null)}
-                                        size="small"
-                                    >
-                                        <CloseIcon />
-                                    </IconButton>
-                                </DialogTitle>
-                                <DialogContent>
-                                    {selectedLog && (
-                                        <Box sx={{ mt: 2 }}>
-                                            {/* FIM-specific details */}
-                                            <Box sx={{ mb: 3 }}>
-                                                <Typography variant="h6" gutterBottom>
-                                                    File Information
-                                                </Typography>
-
-                                                <Grid container spacing={2}>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <Typography variant="subtitle2">Event:</Typography>
-                                                        <Chip
-                                                            label={selectedLog.event || 'Unknown'}
-                                                            color={getEventColor(selectedLog.event)}
-                                                            size="small"
-                                                            sx={{ mb: 1 }}
-                                                        />
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <Typography variant="subtitle2">Rule Level:</Typography>
-                                                        <Typography variant="body2" sx={{ mb: 1 }}>
-                                                            {selectedLog.ruleLevel || 'N/A'}
-                                                        </Typography>
-                                                    </Grid>
-                                                    <Grid item xs={12}>
-                                                        <Typography variant="subtitle2">Path:</Typography>
-                                                        <Typography variant="body2" sx={{ mb: 1 }}>
-                                                            {selectedLog.path || 'N/A'}
-                                                        </Typography>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <Typography variant="subtitle2">Agent:</Typography>
-                                                        <Typography variant="body2" sx={{ mb: 1 }}>
-                                                            {selectedLog.agent || 'N/A'}
-                                                        </Typography>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <Typography variant="subtitle2">Mode:</Typography>
-                                                        <Typography variant="body2" sx={{ mb: 1 }}>
-                                                            {selectedLog.mode || 'N/A'}
-                                                        </Typography>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <Typography variant="subtitle2">Size Before:</Typography>
-                                                        <Typography variant="body2" sx={{ mb: 1 }}>
-                                                            {selectedLog.sizeBefore ? `${selectedLog.sizeBefore} bytes` : 'N/A'}
-                                                        </Typography>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <Typography variant="subtitle2">Size After:</Typography>
-                                                        <Typography variant="body2" sx={{ mb: 1 }}>
-                                                            {selectedLog.sizeAfter ? `${selectedLog.sizeAfter} bytes` : 'N/A'}
-                                                        </Typography>
-                                                    </Grid>
-                                                    <Grid item xs={12}>
-                                                        <Typography variant="subtitle2">Rule Description:</Typography>
-                                                        <Typography variant="body2" sx={{ mb: 1 }}>
-                                                            {selectedLog.ruleDescription || 'N/A'}
-                                                        </Typography>
-                                                    </Grid>
-                                                </Grid>
-
-                                                {/* File Hash Information */}
-                                                <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                                                    File Hash Information
-                                                </Typography>
-                                                <Grid container spacing={2}>
-                                                    {selectedLog.hashBefore?.md5 && (
-                                                        <>
-                                                            <Grid item xs={12}>
-                                                                <Typography variant="subtitle2">MD5 Before:</Typography>
-                                                                <Typography variant="body2" sx={{ mb: 1, fontFamily: 'monospace' }}>
-                                                                    {selectedLog.hashBefore.md5}
-                                                                </Typography>
-                                                            </Grid>
-                                                            <Grid item xs={12}>
-                                                                <Typography variant="subtitle2">SHA1 Before:</Typography>
-                                                                <Typography variant="body2" sx={{ mb: 1, fontFamily: 'monospace' }}>
-                                                                    {selectedLog.hashBefore.sha1 || 'N/A'}
-                                                                </Typography>
-                                                            </Grid>
-                                                            <Grid item xs={12}>
-                                                                <Typography variant="subtitle2">SHA256 Before:</Typography>
-                                                                <Typography variant="body2" sx={{ mb: 1, fontFamily: 'monospace' }}>
-                                                                    {selectedLog.hashBefore.sha256 || 'N/A'}
-                                                                </Typography>
-                                                            </Grid>
-                                                        </>
-                                                    )}
-
-                                                    {selectedLog.hashAfter?.md5 && (
-                                                        <>
-                                                            <Grid item xs={12}>
-                                                                <Typography variant="subtitle2">MD5 After:</Typography>
-                                                                <Typography variant="body2" sx={{ mb: 1, fontFamily: 'monospace' }}>
-                                                                    {selectedLog.hashAfter.md5}
-                                                                </Typography>
-                                                            </Grid>
-                                                            <Grid item xs={12}>
-                                                                <Typography variant="subtitle2">SHA1 After:</Typography>
-                                                                <Typography variant="body2" sx={{ mb: 1, fontFamily: 'monospace' }}>
-                                                                    {selectedLog.hashAfter.sha1 || 'N/A'}
-                                                                </Typography>
-                                                            </Grid>
-                                                            <Grid item xs={12}>
-                                                                <Typography variant="subtitle2">SHA256 After:</Typography>
-                                                                <Typography variant="body2" sx={{ mb: 1, fontFamily: 'monospace' }}>
-                                                                    {selectedLog.hashAfter.sha256 || 'N/A'}
-                                                                </Typography>
-                                                            </Grid>
-                                                        </>
-                                                    )}
-                                                </Grid>
-
-                                                {/* File Permissions */}
-                                                {selectedLog.rawSyscheck?.win_perm_after && (
-                                                    <>
-                                                        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                                                            File Permissions
-                                                        </Typography>
-                                                        <TableContainer component={Paper} sx={{ mb: 2 }}>
-                                                            <Table size="small">
-                                                                <TableHead>
-                                                                    <TableRow>
-                                                                        <TableCell>User/Group</TableCell>
-                                                                        <TableCell>Permissions</TableCell>
-                                                                    </TableRow>
-                                                                </TableHead>
-                                                                <TableBody>
-                                                                    {Array.isArray(selectedLog.rawSyscheck.win_perm_after) ?
-                                                                        selectedLog.rawSyscheck.win_perm_after.map((perm, idx) => (
-                                                                            <TableRow key={idx}>
-                                                                                <TableCell>{perm.name || 'Unknown'}</TableCell>
-                                                                                <TableCell>
-                                                                                    {Array.isArray(perm.allowed) ? perm.allowed.join(', ') : 'N/A'}
-                                                                                </TableCell>
-                                                                            </TableRow>
-                                                                        )) : (
-                                                                            <TableRow>
-                                                                                <TableCell colSpan={2}>No permission information available</TableCell>
-                                                                            </TableRow>
-                                                                        )
-                                                                    }
-                                                                </TableBody>
-                                                            </Table>
-                                                        </TableContainer>
-                                                    </>
-                                                )}
-
-                                                {/* File Attributes */}
-                                                {selectedLog.rawSyscheck?.attrs_after && (
-                                                    <>
-                                                        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                                                            File Attributes
-                                                        </Typography>
-                                                        <Paper sx={{ p: 2, backgroundColor: '#f8f8f8' }}>
-                                                            {Array.isArray(selectedLog.rawSyscheck.attrs_after) ?
-                                                                selectedLog.rawSyscheck.attrs_after.map((attr, idx) => (
-                                                                    <Chip
-                                                                        key={idx}
-                                                                        label={attr}
-                                                                        size="small"
-                                                                        sx={{ m: 0.5 }}
-                                                                    />
-                                                                )) : (
-                                                                    <Typography>No attribute information available</Typography>
-                                                                )
-                                                            }
-                                                        </Paper>
-                                                    </>
-                                                )}
-                                            </Box>
-
-                                            {/* Display full log for debugging */}
-                                            <Typography variant="h6" gutterBottom>
-                                                Raw Log Data
-                                            </Typography>
-                                            <Paper
-                                                elevation={1}
-                                                sx={{
-                                                    p: 2,
-                                                    maxHeight: '300px',
-                                                    overflow: 'auto',
-                                                    backgroundColor: '#f8f8f8',
-                                                    fontFamily: 'monospace'
-                                                }}
-                                            >
-                                                <pre>{JSON.stringify(selectedLog.rawLog || selectedLog, null, 2)}</pre>
-                                            </Paper>
-                                        </Box>
-                                    )}
-                                </DialogContent>
-                            </Dialog>
-                        </>
-                    )}
-                </>
-            )}
-        </Box>
+                <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
+                  {count}
+                </Typography>
+                <Box sx={{ mt: 2, mb: 1 }}>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={percentage} 
+                    sx={{ 
+                      height: 8, 
+                      borderRadius: 2,
+                      bgcolor: '#f5f5f5',
+                      '& .MuiLinearProgress-bar': {
+                        bgcolor: event.color
+                      }
+                    }}
+                  />
+                </Box>
+                <Typography variant="caption" component="div" color="text.secondary">
+                  {percentage}% of total
+                </Typography>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
     );
+  };
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 'medium' }}>
+          File Integrity Monitoring (FIM)
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Monitor file creation, modification, and deletion events captured by syscheck.
+        </Typography>
+        
+        {/* Event Visualization - acts as filters */}
+        <Box sx={{ mt: 3, mb: 4 }}>
+          {renderEventStats()}
+          {activeFilter && (
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button 
+                variant="outlined" 
+                size="small"
+                onClick={() => handleFilterClick('')}
+              >
+                Clear Filter
+              </Button>
+            </Box>
+          )}
+        </Box>
+        
+        {/* Search Box */}
+        <Box sx={{ display: 'flex', mb: 3, mt: 3 }}>
+          <TextField
+            label="Search in logs"
+            variant="outlined"
+            size="small"
+            fullWidth
+            value={searchTerm}
+            onChange={handleSearchChange}
+            sx={{ mr: 1 }}
+            placeholder="Search for events, paths, etc."
+          />
+          <Button 
+            variant="contained" 
+            color="primary"
+            startIcon={<SearchIcon />}
+            onClick={handleSearchExecute}
+          >
+            Search
+          </Button>
+        </Box>
+        
+        {/* Common Rule Descriptions Card */}
+        {uniqueDescriptions.length > 0 && (
+  <Paper elevation={1} sx={{ p: 2, mt: 3, mb: 3 }}>
+    <Typography variant="subtitle1" gutterBottom>
+      Detected Rule Types ({uniqueDescriptions.length})
+    </Typography>
+    <List dense sx={{ maxHeight: '300px', overflow: 'auto' }}>
+      {uniqueDescriptions.map((desc, index) => (
+        <React.Fragment key={index}>
+          <ListItem>
+            <ListItemText 
+              primary={desc}
+              primaryTypographyProps={{ variant: 'body2' }}
+            />
+          </ListItem>
+          {index < uniqueDescriptions.length - 1 && <Divider />}
+        </React.Fragment>
+      ))}
+    </List>
+  </Paper>
+)}
+      </Paper>
+
+      {/* Logs Table */}
+      <Paper elevation={1}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+          <Typography variant="subtitle1">
+            {loading ? 'Loading logs...' : `Showing ${filteredLogs.length} logs`}
+          </Typography>
+        </Box>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Timestamp</TableCell>
+                <TableCell>Agent</TableCell>
+                <TableCell>Event</TableCell>
+                <TableCell>File Path</TableCell>
+                <TableCell>Rule Level</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    <Box sx={{ width: '100%', mt: 2, mb: 2 }}>
+                      <LinearProgress />
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ) : filteredLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    <Typography variant="body2">No logs found</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredLogs.map((log) => {
+                  const parsedLogData = parseLogMessage(log);
+                  const eventType = parsedLogData?.syscheck?.event || getSyscheckEvent(log);
+                  const filePath = parsedLogData?.syscheck?.path || getSyscheckPath(log);
+                  
+                  return (
+                    <TableRow key={log._id || log.uniqueIdentifier} hover>
+                      <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
+                      <TableCell>{log.agent?.name || 'N/A'}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={eventType}
+                          size="small"
+                          sx={{ 
+                            bgcolor: `${getEventColor(eventType)}15`,
+                            color: getEventColor(eventType),
+                            fontWeight: 'bold'
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={filePath}>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              maxWidth: 250, 
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}
+                          >
+                            {filePath}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>{log.rule?.level || 'N/A'}</TableCell>
+                      <TableCell>
+                        <Button 
+                          size="small" 
+                          variant="text" 
+                          color="primary"
+                          onClick={() => handleViewLog(log)}
+                        >
+                          View Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+
+      {/* Log Details Dialog */}
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="lg" 
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">File Integrity Monitoring Log Details</Typography>
+            <IconButton edge="end" color="inherit" onClick={handleCloseDialog} aria-label="close">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {parsedLog && <StructuredLogView data={parsedLog} />}
+        </DialogContent>
+      </Dialog>
+    </Box>
+  );
 };
 
 export default FIM;

@@ -963,180 +963,82 @@ router.get('/session', async (req, res) => {
 
 router.get('/fim', async (req, res) => {
   try {
-      const { 
-          search = '', 
-          page = 1, 
-          limit = 10, 
-          event = '', 
-          path = '',
-          startTime = '' 
-      } = req.query;
+    const { search = '', page = 1, limit = 10, event = '', path = '', startTime = '' } = req.query;
+    
+    // Base query: find logs that are syscheck-related
+    let searchQuery = { 
+      $or: [
+        { "rawLog.message": { $regex: /syscheck/i } },
+        { "rawLog.message.location": { $regex: /syscheck/i } }
+      ] 
+    };
 
-      // Build search query for FIM-related logs
-      let searchQuery = { 
+    // Add any additional filters
+    if (search) {
+      searchQuery.$and = [
+        searchQuery,
+        { 
           $or: [
-              // Main syscheck existence checks
-              { "syscheck.event": { $exists: true } },
-              { "rawLog.syscheck.event": { $exists: true } },
-              
-              // Event type specific searches
-              { "syscheck.event": { $in: ["added", "modified", "deleted"] } },
-              { "rawLog.syscheck.event": { $in: ["added", "modified", "deleted"] } },
-              
-              // Comprehensive text search across raw message
-              { 
-                  "rawLog.message": { 
-                      $regex: /syscheck|file integrity|fim|added|modified|deleted/i 
-                  } 
-              }
+            { 'agent.name': { $regex: search, $options: 'i' } },
+            { 'rule.description': { $regex: search, $options: 'i' } },
+            { 'syscheck.path': { $regex: search, $options: 'i' } },
+            { 'rawLog.syscheck.path': { $regex: search, $options: 'i' } }
           ]
-      };
+        }
+      ];
+    }
 
-      // Additional filtering based on search term
-      if (search) {
-          searchQuery.$and = [
-              searchQuery,
-              { 
-                  $or: [
-                      // Agent and rule-based searches
-                      { "agent.name": { $regex: search, $options: 'i' } },
-                      { "rule.description": { $regex: search, $options: 'i' } },
-                      
-                      // Raw message searches
-                      { "rawLog.message": { $regex: search, $options: 'i' } },
-                      { "rawLog.full_log": { $regex: search, $options: 'i' } },
-                      
-                      // Specific FIM field searches
-                      { "syscheck.path": { $regex: search, $options: 'i' } },
-                      { "rawLog.syscheck.path": { $regex: search, $options: 'i' } },
-                      
-                      // Comprehensive FIM-related keyword search
-                      { 
-                          "rawLog.message": { 
-                              $regex: new RegExp(
-                                  search.split(/\s+/).map(term => 
-                                      `(${term}|${term.toLowerCase()}|${term.toUpperCase()})`
-                                  ).join('|'),
-                                  'i'
-                              )
-                          } 
-                      }
-                  ]
-              }
-          ];
-      }
-
-      // Filter by timestamp if provided
-      if (startTime) {
-        searchQuery.timestamp = { $gte: new Date(startTime) };
-      }
-
-      // Specific FIM event filtering
-      if (event) {
-          searchQuery.$and = searchQuery.$and || [];
-          searchQuery.$and.push({
-              $or: [
-                  { "syscheck.event": event },
-                  { "rawLog.syscheck.event": event }
-              ]
-          });
-      }
-
-      // Path filtering
-      if (path) {
-          searchQuery.$and = searchQuery.$and || [];
-          searchQuery.$and.push({
-              $or: [
-                  { "syscheck.path": { $regex: path, $options: 'i' } },
-                  { "rawLog.syscheck.path": { $regex: path, $options: 'i' } }
-              ]
-          });
-      }
-
-      // Count total documents for pagination
-      const totalLogs = await Log.countDocuments(searchQuery);
-
-      // Execute query with pagination and sorting
-      const fimLogs = await Log.find(searchQuery)
-          .sort({ timestamp: -1 })
-          .skip((page - 1) * limit)
-          .limit(Number(limit))
-          .lean();
-
-      // Process the logs to extract relevant FIM information
-      const processedLogs = fimLogs.map(log => {
-          // Get syscheck data from either direct field or rawLog
-          const syscheck = log.syscheck || log.rawLog?.syscheck || {};
-          const rule = log.rule || log.rawLog?.rule || {};
-          const agent = log.agent || log.rawLog?.agent || {};
-          
-          return {
-              id: log._id,
-              timestamp: log.timestamp,
-              event: syscheck.event || 'unknown',
-              path: syscheck.path || 'unknown',
-              agent: agent.name || 'unknown',
-              ruleLevel: rule.level || '0',
-              ruleDescription: rule.description || 'No description',
-              fullLog: log.rawLog?.full_log || '',
-              // Include additional FIM-relevant data
-              arch: syscheck.arch || '',
-              mode: syscheck.mode || '',
-              sizeAfter: syscheck.size_after || '',
-              sizeBefore: syscheck.size_before || '',
-              hashAfter: {
-                  md5: syscheck.md5_after || '',
-                  sha1: syscheck.sha1_after || '',
-                  sha256: syscheck.sha256_after || ''
-              },
-              hashBefore: {
-                  md5: syscheck.md5_before || '',
-                  sha1: syscheck.sha1_before || '',
-                  sha256: syscheck.sha256_before || ''
-              },
-              // For registry entries
-              valueName: syscheck.value_name || '',
-              valueType: syscheck.value_type || '',
-              // Include raw syscheck for any missing fields
-              rawSyscheck: syscheck
-          };
+    // Filter by event type (added, modified, deleted)
+    if (event) {
+      searchQuery.$and = searchQuery.$and || [];
+      searchQuery.$and.push({ 
+        $or: [
+          { "syscheck.event": { $regex: event, $options: 'i' } },
+          { "rawLog.syscheck.event": { $regex: event, $options: 'i' } }
+        ]
       });
+    }
 
-      res.json({
-          logs: processedLogs,
-          totalLogs,
-          page: Number(page),
-          totalPages: Math.ceil(totalLogs / limit),
-          eventCounts: {
-              added: await Log.countDocuments({
-                  ...searchQuery,
-                  $or: [
-                      { "syscheck.event": "added" },
-                      { "rawLog.syscheck.event": "added" }
-                  ]
-              }),
-              modified: await Log.countDocuments({
-                  ...searchQuery,
-                  $or: [
-                      { "syscheck.event": "modified" },
-                      { "rawLog.syscheck.event": "modified" }
-                  ]
-              }),
-              deleted: await Log.countDocuments({
-                  ...searchQuery,
-                  $or: [
-                      { "syscheck.event": "deleted" },
-                      { "rawLog.syscheck.event": "deleted" }
-                  ]
-              })
-          }
+    // Filter by file path
+    if (path) {
+      searchQuery.$and = searchQuery.$and || [];
+      searchQuery.$and.push({ 
+        $or: [
+          { 'syscheck.path': { $regex: path, $options: 'i' } },
+          { 'rawLog.syscheck.path': { $regex: path, $options: 'i' } }
+        ]
       });
+    }
+
+    // Filter by start time
+    if (startTime) {
+      searchQuery.timestamp = { $gte: new Date(startTime) };
+    }
+
+    // Count total logs for pagination
+    const totalLogs = await Log.countDocuments(searchQuery);
+    
+    // Fetch the logs
+    const fimLogs = await Log.find(searchQuery)
+      .sort({ timestamp: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .lean();
+
+    console.log(`Found ${fimLogs.length} FIM-related logs`);
+    
+    res.json({
+      logs: fimLogs,
+      totalLogs,
+      page: Number(page),
+      totalPages: Math.ceil(totalLogs / limit)
+    });
   } catch (error) {
-      console.error('Error in /fim endpoint:', error);
-      res.status(500).json({ 
-          message: 'Error fetching File Integrity Monitoring logs', 
-          error: error.message 
-      });
+    console.error('Error in /fim endpoint:', error);
+    res.status(500).json({ 
+      message: 'Error fetching FIM logs', 
+      error: error.message 
+    });
   }
 });
 

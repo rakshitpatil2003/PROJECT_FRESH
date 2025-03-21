@@ -101,7 +101,8 @@ const fetchLogsFromGraylog = async () => {
       } catch (e) {
         parsedMessage = msg.message;
       }
-
+      const syscheckData = parsedMessage?.syscheck || {};
+      const location = parsedMessage?.location || '';
       // Preserve original timestamp from the log
       const timestamp = parsedMessage?.data?.timestamp || 
                        parsedMessage?.timestamp || 
@@ -174,6 +175,26 @@ const fetchLogsFromGraylog = async () => {
                    msg.message.protocol || 
                    null
         },
+        syscheck: {
+          path: syscheckData.path || '',
+          mode: syscheckData.mode || '',
+          event: syscheckData.event || '',
+          size_after: syscheckData.size_after || '',
+          size_before: syscheckData.size_before || '',
+          md5_after: syscheckData.md5_after || '',
+          md5_before: syscheckData.md5_before || '',
+          sha1_after: syscheckData.sha1_after || '',
+          sha1_before: syscheckData.sha1_before || '',
+          sha256_after: syscheckData.sha256_after || '',
+          sha256_before: syscheckData.sha256_before || '',
+          mtime_after: syscheckData.mtime_after || '',
+          mtime_before: syscheckData.mtime_before || '',
+          attrs_after: syscheckData.attrs_after || [],
+          attrs_before: syscheckData.attrs_before || [],
+          win_perm_after: syscheckData.win_perm_after || [],
+          win_perm_before: syscheckData.win_perm_before || []
+        },
+        location: location,
         // Add data field to store the complete data object
         data: data,
         // Keep storing rawLog as before
