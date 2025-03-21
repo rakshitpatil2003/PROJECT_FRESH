@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import ReactECharts from 'echarts-for-react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Table, 
-  TableContainer, 
-  TableHead, 
-  TableBody, 
-  TableRow, 
+import * as am4core from "@amcharts/amcharts4/core";
+import * as am4maps from "@amcharts/amcharts4/maps";
+import am4geodata_worldLow from "@amcharts/amcharts4-geodata/worldLow";
+import {
+  Box,
+  Typography,
+  Paper,
+  Table,
+  TableContainer,
+  TableHead,
+  TableBody,
+  TableRow,
   TableCell,
   Chip,
   Grid,
@@ -39,6 +42,46 @@ import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
 // Define API URL from environment or default
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
+// Add this before your component
+// Updated to use full country names to match your logs
+const countryCoordinates = {
+  "United States": { latitude: 39.7837304, longitude: -100.4458825 }, "India": { latitude: 20.5937, longitude: 78.9629 },
+  "Germany": { latitude: 51.1657, longitude: 10.4515 }, "France": { latitude: 46.6034, longitude: 1.8883 }, "Netherlands": { latitude: 52.1326, longitude: 5.2913 },
+  "Singapore": { latitude: 1.3521, longitude: 103.8198 }, "Japan": { latitude: 36.2048, longitude: 138.2529 }, "Luxembourg": { latitude: 49.8153, longitude: 6.1296 },
+  "Reserved": { latitude: 7.873054, longitude: 80.771797 }, "China": { latitude: 35.8617, longitude: 104.1954 }, "United Kingdom": { latitude: 55.3781, longitude: -3.4360 },
+  "Canada": { latitude: 56.1304, longitude: -106.3468 }, "Australia": { latitude: -25.2744, longitude: 133.7751 }, "Brazil": { latitude: -14.2350, longitude: -51.9253 },
+  "Russia": { latitude: 61.5240, longitude: 105.3188 }, "South Korea": { latitude: 35.9078, longitude: 127.7669 }, "Italy": { latitude: 41.8719, longitude: 12.5674 },
+  "Spain": { latitude: 40.4637, longitude: -3.7492 }, "Mexico": { latitude: 23.6345, longitude: -102.5528 }, "Indonesia": { latitude: -0.7893, longitude: 113.9213 },
+  "South Africa": { latitude: -30.5595, longitude: 22.9375 }, "Korea, Republic of": { latitude: 40.339852, longitude: 127.510093 },
+  "Hong Kong": { latitude: 22.319303, longitude: 114.169361 }, "Afghanistan": { latitude: 33.9391, longitude: 67.709953 },
+  "Albania": { latitude: 41.1533, longitude: 20.1683 }, "Algeria": { latitude: 28.0339, longitude: 1.6596 }, "Andorra": { latitude: 42.5078, longitude: 1.5211 },
+  "Angola": { latitude: -11.2027, longitude: 17.8739 }, "Argentina": { latitude: -38.4161, longitude: -63.6167 }, "Armenia": { latitude: 40.0691, longitude: 45.0382 },
+  "Austria": { latitude: 47.5162, longitude: 14.5501 }, "Azerbaijan": { latitude: 40.1431, longitude: 47.5769 }, "Bahamas": { latitude: 25.0343, longitude: -77.3963 },
+  "Bahrain": { latitude: 26.0667, longitude: 50.5577 }, "Bangladesh": { latitude: 23.685, longitude: 90.3563 }, "Belarus": { latitude: 53.9006, longitude: 27.559 },
+  "Belgium": { latitude: 50.8503, longitude: 4.3517 }, "Belize": { latitude: 17.1899, longitude: -88.4976 }, "Benin": { latitude: 9.3077, longitude: 2.3158 },
+  "Bhutan": { latitude: 27.5142, longitude: 90.4336 }, "Bolivia": { latitude: -16.2902, longitude: -63.5887 }, "Botswana": { latitude: -22.3285, longitude: 24.6849 },
+  "Brunei": { latitude: 4.5353, longitude: 114.7277 }, "Bulgaria": { latitude: 42.7339, longitude: 25.4858 }, "Burkina Faso": { latitude: 12.2383, longitude: -1.5616 },
+  "Burundi": { latitude: -3.3731, longitude: 29.9189 }, "Cambodia": { latitude: 12.5657, longitude: 104.991 }, "Cameroon": { latitude: 7.3697, longitude: 12.3547 },
+  "Chile": { latitude: -35.6751, longitude: -71.543 }, "Colombia": { latitude: 4.5709, longitude: -74.2973 }, "Costa Rica": { latitude: 9.7489, longitude: -83.7534 },
+  "Croatia": { latitude: 45.1, longitude: 15.2 }, "Cuba": { latitude: 21.5218, longitude: -77.7812 }, "Cyprus": { latitude: 35.1264, longitude: 33.4299 },
+  "Czech Republic": { latitude: 49.8175, longitude: 15.473 }, "Denmark": { latitude: 56.2639, longitude: 9.5018 }, "Dominican Republic": { latitude: 18.7357, longitude: -70.1627 },
+  "Ecuador": { latitude: -1.8312, longitude: -78.1834 }, "Egypt": { latitude: 26.8206, longitude: 30.8025 }, "El Salvador": { latitude: 13.7942, longitude: -88.8965 },
+  "Estonia": { latitude: 58.5953, longitude: 25.0136 }, "Ethiopia": { latitude: 9.145, longitude: 40.4897 }, "Finland": { latitude: 61.9241, longitude: 25.7482 },
+  "Ghana": { latitude: 7.9465, longitude: -1.0232 }, "Greece": { latitude: 39.0742, longitude: 21.8243 }, "Guatemala": { latitude: 15.7835, longitude: -90.2308 },
+  "Honduras": { latitude: 15.1999, longitude: -86.2419 }, "Hungary": { latitude: 47.1625, longitude: 19.5033 }, "Iceland": { latitude: 64.9631, longitude: -19.0208 },
+  "Iran": { latitude: 32.4279, longitude: 53.688 }, "Iraq": { latitude: 33.2232, longitude: 43.6793 }, "Ireland": { latitude: 53.4129, longitude: -8.2439 },
+  "Israel": { latitude: 31.0461, longitude: 34.8516 }, "Jamaica": { latitude: 18.1096, longitude: -77.2975 }, "Jordan": { latitude: 30.5852, longitude: 36.2384 },
+  "Kazakhstan": { latitude: 48.0196, longitude: 66.9237 }, "Kuwait": { latitude: 29.3117, longitude: 47.4818 }, "Latvia": { latitude: 56.8796, longitude: 24.6032 },
+  "Lebanon": { latitude: 33.8547, longitude: 35.8623 }, "Lithuania": { latitude: 55.1694, longitude: 23.8813 }, "Madagascar": { latitude: -18.7669, longitude: 46.8691 },
+  "Malaysia": { latitude: 4.2105, longitude: 101.9758 }, "Malta": { latitude: 35.9375, longitude: 14.3754 }, "Nepal": { latitude: 28.3949, longitude: 84.124 },
+  "New Zealand": { latitude: -40.9006, longitude: 174.886 }, "Norway": { latitude: 60.472, longitude: 8.4689 }, "Pakistan": { latitude: 30.3753, longitude: 69.3451 },
+  "Philippines": { latitude: 12.8797, longitude: 121.774 }, "Poland": { latitude: 51.9194, longitude: 19.1451 }, "Portugal": { latitude: 39.3999, longitude: -8.2245 },
+  "Sweden": { latitude: 60.1282, longitude: 18.6435 }, "Switzerland": { latitude: 46.8182, longitude: 8.2275 }, "Thailand": { latitude: 15.870, longitude: 100.9925 }
+};
+
+
+
+
 const ThreatHunting = () => {
   // State variables
   const [logs, setLogs] = useState([]);
@@ -58,57 +101,57 @@ const ThreatHunting = () => {
 
   // Fetch logs from API
   // Modify the useEffect function to fetch all logs for visualization
-useEffect(() => {
-  const fetchThreatLogs = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch paginated logs for the table
-      const response = await axios.get(`${API_URL}/api/logs/threats`, {
-        params: {
-          page: page,
-          limit: rowsPerPage,
-          search: searchTerm,
-          action: selectedAction,
-          srcCountry: selectedSrcCountry,
-          dstCountry: selectedDstCountry
-        }
-      });
-      
-      // Parse logs through our normalization function
-      const normalizedLogs = response.data.logs.map(log => parseLogMessage(log));
-      
-      setLogs(normalizedLogs);
-      // Calculate total pages based on response
-      setTotalPages(Math.ceil(response.data.total / rowsPerPage) || 1);
-      
-      // Fetch ALL logs for visualization without pagination
-      const allLogsResponse = await axios.get(`${API_URL}/api/logs/threats`, {
-        params: {
-          limit: 0, // Set limit to 0 to fetch all logs
-          search: searchTerm,
-          action: selectedAction,
-          srcCountry: selectedSrcCountry,
-          dstCountry: selectedDstCountry
-        }
-      });
-      
-      const allNormalizedLogs = allLogsResponse.data.logs.map(log => parseLogMessage(log));
-      setAllLogs(allNormalizedLogs);
-      
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching threat logs:', err);
-      setError('Failed to fetch threat logs. Please try again.');
-      setLogs([]);
-      setAllLogs([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const fetchThreatLogs = async () => {
+      try {
+        setLoading(true);
 
-  fetchThreatLogs();
-}, [page, rowsPerPage, searchTerm, selectedAction, selectedSrcCountry, selectedDstCountry]);
+        // Fetch paginated logs for the table
+        const response = await axios.get(`${API_URL}/api/logs/threats`, {
+          params: {
+            page: page,
+            limit: rowsPerPage,
+            search: searchTerm,
+            action: selectedAction,
+            srcCountry: selectedSrcCountry,
+            dstCountry: selectedDstCountry
+          }
+        });
+
+        // Parse logs through our normalization function
+        const normalizedLogs = response.data.logs.map(log => parseLogMessage(log));
+
+        setLogs(normalizedLogs);
+        // Calculate total pages based on response
+        setTotalPages(Math.ceil(response.data.total / rowsPerPage) || 1);
+
+        // Fetch ALL logs for visualization without pagination
+        const allLogsResponse = await axios.get(`${API_URL}/api/logs/threats`, {
+          params: {
+            limit: 0, // Set limit to 0 to fetch all logs
+            search: searchTerm,
+            action: selectedAction,
+            srcCountry: selectedSrcCountry,
+            dstCountry: selectedDstCountry
+          }
+        });
+
+        const allNormalizedLogs = allLogsResponse.data.logs.map(log => parseLogMessage(log));
+        setAllLogs(allNormalizedLogs);
+
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching threat logs:', err);
+        setError('Failed to fetch threat logs. Please try again.');
+        setLogs([]);
+        setAllLogs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchThreatLogs();
+  }, [page, rowsPerPage, searchTerm, selectedAction, selectedSrcCountry, selectedDstCountry]);
 
   // Handler for viewing log details
   const handleViewDetails = (log) => {
@@ -129,7 +172,7 @@ useEffect(() => {
   // Get color based on action type
   const getActionColor = (action) => {
     if (!action) return 'default';
-    
+
     const actionLower = action.toLowerCase();
     if (actionLower === 'block' || actionLower === 'denied') return 'error';
     if (actionLower === 'alert') return 'warning';
@@ -137,13 +180,15 @@ useEffect(() => {
     return 'info';
   };
 
+
+
   // Process data for visualizations
   const visualizationData = useMemo(() => {
     if (!allLogs || allLogs.length === 0) return null;
-    
+
     // Count by action type
     const actionCounts = {};
-    
+
     // Source and destination countries
     const srcCountryMap = {};
     const dstCountryMap = {};
@@ -152,49 +197,49 @@ useEffect(() => {
     const directionMap = {};
     const timelineData = [];
     const srcDestPairs = {};
-    
+
     allLogs.forEach(log => {
       // Process action
       const action = log.traffic?.action || 'Unknown';
       actionCounts[action] = (actionCounts[action] || 0) + 1;
-      
+
       // Process source country
       const srcCountry = log.traffic?.srcCountry || 'Unknown';
       if (srcCountry !== 'N/A' && srcCountry !== 'Unknown') {
         srcCountryMap[srcCountry] = (srcCountryMap[srcCountry] || 0) + 1;
       }
-      
+
       // Process destination country
       const dstCountry = log.traffic?.dstCountry || 'Unknown';
       if (dstCountry !== 'N/A' && dstCountry !== 'Unknown') {
         dstCountryMap[dstCountry] = (dstCountryMap[dstCountry] || 0) + 1;
       }
-      
+
       // Process service
       const service = log.traffic?.service || 'Unknown';
       if (service !== 'N/A' && service !== 'Unknown') {
         serviceMap[service] = (serviceMap[service] || 0) + 1;
       }
-      
+
       // Process app category
       const appcat = log.traffic?.appcat || 'Unknown';
       if (appcat !== 'N/A' && appcat !== 'Unknown') {
         appCategoryMap[appcat] = (appCategoryMap[appcat] || 0) + 1;
       }
-      
+
       // Process direction
       const direction = log.traffic?.direction || 'Unknown';
       if (direction !== 'N/A' && direction !== 'Unknown') {
         directionMap[direction] = (directionMap[direction] || 0) + 1;
       }
-      
+
       // Process timestamp for timeline
       if (log.timestamp) {
         let date;
         try {
           date = new Date(log.timestamp);
           const dateString = date.toISOString().split('T')[0];
-          
+
           // Group by date
           const existingIndex = timelineData.findIndex(item => item.date === dateString);
           if (existingIndex >= 0) {
@@ -209,56 +254,68 @@ useEffect(() => {
           // Skip invalid dates
         }
       }
-      
+
       // Process source-destination pairs for connection visualization
-      if (srcCountry !== 'N/A' && srcCountry !== 'Unknown' && 
-          dstCountry !== 'N/A' && dstCountry !== 'Unknown') {
+      if (srcCountry !== 'N/A' && srcCountry !== 'Unknown' &&
+        dstCountry !== 'N/A' && dstCountry !== 'Unknown' &&
+        countryCoordinates[srcCountry] && countryCoordinates[dstCountry]) {
         const pairKey = `${srcCountry}->${dstCountry}`;
         srcDestPairs[pairKey] = (srcDestPairs[pairKey] || 0) + 1;
       }
     });
-    
+
     // Sort and format for charts
     const topSrcCountries = Object.entries(srcCountryMap)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([name, value]) => ({ name, value }));
-      
+
     const topDstCountries = Object.entries(dstCountryMap)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([name, value]) => ({ name, value }));
-      
+
     const topServices = Object.entries(serviceMap)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([name, value]) => ({ name, value }));
-    
+
     const topAppCategories = Object.entries(appCategoryMap)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([name, value]) => ({ name, value }));
-      
+
     // Sort timeline data
     const sortedTimelineData = timelineData
       .sort((a, b) => new Date(a.date) - new Date(b.date));
-      
+
     // Create connection data for source -> destination visualization
     const connectionData = Object.entries(srcDestPairs)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 50) // Take top 50 connections
       .map(([pair, value]) => {
         const [source, target] = pair.split('->');
-        return { source, target, value };
+        return {
+          source, target, value, srcLatitude: countryCoordinates[source]?.latitude || 0,
+          srcLongitude: countryCoordinates[source]?.longitude || 0,
+          dstLatitude: countryCoordinates[target]?.latitude || 0,
+          dstLongitude: countryCoordinates[target]?.longitude || 0
+        };
+
+
+      })// Filter out connections without coordinates
+      .filter(conn => {
+        return conn.srcLatitude && conn.srcLongitude &&
+          conn.dstLatitude && conn.dstLongitude;
       });
-    
+
     // Extract unique countries for connection chart
     const connectionCountries = new Set();
     connectionData.forEach(item => {
       connectionCountries.add(item.source);
       connectionCountries.add(item.target);
     });
-    
+
     return {
       actionCounts,
       topSrcCountries,
@@ -316,9 +373,9 @@ useEffect(() => {
           name,
           value,
           itemStyle: {
-            color: name.toLowerCase() === 'block' || name.toLowerCase() === 'denied' ? '#dc3545' : 
-                  name.toLowerCase() === 'alert' ? '#ffc107' : 
-                  name.toLowerCase() === 'allow' || name.toLowerCase() === 'permitted' ? '#28a745' : '#6c757d'
+            color: name.toLowerCase() === 'block' || name.toLowerCase() === 'denied' ? '#dc3545' :
+              name.toLowerCase() === 'alert' ? '#ffc107' :
+                name.toLowerCase() === 'allow' || name.toLowerCase() === 'permitted' ? '#28a745' : '#6c757d'
           }
         }))
       }
@@ -565,6 +622,144 @@ useEffect(() => {
     ]
   };
 
+
+  // Add this somewhere in your code to debug country entries that don't have coordinates
+  useEffect(() => {
+    if (allLogs && allLogs.length > 0) {
+      const countriesInLogs = new Set();
+      allLogs.forEach(log => {
+        if (log.traffic?.srcCountry && log.traffic.srcCountry !== 'N/A' && log.traffic.srcCountry !== 'Unknown') {
+          countriesInLogs.add(log.traffic.srcCountry);
+        }
+        if (log.traffic?.dstCountry && log.traffic.dstCountry !== 'N/A' && log.traffic.dstCountry !== 'Unknown') {
+          countriesInLogs.add(log.traffic.dstCountry);
+        }
+      });
+
+      // Find countries that don't have coordinates defined
+      const missingCoordinates = Array.from(countriesInLogs).filter(country => !countryCoordinates[country]);
+      if (missingCoordinates.length > 0) {
+        console.warn('Countries missing coordinates:', missingCoordinates);
+      }
+    }
+  }, [allLogs]);
+
+
+
+  const WorldConnectionMap = ({ connectionData }) => {
+    const chartRef = React.useRef(null);
+    const chartInstanceRef = React.useRef(null);
+
+    useEffect(() => {
+      // Create map instance
+      const chart = am4core.create("chartdiv", am4maps.MapChart);
+      chartInstanceRef.current = chart;
+
+      // Set map definition
+      chart.geodata = am4geodata_worldLow;
+
+      // Set projection
+      chart.projection = new am4maps.projections.Miller();
+
+      // Create map polygon series
+      const polygonSeries = chart.series.push(new am4maps.MapPolygonSeries());
+      polygonSeries.useGeodata = true;
+      polygonSeries.mapPolygons.template.fill = am4core.color("#d9d9d9");
+      polygonSeries.mapPolygons.template.stroke = am4core.color("#ffffff");
+
+      // Configure country hover states
+      polygonSeries.mapPolygons.template.tooltipText = "{name}";
+      polygonSeries.mapPolygons.template.cursorOverStyle = am4core.MouseCursorStyle.pointer;
+
+      // Add city markers
+      const citySeries = chart.series.push(new am4maps.MapImageSeries());
+      const city = citySeries.mapImages.template.createChild(am4core.Circle);
+      city.radius = 5;
+      city.fill = am4core.color("#f00");
+      city.strokeWidth = 2;
+      city.stroke = am4core.color("#fff");
+
+      // Add city tooltips
+      citySeries.mapImages.template.tooltipText = "{title}";
+
+      // Set cities based on connection data
+      const cityData = [];
+      const uniqueCountries = new Set();
+
+      if (connectionData && connectionData.length > 0) {
+        connectionData.forEach(conn => {
+          if (conn.srcLongitude && conn.srcLatitude && !uniqueCountries.has(conn.source)) {
+            cityData.push({
+              title: conn.source,
+              latitude: conn.srcLatitude,
+              longitude: conn.srcLongitude
+            });
+            uniqueCountries.add(conn.source);
+          }
+
+          if (conn.dstLongitude && conn.dstLatitude && !uniqueCountries.has(conn.target)) {
+            cityData.push({
+              title: conn.target,
+              latitude: conn.dstLatitude,
+              longitude: conn.dstLongitude
+            });
+            uniqueCountries.add(conn.target);
+          }
+        });
+      }
+
+      citySeries.mapImages.template.propertyFields.latitude = "latitude";
+      citySeries.mapImages.template.propertyFields.longitude = "longitude";
+      citySeries.data = cityData;
+
+      // Configure line series with arrows
+      const lineSeries = chart.series.push(new am4maps.MapArcSeries());
+      lineSeries.mapLines.template.line.strokeWidth = 2;
+      lineSeries.mapLines.template.line.stroke = am4core.color("#e03e96");
+      lineSeries.mapLines.template.line.strokeOpacity = 0.5;
+      lineSeries.mapLines.template.line.nonScalingStroke = true;
+
+      // Add arrows
+      const arrow = lineSeries.mapLines.template.line.strokeDasharray = "1,1";
+      lineSeries.mapLines.template.line.events.on("inited", function (event) {
+        event.target.strokeDasharray = "1,1";
+      });
+
+      // Add line tooltips
+      lineSeries.mapLines.template.tooltipText = "{source} → {target}: {value} event(s)";
+
+      // Add lines based on connection data
+      if (connectionData && connectionData.length > 0) {
+        const lines = connectionData.map(conn => {
+          return {
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                { longitude: conn.srcLongitude, latitude: conn.srcLatitude },
+                { longitude: conn.dstLongitude, latitude: conn.dstLatitude }
+              ]
+            },
+            source: conn.source,
+            target: conn.target,
+            value: conn.value
+          };
+        });
+
+        lineSeries.data = lines;
+      }
+
+      chartRef.current = chart;
+
+      return () => {
+        chart.dispose();
+      };
+    }, [connectionData]);
+
+    return (
+      <Box id="chartdiv" style={{ width: "100%", height: "600px" }}></Box>
+    );
+  };
+
   // Replace the Sankey chart with a Chord diagram
   const connectionMapOption = {
     title: {
@@ -573,7 +768,7 @@ useEffect(() => {
     },
     tooltip: {
       trigger: 'item',
-      formatter: function(param) {
+      formatter: function (param) {
         if (param.data && param.data.source && param.data.target) {
           return `${param.data.source} → ${param.data.target}: ${param.data.value} event(s)`;
         }
@@ -611,7 +806,7 @@ useEffect(() => {
       {
         name: 'Connections',
         type: 'scatter',
-        symbolSize: function(val) {
+        symbolSize: function (val) {
           return Math.sqrt(val[2]) * 3;
         },
         data: (visualizationData?.connectionData || []).map(item => {
@@ -619,18 +814,18 @@ useEffect(() => {
             ...(visualizationData?.connectionData || []).map(i => i.source),
             ...(visualizationData?.connectionData || []).map(i => i.target)
           ])).sort().indexOf(item.source);
-          
+
           const targetIndex = Array.from(new Set([
             ...(visualizationData?.connectionData || []).map(i => i.source),
             ...(visualizationData?.connectionData || []).map(i => i.target)
           ])).sort().indexOf(item.target);
-          
+
           return [srcIndex, targetIndex, item.value, item.source, item.target];
         }),
         emphasis: {
           label: {
             show: true,
-            formatter: function(param) {
+            formatter: function (param) {
               return param.data[3] + ' → ' + param.data[4];
             },
             position: 'top'
@@ -640,10 +835,10 @@ useEffect(() => {
           show: false
         },
         itemStyle: {
-          color: function(params) {
-            return '#' + 
-              Math.floor(Math.random() * 256).toString(16).padStart(2, '0') + 
-              Math.floor(Math.random() * 256).toString(16).padStart(2, '0') + 
+          color: function (params) {
+            return '#' +
+              Math.floor(Math.random() * 256).toString(16).padStart(2, '0') +
+              Math.floor(Math.random() * 256).toString(16).padStart(2, '0') +
               Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
           }
         }
@@ -662,7 +857,7 @@ useEffect(() => {
           symbolSize: 8
         },
         lineStyle: {
-          width: function(params) {
+          width: function (params) {
             return Math.log(params.data.value) + 1;
           },
           color: 'rgb(200, 45, 45)',
@@ -674,12 +869,12 @@ useEffect(() => {
             ...(visualizationData?.connectionData || []).map(i => i.source),
             ...(visualizationData?.connectionData || []).map(i => i.target)
           ])).sort().indexOf(item.source);
-          
+
           const targetIndex = Array.from(new Set([
             ...(visualizationData?.connectionData || []).map(i => i.source),
             ...(visualizationData?.connectionData || []).map(i => i.target)
           ])).sort().indexOf(item.target);
-          
+
           return {
             coords: [[srcIndex, targetIndex], [targetIndex, srcIndex]],
             value: item.value,
@@ -709,7 +904,7 @@ useEffect(() => {
       {/* View toggle buttons */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Button 
+          <Button
             variant={view === 'dashboard' ? 'contained' : 'outlined'}
             startIcon={<DashboardIcon />}
             onClick={() => setView('dashboard')}
@@ -717,7 +912,7 @@ useEffect(() => {
           >
             Dashboard
           </Button>
-          <Button 
+          <Button
             variant={view === 'events' ? 'contained' : 'outlined'}
             startIcon={<TableViewIcon />}
             onClick={() => setView('events')}
@@ -725,7 +920,7 @@ useEffect(() => {
             Events
           </Button>
         </Box>
-        
+
         {/* Search and filter controls could go here */}
       </Box>
 
@@ -738,8 +933,8 @@ useEffect(() => {
           {/* Dashboard View */}
           {view === 'dashboard' && visualizationData && (
             <Paper sx={{ mb: 4, p: 2 }}>
-              <Tabs 
-                value={activeTab} 
+              <Tabs
+                value={activeTab}
                 onChange={(e, newValue) => setActiveTab(newValue)}
                 variant="scrollable"
                 scrollButtons="auto"
@@ -751,7 +946,7 @@ useEffect(() => {
                 <Tab label="Timeline" />
                 <Tab label="Connection Map" />
               </Tabs>
-              
+
               {/* Overview Tab */}
               {activeTab === 0 && (
                 <Grid container spacing={3}>
@@ -771,7 +966,7 @@ useEffect(() => {
                   </Grid>
                 </Grid>
               )}
-              
+
               {/* Countries Tab */}
               {activeTab === 1 && (
                 <Grid container spacing={3}>
@@ -791,7 +986,7 @@ useEffect(() => {
                   </Grid>
                 </Grid>
               )}
-              
+
               {/* Services & Apps Tab */}
               {activeTab === 2 && (
                 <Grid container spacing={3}>
@@ -811,7 +1006,7 @@ useEffect(() => {
                   </Grid>
                 </Grid>
               )}
-              
+
               {/* Timeline Tab */}
               {activeTab === 3 && (
                 <Grid container spacing={3}>
@@ -824,28 +1019,40 @@ useEffect(() => {
                   </Grid>
                 </Grid>
               )}
-              
-              {/* Connection Map Tab */}
+
+// In the Connection Map Tab section:
               {activeTab === 4 && (
-  <Grid container spacing={3}>
-    <Grid item xs={12}>
-      <Card>
-        <CardContent>
-          {visualizationData?.connectionData && visualizationData.connectionData.length > 0 ? (
-            <ReactECharts option={connectionMapOption} style={{ height: '600px' }} />
-          ) : (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '600px' }}>
-              <CircularProgress />
-              <Typography variant="body1" sx={{ ml: 2 }}>
-                Loading connection data...
-              </Typography>
-            </Box>
-          )}
-        </CardContent>
-      </Card>
-    </Grid>
-  </Grid>
-)}
+                <Grid container spacing={3}>
+                  <Grid item xs={12}>
+                    <Card>
+                      <CardContent>
+                        {visualizationData?.connectionData && visualizationData.connectionData.length > 0 ? (
+                          <WorldConnectionMap connectionData={visualizationData.connectionData} />
+                        ) : (
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '600px' }}>
+                            <Typography variant="body1">
+                              No connection data available or coordinates for countries not defined.
+                            </Typography>
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Add fallback ECharts map if needed */}
+                  {visualizationData?.connectionData && visualizationData.connectionData.length > 0 &&
+                    !visualizationData.connectionData.some(conn => conn.srcLongitude && conn.dstLongitude) && (
+                      <Grid item xs={12} mt={3}>
+                        <Card>
+                          <CardContent>
+                            <Typography variant="h6" gutterBottom>Alternative Connection Visualization</Typography>
+                            <ReactECharts option={connectionMapOption} style={{ height: '600px' }} />
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    )}
+                </Grid>
+              )}
             </Paper>
           )}
 
@@ -881,8 +1088,8 @@ useEffect(() => {
                             <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
                             <TableCell>{log.agent?.name || 'Unknown'}</TableCell>
                             <TableCell>
-                              <Chip 
-                                label={log.traffic?.action || 'N/A'} 
+                              <Chip
+                                label={log.traffic?.action || 'N/A'}
                                 color={getActionColor(log.traffic?.action)}
                                 size="small"
                               />
@@ -915,12 +1122,12 @@ useEffect(() => {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                  
+
                   {/* Pagination for logs table */}
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-                    <Pagination 
-                      count={totalPages} 
-                      page={page} 
+                    <Pagination
+                      count={totalPages}
+                      page={page}
                       onChange={(event, value) => setPage(value)}
                       color="primary"
                     />
@@ -929,10 +1136,10 @@ useEffect(() => {
               )}
             </>
           )}
-          
+
           {/* Log Details Dialog */}
-          <Dialog 
-            open={selectedLog !== null} 
+          <Dialog
+            open={selectedLog !== null}
             onClose={() => setSelectedLog(null)}
             fullWidth
             maxWidth="md"
@@ -967,14 +1174,14 @@ useEffect(() => {
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <Typography variant="subtitle2">Action</Typography>
-                        <Chip 
-                          label={selectedLog.traffic?.action || 'N/A'} 
+                        <Chip
+                          label={selectedLog.traffic?.action || 'N/A'}
                           color={getActionColor(selectedLog.traffic?.action)}
                         />
                       </Grid>
                     </Grid>
                   </Box>
-                  
+
                   {/* Structured Log View Component */}
                   <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                     Structured Log Data
@@ -982,7 +1189,7 @@ useEffect(() => {
                   <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f9f9f9' }}>
                     <StructuredLogView log={selectedLog} />
                   </Paper>
-                  
+
                   {/* Raw Log Section */}
                   <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
                     Raw Log
