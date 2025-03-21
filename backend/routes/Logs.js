@@ -968,11 +968,6 @@ router.get('/fim', async (req, res) => {
     // Base query: find logs that are syscheck-related
     let searchQuery = { 
       $or: [
-        //{ 'location': 'syscheck' },
-        //{ 'rawLog.location': 'syscheck' },
-        //{ 'rule.groups': 'syscheck' },
-        //{ 'syscheck.event': { $exists: true } },
-        //{ 'rawLog.syscheck': { $exists: true } },
         { "rawLog.message": { $regex: /syscheck/i } },
         { "rawLog.message.location": { $regex: /syscheck/i } }
       ] 
