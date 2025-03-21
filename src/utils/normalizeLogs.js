@@ -83,6 +83,20 @@ export const parseLogMessage = (logEntry) => {
               tsc: ruleData?.tsc || [],
               gpg13: ruleData?.gpg13 || []
           },
+          syscheck: {
+            path: messageData?.syscheck?.path || logEntry?.syscheck?.path || logEntry?.rawLog?.syscheck?.path || 'N/A',
+            mode: messageData?.syscheck?.mode || logEntry?.syscheck?.mode || logEntry?.rawLog?.syscheck?.mode || 'N/A',
+            event: messageData?.syscheck?.event || logEntry?.syscheck?.event || logEntry?.rawLog?.syscheck?.event || 'N/A',
+            size_after: messageData?.syscheck?.size_after || logEntry?.syscheck?.size_after || logEntry?.rawLog?.syscheck?.size_after || 'N/A',
+            size_before: messageData?.syscheck?.size_before || logEntry?.syscheck?.size_before || logEntry?.rawLog?.syscheck?.size_before || 'N/A',
+            md5_after: messageData?.syscheck?.md5_after || logEntry?.syscheck?.md5_after || logEntry?.rawLog?.syscheck?.md5_after || 'N/A',
+            md5_before: messageData?.syscheck?.md5_before || logEntry?.syscheck?.md5_before || logEntry?.rawLog?.syscheck?.md5_before || 'N/A',
+            sha1_after: messageData?.syscheck?.sha1_after || logEntry?.syscheck?.sha1_after || logEntry?.rawLog?.syscheck?.sha1_after || 'N/A',
+            sha1_before: messageData?.syscheck?.sha1_before || logEntry?.syscheck?.sha1_before || logEntry?.rawLog?.syscheck?.sha1_before || 'N/A',
+            mtime_after: messageData?.syscheck?.mtime_after || logEntry?.syscheck?.mtime_after || logEntry?.rawLog?.syscheck?.mtime_after || 'N/A',
+            mtime_before: messageData?.syscheck?.mtime_before || logEntry?.syscheck?.mtime_before || logEntry?.rawLog?.syscheck?.mtime_before || 'N/A',
+          },
+          location: messageData?.location || logEntry?.location || logEntry?.rawLog?.location || 'N/A',
           network: {
               srcIp: messageData?.data?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
               srcPort: messageData?.data?.src_port || 'N/A',
@@ -389,6 +403,97 @@ export const StructuredLogView = ({ data }) => {
       </Box>
     );
   };
+
+  const renderSyscheckDetails = () => {
+    if (!data.syscheck || (!data.syscheck.path && !data.syscheck.event)) return null;
+    
+    const eventColorMap = {
+      added: '#4caf50',
+      modified: '#2196f3',
+      deleted: '#f44336'
+    };
+    
+    const eventColor = eventColorMap[data.syscheck.event?.toLowerCase()] || '#9e9e9e';
+    
+    return (
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <SecurityIcon sx={{ mr: 1 }} />
+          File Integrity Monitoring Details
+        </Typography>
+        
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="caption" color="text.secondary">File Path</Typography>
+              <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>{data.syscheck.path}</Typography>
+            </Paper>
+          </Grid>
+          
+          <Grid item xs={12} md={6}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="caption" color="text.secondary">Event Type</Typography>
+              <Box sx={{ mt: 1 }}>
+                <Chip 
+                  label={data.syscheck.event}
+                  sx={{ 
+                    bgcolor: `${eventColor}15`,
+                    color: eventColor,
+                    fontWeight: 'bold'
+                  }}
+                />
+              </Box>
+            </Paper>
+          </Grid>
+          
+          {data.syscheck.mode && (
+            <Grid item xs={12} md={6}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary">Mode</Typography>
+                <Typography variant="body1">{data.syscheck.mode}</Typography>
+              </Paper>
+            </Grid>
+          )}
+          
+          {data.syscheck.size_after && (
+            <Grid item xs={12} md={6}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary">Size After</Typography>
+                <Typography variant="body1">{data.syscheck.size_after}</Typography>
+              </Paper>
+            </Grid>
+          )}
+          
+          {data.syscheck.md5_after && (
+            <Grid item xs={12}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary">MD5 After</Typography>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{data.syscheck.md5_after}</Typography>
+              </Paper>
+            </Grid>
+          )}
+          
+          {data.syscheck.sha1_after && (
+            <Grid item xs={12}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary">SHA1 After</Typography>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{data.syscheck.sha1_after}</Typography>
+              </Paper>
+            </Grid>
+          )}
+          
+          {data.syscheck.mtime_after && (
+            <Grid item xs={12} md={6}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary">Modified Time</Typography>
+                <Typography variant="body1">{data.syscheck.mtime_after}</Typography>
+              </Paper>
+            </Grid>
+          )}
+        </Grid>
+      </Box>
+    );
+  };
   
   // Format timestamp to be more readable
   const formatTimestamp = (timestamp) => {
@@ -429,13 +534,14 @@ export const StructuredLogView = ({ data }) => {
       </Paper>
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} aria-label="log details tabs" variant="scrollable" scrollButtons="auto">
-          <Tab icon={<SecurityIcon />} iconPosition="start" label="Rule Details" />
-          <Tab icon={<DnsIcon />} iconPosition="start" label="Network" />
-          <Tab icon={<EventIcon />} iconPosition="start" label="Event Info" />
-          <Tab icon={<LockIcon />} iconPosition="start" label="Compliance" />
-          <Tab icon={<CodeIcon />} iconPosition="start" label="Raw Data" />
-        </Tabs>
+      <Tabs value={tabValue} onChange={handleTabChange} aria-label="log details tabs" variant="scrollable" scrollButtons="auto">
+        <Tab icon={<SecurityIcon />} iconPosition="start" label="Rule Details" />
+        <Tab icon={<DnsIcon />} iconPosition="start" label="Network" />
+        <Tab icon={<EventIcon />} iconPosition="start" label="Event Info" />
+        <Tab icon={<ShieldIcon />} iconPosition="start" label="Syscheck" />
+        <Tab icon={<LockIcon />} iconPosition="start" label="Compliance" />
+        <Tab icon={<CodeIcon />} iconPosition="start" label="Raw Data" />
+      </Tabs>
       </Box>
 
       {/* Rule Details Tab */}
@@ -566,9 +672,18 @@ export const StructuredLogView = ({ data }) => {
         )}
       </Box>
 
-      {/* Compliance Tab */}
+      {/* Syscheck Tab */}
       <Box role="tabpanel" hidden={tabValue !== 3}>
         {tabValue === 3 && (
+          <Box sx={{ p: 2 }}>
+            {renderSyscheckDetails()}
+          </Box>
+        )}
+      </Box>
+
+      {/* Compliance Tab */}
+      <Box role="tabpanel" hidden={tabValue !== 4}>
+        {tabValue === 4 && (
           <Box sx={{ p: 2 }}>
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
@@ -584,8 +699,8 @@ export const StructuredLogView = ({ data }) => {
       </Box>
 
       {/* Raw Data Tab */}
-      <Box role="tabpanel" hidden={tabValue !== 4}>
-        {tabValue === 4 && (
+      <Box role="tabpanel" hidden={tabValue !== 5}>
+        {tabValue === 5 && (
           <Box sx={{ p: 2 }}>
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
