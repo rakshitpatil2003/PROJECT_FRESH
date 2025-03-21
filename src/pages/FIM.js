@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   Typography, Box, Paper, Grid, Table, TableBody, TableCell, TableContainer, 
-  TableHead, TableRow, TablePagination, Button, Dialog, DialogContent,
-  DialogTitle, IconButton, Chip, Card, CardContent, Tooltip,
-  List, ListItem, ListItemText, Divider, LinearProgress
+  TableHead, TableRow, Button, Dialog, DialogContent,
+  DialogTitle, IconButton, Chip, Tooltip,
+  List, ListItem, ListItemText, Divider, LinearProgress, TextField
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
 import { StructuredLogView, parseLogMessage } from '../utils/normalizeLogs';
 
 const FIM = () => {
@@ -17,55 +18,34 @@ const FIM = () => {
   
   // State variables
   const [logs, setLogs] = useState([]);
+  const [filteredLogs, setFilteredLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [totalLogs, setTotalLogs] = useState(0);
   const [selectedLog, setSelectedLog] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [parsedLog, setParsedLog] = useState(null);
   const [activeFilter, setActiveFilter] = useState('');
   const [eventCounts, setEventCounts] = useState({ added: 0, modified: 0, deleted: 0 });
   const [uniqueDescriptions, setUniqueDescriptions] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Fetch logs from the API
+  // Fetch all logs from the API
   const fetchLogs = async () => {
     setLoading(true);
     try {
+      // Removed pagination parameters, requesting all logs at once
       const response = await axios.get(`${API_URL}/api/logs/fim`, {
         params: {
-          page: page + 1,
-          limit: rowsPerPage,
-          event: activeFilter
+          // Only keep the event filter if active
+          event: activeFilter,
+          // Set a very high limit to get all logs
+          limit: 10000
         }
       });
       
       const fetchedLogs = response.data.logs;
       setLogs(fetchedLogs);
-      setTotalLogs(response.data.totalLogs);
+      applyFilters(fetchedLogs, activeFilter, searchTerm);
       
-      // Calculate event counts
-      const counts = { added: 0, modified: 0, deleted: 0 };
-      const descriptions = new Set();
-      
-      fetchedLogs.forEach(log => {
-        const parsedLogData = parseLogMessage(log);
-        const eventType = parsedLogData?.syscheck?.event || getSyscheckEvent(log);
-        if (eventType && counts[eventType.toLowerCase()] !== undefined) {
-          counts[eventType.toLowerCase()]++;
-        }
-        
-        // Extract rule descriptions
-        const description = parsedLogData?.rule?.description || 
-                         (log.rule && log.rule.description) || 
-                         (log.rawLog && log.rawLog.rule && log.rawLog.rule.description);
-        if (description && description !== 'No description') {
-          descriptions.add(description);
-        }
-      });
-      
-      setEventCounts(counts);
-      setUniqueDescriptions([...descriptions]);
     } catch (error) {
       console.error('Error fetching FIM logs:', error);
     } finally {
@@ -73,21 +53,54 @@ const FIM = () => {
     }
   };
 
-  // Initial fetch and when filters change
+  // Calculate stats and apply filters
+  const applyFilters = (logsData, eventFilter, search) => {
+    // Apply search filter if provided
+    let filtered = logsData;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = logsData.filter(log => {
+        const logString = JSON.stringify(log).toLowerCase();
+        return logString.includes(searchLower);
+      });
+    }
+
+    // Calculate event counts
+    const counts = { added: 0, modified: 0, deleted: 0 };
+    const descriptions = new Set();
+    
+    logsData.forEach(log => {
+      const parsedLogData = parseLogMessage(log);
+      const eventType = parsedLogData?.syscheck?.event || getSyscheckEvent(log);
+      if (eventType && counts[eventType.toLowerCase()] !== undefined) {
+        counts[eventType.toLowerCase()]++;
+      }
+      
+      // Extract rule descriptions
+      const description = parsedLogData?.rule?.description || 
+                       (log.rule && log.rule.description) || 
+                       (log.rawLog && log.rawLog.rule && log.rawLog.rule.description);
+      if (description && description !== 'No description') {
+        descriptions.add(description);
+      }
+    });
+    
+    setEventCounts(counts);
+    setUniqueDescriptions([...descriptions]);
+    setFilteredLogs(filtered);
+  };
+
+  // Initial fetch
   useEffect(() => {
     fetchLogs();
-  }, [page, rowsPerPage, activeFilter]);
+  }, [activeFilter]);
 
-  // Handle page change
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  // Handle rows per page change
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
+  // Apply search filter without refetching
+  useEffect(() => {
+    if (logs.length > 0) {
+      applyFilters(logs, activeFilter, searchTerm);
+    }
+  }, [searchTerm]);
 
   // Open log details dialog
   const handleViewLog = (log) => {
@@ -106,7 +119,16 @@ const FIM = () => {
   // Handle filter click
   const handleFilterClick = (filter) => {
     setActiveFilter(activeFilter === filter ? '' : filter);
-    setPage(0);
+  };
+
+  // Handle search change
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  // Execute client-side search for specific events
+  const handleSearchExecute = () => {
+    applyFilters(logs, activeFilter, searchTerm);
   };
 
   // Get event type chip color
@@ -138,6 +160,13 @@ const FIM = () => {
     }
     if (log.message && log.message.syscheck && log.message.syscheck.event) {
       return log.message.syscheck.event;
+    }
+    // Check in rawLog.message for keywords
+    if (log.rawLog && log.rawLog.message) {
+      const message = log.rawLog.message.toLowerCase();
+      if (message.includes('added')) return 'added';
+      if (message.includes('modified')) return 'modified';
+      if (message.includes('deleted')) return 'deleted';
     }
     return 'unknown';
   };
@@ -262,7 +291,7 @@ const FIM = () => {
               <Button 
                 variant="outlined" 
                 size="small"
-                onClick={() => setActiveFilter('')}
+                onClick={() => handleFilterClick('')}
               >
                 Clear Filter
               </Button>
@@ -270,36 +299,58 @@ const FIM = () => {
           )}
         </Box>
         
+        {/* Search Box */}
+        <Box sx={{ display: 'flex', mb: 3, mt: 3 }}>
+          <TextField
+            label="Search in logs"
+            variant="outlined"
+            size="small"
+            fullWidth
+            value={searchTerm}
+            onChange={handleSearchChange}
+            sx={{ mr: 1 }}
+            placeholder="Search for events, paths, etc."
+          />
+          <Button 
+            variant="contained" 
+            color="primary"
+            startIcon={<SearchIcon />}
+            onClick={handleSearchExecute}
+          >
+            Search
+          </Button>
+        </Box>
+        
         {/* Common Rule Descriptions Card */}
         {uniqueDescriptions.length > 0 && (
-          <Paper elevation={1} sx={{ p: 2, mt: 3, mb: 3 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Detected Rule Types
-            </Typography>
-            <List dense>
-              {uniqueDescriptions.slice(0, 5).map((desc, index) => (
-                <React.Fragment key={index}>
-                  <ListItem>
-                    <ListItemText 
-                      primary={desc}
-                      primaryTypographyProps={{ variant: 'body2' }}
-                    />
-                  </ListItem>
-                  {index < uniqueDescriptions.slice(0, 5).length - 1 && <Divider />}
-                </React.Fragment>
-              ))}
-            </List>
-            {uniqueDescriptions.length > 5 && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                {uniqueDescriptions.length - 5} more rule descriptions...
-              </Typography>
-            )}
-          </Paper>
-        )}
+  <Paper elevation={1} sx={{ p: 2, mt: 3, mb: 3 }}>
+    <Typography variant="subtitle1" gutterBottom>
+      Detected Rule Types ({uniqueDescriptions.length})
+    </Typography>
+    <List dense sx={{ maxHeight: '300px', overflow: 'auto' }}>
+      {uniqueDescriptions.map((desc, index) => (
+        <React.Fragment key={index}>
+          <ListItem>
+            <ListItemText 
+              primary={desc}
+              primaryTypographyProps={{ variant: 'body2' }}
+            />
+          </ListItem>
+          {index < uniqueDescriptions.length - 1 && <Divider />}
+        </React.Fragment>
+      ))}
+    </List>
+  </Paper>
+)}
       </Paper>
 
       {/* Logs Table */}
       <Paper elevation={1}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+          <Typography variant="subtitle1">
+            {loading ? 'Loading logs...' : `Showing ${filteredLogs.length} logs`}
+          </Typography>
+        </Box>
         <TableContainer>
           <Table size="small">
             <TableHead>
@@ -321,14 +372,14 @@ const FIM = () => {
                     </Box>
                   </TableCell>
                 </TableRow>
-              ) : logs.length === 0 ? (
+              ) : filteredLogs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center">
                     <Typography variant="body2">No logs found</Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                logs.map((log) => {
+                filteredLogs.map((log) => {
                   const parsedLogData = parseLogMessage(log);
                   const eventType = parsedLogData?.syscheck?.event || getSyscheckEvent(log);
                   const filePath = parsedLogData?.syscheck?.path || getSyscheckPath(log);
@@ -381,16 +432,6 @@ const FIM = () => {
             </TableBody>
           </Table>
         </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50]}
-          component="div"
-          count={totalLogs}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
       </Paper>
 
       {/* Log Details Dialog */}
