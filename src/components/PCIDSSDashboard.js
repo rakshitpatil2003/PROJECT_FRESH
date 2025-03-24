@@ -33,6 +33,7 @@ import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
 import ExportPDF from '../components/ExportPDF';
+import Skeleton from '@mui/material/Skeleton';
 
 const PCIDSSDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -767,13 +768,7 @@ const PCIDSSDashboard = () => {
         fetchLogs();
     }, [fetchLogs]);
 
-    if (loading && !logs.length) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
-                <CircularProgress />
-            </Box>
-        );
-    }
+
 
     return (
         <Box ref={dashboardRef} p={4}>
@@ -794,7 +789,13 @@ const PCIDSSDashboard = () => {
                 severity="info"
                 sx={{ mb: 3 }}
             >
-                {pciDssLogs.length} PCI DSS compliance events detected across {pciDssStats.uniquePciDssRequirements.length} unique requirements
+                {loading ? (
+                    <Box display="flex" alignItems="center">
+                        <CircularProgress size={20} sx={{ mr: 1 }} /> Loading PCI DSS compliance data...
+                    </Box>
+                ) : (
+                    `${pciDssLogs.length} PCI DSS compliance events detected across ${pciDssStats.uniquePciDssRequirements.length} unique requirements`
+                )}
             </Alert>
 
             {error && (
@@ -811,9 +812,13 @@ const PCIDSSDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Total PCI DSS Events
                             </Typography>
-                            <Typography variant="h4">
-                                {pciDssLogs.length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {pciDssLogs.length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -823,9 +828,14 @@ const PCIDSSDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Unique Requirements
                             </Typography>
-                            <Typography variant="h4">
-                                {pciDssStats.uniquePciDssRequirements.length}
-                            </Typography>
+
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {pciDssStats.uniquePciDssRequirements.length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -835,9 +845,14 @@ const PCIDSSDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Affected Countries
                             </Typography>
-                            <Typography variant="h4">
-                                {Object.keys(pciDssStats.countryDistribution).length}
-                            </Typography>
+
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {Object.keys(pciDssStats.countryDistribution).length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -847,9 +862,14 @@ const PCIDSSDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 High Severity (12+)
                             </Typography>
-                            <Typography variant="h4">
-                                {pciDssLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
-                            </Typography>
+
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {pciDssLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -859,32 +879,62 @@ const PCIDSSDashboard = () => {
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12}>
                     <Paper sx={{ p: 2, height: 300 }}>
-                        <div ref={timelineChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={timelineChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={agentDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={agentDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={severityDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={severityDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={countryDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={countryDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={cardDataViolationChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={cardDataViolationChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={requirementDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={requirementDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
             </Grid>
@@ -926,56 +976,70 @@ const PCIDSSDashboard = () => {
                         </TableHead>
 
                         <TableBody>
-                            {pciDssLogs.length > 0 ? (
-                                pciDssLogs
-                                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                .map((log, index) => (
-                                    <TableRow key={index} hover>
-                                        <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
-                                        <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
-                                        <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={log.parsed.rule?.level || '0'}
-                                                color={getRuleLevelColor(log.parsed.rule?.level)}
-                                                size="small"
-                                            />
-                                        </TableCell>
-                                        <TableCell>{log.parsed.geoip?.country_name || 'Unknown'}</TableCell>
-                                        <TableCell>
-                                            {log.parsed.rule?.pci_dss?.map((req, i) => (
-                                                <Chip
-                                                    key={i}
-                                                    label={req}
-                                                    size="small"
-                                                    sx={{ m: 0.5 }}
-                                                />
-                                            ))}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Link
-                                                component="button"
-                                                variant="body2"
-                                                onClick={() => handleViewDetails(log)}
-                                            >
-                                                View Details
-                                            </Link>
-                                        </TableCell>
+                            {loading ? (
+                                // Show loading skeletons for the table
+                                [...Array(5)].map((_, index) => (
+                                    <TableRow key={`skeleton-${index}`}>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton width={60} /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton width={80} /></TableCell>
                                     </TableRow>
                                 ))
+                            ) : pciDssLogs.length > 0 ? (
+                                pciDssLogs
+                                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                                    .map((log, index) => (
+                                        <TableRow key={index} hover>
+                                            <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
+                                            <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
+                                            <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={log.parsed.rule?.level || '0'}
+                                                    color={getRuleLevelColor(log.parsed.rule?.level)}
+                                                    size="small"
+                                                />
+                                            </TableCell>
+                                            <TableCell>{log.parsed.geoip?.country_name || 'Unknown'}</TableCell>
+                                            <TableCell>
+                                                {log.parsed.rule?.pci_dss?.map((req, i) => (
+                                                    <Chip
+                                                        key={i}
+                                                        label={req}
+                                                        size="small"
+                                                        sx={{ m: 0.5 }}
+                                                    />
+                                                ))}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Link
+                                                    component="button"
+                                                    variant="body2"
+                                                    onClick={() => handleViewDetails(log)}
+                                                >
+                                                    View Details
+                                                </Link>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={7} align="center">No PCI DSS logs found</TableCell>
                                 </TableRow>
                             )}
-                        </TableBody>                    </Table>
+
+                        </TableBody>
+                    </Table>
                 </TableContainer>
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}
                     component="div"
-                    count={pciDssLogs.length}
+                    count={loading ? 0 : pciDssLogs.length}
                     rowsPerPage={rowsPerPage}
-                    page={page}
+                    page={loading ? 0 : page}
                     onPageChange={(event, newPage) => setPage(newPage)}
                     onRowsPerPageChange={(event) => {
                         setRowsPerPage(parseInt(event.target.value, 10));
