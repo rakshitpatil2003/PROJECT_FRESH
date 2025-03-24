@@ -4,35 +4,8 @@ import ReactECharts from 'echarts-for-react';
 import * as am4core from "@amcharts/amcharts4/core";
 import * as am4maps from "@amcharts/amcharts4/maps";
 import am4geodata_worldLow from "@amcharts/amcharts4-geodata/worldLow";
-import {
-  Box,
-  Typography,
-  Paper,
-  Table,
-  TableContainer,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  Chip,
-  Grid,
-  Link,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  IconButton,
-  CircularProgress,
-  Pagination,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Alert,
-  Card,
-  CardContent,
-  Tabs,
-  Tab,
-  Button
+import {Box,Typography,Paper,Table,TableContainer,TableHead,TableBody,TableRow,TableCell,Chip,Grid,Link,Dialog,DialogTitle,DialogContent,IconButton,CircularProgress,Pagination,
+      FormControl,InputLabel,Select,MenuItem,Alert,Card,CardContent,Tabs,Tab,Button
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import TableViewIcon from '@mui/icons-material/TableView';
@@ -48,9 +21,9 @@ const countryCoordinates = {
   "United States": { latitude: 39.7837304, longitude: -100.4458825 }, "India": { latitude: 20.5937, longitude: 78.9629 },
   "Germany": { latitude: 51.1657, longitude: 10.4515 }, "France": { latitude: 46.6034, longitude: 1.8883 }, "Netherlands": { latitude: 52.1326, longitude: 5.2913 },
   "Singapore": { latitude: 1.3521, longitude: 103.8198 }, "Japan": { latitude: 36.2048, longitude: 138.2529 }, "Luxembourg": { latitude: 49.8153, longitude: 6.1296 },
-  "Reserved": { latitude: 7.873054, longitude: 80.771797 }, "China": { latitude: 35.8617, longitude: 104.1954 }, "United Kingdom": { latitude: 55.3781, longitude: -3.4360 },
+  "Reserved": { latitude: -5.0000, longitude: 73.5000 }, "China": { latitude: 35.8617, longitude: 104.1954 }, "United Kingdom": { latitude: 55.3781, longitude: -3.4360 },
   "Canada": { latitude: 56.1304, longitude: -106.3468 }, "Australia": { latitude: -25.2744, longitude: 133.7751 }, "Brazil": { latitude: -14.2350, longitude: -51.9253 },
-  "Russia": { latitude: 61.5240, longitude: 105.3188 }, "South Korea": { latitude: 35.9078, longitude: 127.7669 }, "Italy": { latitude: 41.8719, longitude: 12.5674 },
+  "Russian Federation": { latitude: 61.5240, longitude: 105.3188 }, "South Korea": { latitude: 35.9078, longitude: 127.7669 }, "Italy": { latitude: 41.8719, longitude: 12.5674 },
   "Spain": { latitude: 40.4637, longitude: -3.7492 }, "Mexico": { latitude: 23.6345, longitude: -102.5528 }, "Indonesia": { latitude: -0.7893, longitude: 113.9213 },
   "South Africa": { latitude: -30.5595, longitude: 22.9375 }, "Korea, Republic of": { latitude: 40.339852, longitude: 127.510093 },
   "Hong Kong": { latitude: 22.319303, longitude: 114.169361 }, "Afghanistan": { latitude: 33.9391, longitude: 67.709953 },
@@ -69,14 +42,17 @@ const countryCoordinates = {
   "Estonia": { latitude: 58.5953, longitude: 25.0136 }, "Ethiopia": { latitude: 9.145, longitude: 40.4897 }, "Finland": { latitude: 61.9241, longitude: 25.7482 },
   "Ghana": { latitude: 7.9465, longitude: -1.0232 }, "Greece": { latitude: 39.0742, longitude: 21.8243 }, "Guatemala": { latitude: 15.7835, longitude: -90.2308 },
   "Honduras": { latitude: 15.1999, longitude: -86.2419 }, "Hungary": { latitude: 47.1625, longitude: 19.5033 }, "Iceland": { latitude: 64.9631, longitude: -19.0208 },
-  "Iran": { latitude: 32.4279, longitude: 53.688 }, "Iraq": { latitude: 33.2232, longitude: 43.6793 }, "Ireland": { latitude: 53.4129, longitude: -8.2439 },
+  "Iran, Islamic Republic of": { latitude: 32.4279, longitude: 53.688 }, "Iraq": { latitude: 33.2232, longitude: 43.6793 }, "Ireland": { latitude: 53.4129, longitude: -8.2439 },
   "Israel": { latitude: 31.0461, longitude: 34.8516 }, "Jamaica": { latitude: 18.1096, longitude: -77.2975 }, "Jordan": { latitude: 30.5852, longitude: 36.2384 },
   "Kazakhstan": { latitude: 48.0196, longitude: 66.9237 }, "Kuwait": { latitude: 29.3117, longitude: 47.4818 }, "Latvia": { latitude: 56.8796, longitude: 24.6032 },
   "Lebanon": { latitude: 33.8547, longitude: 35.8623 }, "Lithuania": { latitude: 55.1694, longitude: 23.8813 }, "Madagascar": { latitude: -18.7669, longitude: 46.8691 },
   "Malaysia": { latitude: 4.2105, longitude: 101.9758 }, "Malta": { latitude: 35.9375, longitude: 14.3754 }, "Nepal": { latitude: 28.3949, longitude: 84.124 },
   "New Zealand": { latitude: -40.9006, longitude: 174.886 }, "Norway": { latitude: 60.472, longitude: 8.4689 }, "Pakistan": { latitude: 30.3753, longitude: 69.3451 },
   "Philippines": { latitude: 12.8797, longitude: 121.774 }, "Poland": { latitude: 51.9194, longitude: 19.1451 }, "Portugal": { latitude: 39.3999, longitude: -8.2245 },
-  "Sweden": { latitude: 60.1282, longitude: 18.6435 }, "Switzerland": { latitude: 46.8182, longitude: 8.2275 }, "Thailand": { latitude: 15.870, longitude: 100.9925 }
+  "Sweden": { latitude: 60.1282, longitude: 18.6435 }, "Switzerland": { latitude: 46.8182, longitude: 8.2275 }, "Thailand": { latitude: 15.870, longitude: 100.9925 },
+  "Vietnam": { latitude: 14.0583, longitude: 108.2772 },"United Arab Emirates": { latitude: 23.4241, longitude: 53.8478 },"Taiwan": { latitude: 23.6978, longitude: 120.9605 },
+  "Turkey": { latitude: 38.9637, longitude: 35.2433 },"Ukraine": { latitude: 48.3794, longitude: 31.1656 }, "Sri Lanka": { latitude: 7.8731, longitude: 80.7718 }
+
 };
 
 
@@ -649,46 +625,92 @@ const ThreatHunting = () => {
   const WorldConnectionMap = ({ connectionData }) => {
     const chartRef = React.useRef(null);
     const chartInstanceRef = React.useRef(null);
-
+  
     useEffect(() => {
       // Create map instance
       const chart = am4core.create("chartdiv", am4maps.MapChart);
       chartInstanceRef.current = chart;
-
+  
       // Set map definition
       chart.geodata = am4geodata_worldLow;
-
+  
       // Set projection
       chart.projection = new am4maps.projections.Miller();
-
+  
       // Create map polygon series
       const polygonSeries = chart.series.push(new am4maps.MapPolygonSeries());
       polygonSeries.useGeodata = true;
       polygonSeries.mapPolygons.template.fill = am4core.color("#d9d9d9");
       polygonSeries.mapPolygons.template.stroke = am4core.color("#ffffff");
-
+  
       // Configure country hover states
       polygonSeries.mapPolygons.template.tooltipText = "{name}";
       polygonSeries.mapPolygons.template.cursorOverStyle = am4core.MouseCursorStyle.pointer;
-
-      // Add city markers
+  
+      // Add city markers for regular countries
       const citySeries = chart.series.push(new am4maps.MapImageSeries());
-      const city = citySeries.mapImages.template.createChild(am4core.Circle);
-      city.radius = 5;
-      city.fill = am4core.color("#f00");
-      city.strokeWidth = 2;
-      city.stroke = am4core.color("#fff");
-
+      citySeries.mapImages.template.nonScaling = false;
+      
+      const cityTemplate = citySeries.mapImages.template.createChild(am4core.Circle);
+      cityTemplate.radius = 5;
+      cityTemplate.fill = am4core.color("#f00");
+      cityTemplate.strokeWidth = 2;
+      cityTemplate.stroke = am4core.color("#fff");
+  
       // Add city tooltips
       citySeries.mapImages.template.tooltipText = "{title}";
-
-      // Set cities based on connection data
+  
+      // Create a separate series for the server icon (Reserved location)
+      const serverSeries = chart.series.push(new am4maps.MapImageSeries());
+      serverSeries.mapImages.template.nonScaling = false;
+  
+      // Create a server icon
+      const serverTemplate = serverSeries.mapImages.template.createChild(am4core.Container);
+      
+      // Create a rectangle for server body
+      const serverBody = serverTemplate.createChild(am4core.RoundedRectangle);
+      serverBody.width = 16;
+      serverBody.height = 20;
+      serverBody.cornerRadius(2, 2, 2, 2);
+      serverBody.fill = am4core.color("#3B82F6");
+      serverBody.stroke = am4core.color("#1E40AF");
+      serverBody.strokeWidth = 1;
+      
+      // Add server details (lines representing server slots)
+      for (let i = 1; i <= 3; i++) {
+        const line = serverTemplate.createChild(am4core.Rectangle);
+        line.width = 10;
+        line.height = 1;
+        line.fill = am4core.color("#ffffff");
+        line.y = i * 4;
+        line.x = 3;
+      }
+      
+      // Center the server icon properly
+      serverTemplate.horizontalCenter = "middle";
+      serverTemplate.verticalCenter = "bottom";
+      
+      // Add server tooltip
+      serverSeries.mapImages.template.tooltipText = "{title} (Server)";
+  
+      // Set cities and server location based on connection data
       const cityData = [];
+      const serverData = [];
       const uniqueCountries = new Set();
-
+  
       if (connectionData && connectionData.length > 0) {
         connectionData.forEach(conn => {
-          if (conn.srcLongitude && conn.srcLatitude && !uniqueCountries.has(conn.source)) {
+          // Check if source country is "Reserved"
+          if (conn.source === "Reserved" && conn.srcLongitude && conn.srcLatitude && !uniqueCountries.has(conn.source)) {
+            serverData.push({
+              title: conn.source,
+              latitude: conn.srcLatitude,
+              longitude: conn.srcLongitude
+            });
+            uniqueCountries.add(conn.source);
+          } 
+          // Otherwise add to normal city data
+          else if (conn.srcLongitude && conn.srcLatitude && !uniqueCountries.has(conn.source)) {
             cityData.push({
               title: conn.source,
               latitude: conn.srcLatitude,
@@ -696,8 +718,18 @@ const ThreatHunting = () => {
             });
             uniqueCountries.add(conn.source);
           }
-
-          if (conn.dstLongitude && conn.dstLatitude && !uniqueCountries.has(conn.target)) {
+  
+          // Check if target country is "Reserved"
+          if (conn.target === "Reserved" && conn.dstLongitude && conn.dstLatitude && !uniqueCountries.has(conn.target)) {
+            serverData.push({
+              title: conn.target,
+              latitude: conn.dstLatitude,
+              longitude: conn.dstLongitude
+            });
+            uniqueCountries.add(conn.target);
+          } 
+          // Otherwise add to normal city data
+          else if (conn.dstLongitude && conn.dstLatitude && !uniqueCountries.has(conn.target)) {
             cityData.push({
               title: conn.target,
               latitude: conn.dstLatitude,
@@ -707,54 +739,126 @@ const ThreatHunting = () => {
           }
         });
       }
-
+  
+      // Set property fields for both series
       citySeries.mapImages.template.propertyFields.latitude = "latitude";
       citySeries.mapImages.template.propertyFields.longitude = "longitude";
+      serverSeries.mapImages.template.propertyFields.latitude = "latitude";
+      serverSeries.mapImages.template.propertyFields.longitude = "longitude";
+      
+      // Set data for both series
       citySeries.data = cityData;
-
-      // Configure line series with arrows
+      serverSeries.data = serverData;
+  
+      // Create a line series for connections
       const lineSeries = chart.series.push(new am4maps.MapArcSeries());
       lineSeries.mapLines.template.line.strokeWidth = 2;
       lineSeries.mapLines.template.line.stroke = am4core.color("#e03e96");
       lineSeries.mapLines.template.line.strokeOpacity = 0.5;
       lineSeries.mapLines.template.line.nonScalingStroke = true;
-
-      // Add arrows
-      const arrow = lineSeries.mapLines.template.line.strokeDasharray = "1,1";
-      lineSeries.mapLines.template.line.events.on("inited", function (event) {
-        event.target.strokeDasharray = "1,1";
-      });
-
+      
+      // Add curved lines (arcs)
+      lineSeries.mapLines.template.shortestDistance = false;
+      lineSeries.mapLines.template.line.controlPointDistance = 0.3;
+      
       // Add line tooltips
-      lineSeries.mapLines.template.tooltipText = "{source} → {target}: {value} event(s)";
-
+      lineSeries.mapLines.template.tooltipText = "{from} → {to}: {value} event(s)";
+      
+      // Modify line thickness based on value
+      lineSeries.mapLines.template.propertyFields.strokeWidth = "lineThickness";
+  
+      // Create an animation series for the flowing dots
+      const animationSeries = chart.series.push(new am4maps.MapLineSeries());
+      animationSeries.mapLines.template.line.strokeOpacity = 0;
+      animationSeries.mapLines.template.shortestDistance = false;
+      
+      // Create flowing dot (bullet)
+      const bullet = animationSeries.mapLines.template.createChild(am4core.Circle);
+      bullet.radius = 4;
+      bullet.fill = am4core.color("#ffff00");
+      bullet.stroke = am4core.color("#0000ff");
+      bullet.strokeWidth = 2;
+      bullet.fillOpacity = 0.7;
+      bullet.nonScaling = true;
+      
+      // Add a glow effect to the bullet
+      const bulletGlow = bullet.filters.push(new am4core.BlurFilter());
+      bulletGlow.blur = 4;
+      
+      // Animate the bullet
+      bullet.adapter.add("positionOnLine", (position, target) => {
+        // Create looping animation from 0 to 1
+        const animationValue = Math.abs((Date.now() % 5000) / 5000 - 0.5) * 2;
+        return animationValue;
+      });
+      
+      // Update bullet position on each frame
+      chart.events.on("frameended", () => {
+        bullet.invalidatePosition();
+      });
+  
       // Add lines based on connection data
+      const lineData = [];
+      const animationData = [];
+      
       if (connectionData && connectionData.length > 0) {
-        const lines = connectionData.map(conn => {
-          return {
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                { longitude: conn.srcLongitude, latitude: conn.srcLatitude },
-                { longitude: conn.dstLongitude, latitude: conn.dstLatitude }
+        connectionData.forEach(conn => {
+          if (conn.srcLongitude && conn.srcLatitude && conn.dstLongitude && conn.dstLatitude) {
+            // Calculate line thickness based on value (logarithmic scale for better visualization)
+            const lineThickness = Math.max(1, Math.min(10, 1 + Math.log(conn.value)));
+            
+            const lineObject = {
+              from: conn.source,
+              to: conn.target,
+              value: conn.value,
+              lineThickness: lineThickness,
+              multiGeoLine: [
+                [
+                  { longitude: conn.srcLongitude, latitude: conn.srcLatitude },
+                  { longitude: conn.dstLongitude, latitude: conn.dstLatitude }
+                ]
               ]
-            },
-            source: conn.source,
-            target: conn.target,
-            value: conn.value
-          };
+            };
+            
+            lineData.push(lineObject);
+            
+            // Add the same line data to animation series (for the flowing dot)
+            animationData.push({
+              multiGeoLine: [
+                [
+                  { longitude: conn.srcLongitude, latitude: conn.srcLatitude },
+                  { longitude: conn.dstLongitude, latitude: conn.dstLatitude }
+                ]
+              ],
+              lineThickness: lineThickness
+            });
+          }
         });
-
-        lineSeries.data = lines;
       }
-
+      
+      lineSeries.data = lineData;
+      animationSeries.data = animationData;
+      
+      // Add arrow to line series
+      const arrow = lineSeries.mapLines.template.arrow = new am4core.Triangle();
+      arrow.position = 0.5;
+      arrow.direction = "right";
+      arrow.stroke = am4core.color("#0000ff");
+      arrow.fill = am4core.color("#0000ff");
+      arrow.width = 8;
+      arrow.height = 8;
+  
+      // Add zoom control
+      chart.zoomControl = new am4maps.ZoomControl();
+      chart.zoomControl.slider.height = 100;
+  
       chartRef.current = chart;
-
+  
       return () => {
         chart.dispose();
       };
     }, [connectionData]);
-
+  
     return (
       <Box id="chartdiv" style={{ width: "100%", height: "600px" }}></Box>
     );
@@ -1020,7 +1124,7 @@ const ThreatHunting = () => {
                 </Grid>
               )}
 
-// In the Connection Map Tab section:
+
               {activeTab === 4 && (
                 <Grid container spacing={3}>
                   <Grid item xs={12}>

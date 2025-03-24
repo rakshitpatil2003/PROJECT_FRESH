@@ -76,11 +76,11 @@ const MajorLogs = () => {
   
       // Sort by level (descending) and then by timestamp
       const sortedLogs = validLogs.sort((a, b) => {
-        const levelA = parseInt(a.rule?.level) || 0;
-        const levelB = parseInt(b.rule?.level) || 0;
-        if (levelB !== levelA) {
-          return levelB - levelA;
-        }
+        // const levelA = parseInt(a.rule?.level) || 0;
+        // const levelB = parseInt(b.rule?.level) || 0;
+        // if (levelB !== levelA) {
+        //   return levelB - levelA;
+        // }
         return new Date(b.timestamp) - new Date(a.timestamp);
       });
   
