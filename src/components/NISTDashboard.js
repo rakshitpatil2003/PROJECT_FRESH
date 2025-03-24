@@ -33,6 +33,7 @@ import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
 import ExportPDF from '../components/ExportPDF';
+import Skeleton from '@mui/material/Skeleton';
 
 const NISTDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -681,14 +682,6 @@ const NISTDashboard = () => {
         fetchLogs();
     }, [fetchLogs]);
 
-    if (loading && !logs.length) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
     return (
         <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#2196f3', mb: 2 }}>
@@ -708,7 +701,13 @@ const NISTDashboard = () => {
                 severity="info"
                 sx={{ mb: 3 }}
             >
-                {nistLogs.length} NIST compliance events detected across {nistStats.uniqueNistControls.length} unique NIST controls
+                {loading ? (
+                    <Box display="flex" alignItems="center">
+                        <CircularProgress size={20} sx={{ mr: 1 }} /> Loading NIST 800-53 compliance data...
+                    </Box>
+                ) : (
+                    `${nistLogs.length} NIST compliance events detected across ${nistStats.uniqueNistControls.length} unique NIST controls`
+                )}
             </Alert>
 
             {error && (
@@ -725,9 +724,13 @@ const NISTDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Total NIST Events
                             </Typography>
-                            <Typography variant="h4">
-                                {nistLogs.length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {nistLogs.length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -737,9 +740,13 @@ const NISTDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Unique NIST Controls
                             </Typography>
-                            <Typography variant="h4">
-                                {nistStats.uniqueNistControls.length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {nistStats.uniqueNistControls.length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -749,9 +756,13 @@ const NISTDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Control Families
                             </Typography>
-                            <Typography variant="h4">
-                                {Object.keys(nistStats.controlFamilies).length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {Object.keys(nistStats.controlFamilies).length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -761,9 +772,13 @@ const NISTDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 High Severity (12+)
                             </Typography>
-                            <Typography variant="h4">
-                                {nistLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {nistLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -773,27 +788,48 @@ const NISTDashboard = () => {
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12}>
                     <Paper sx={{ p: 2, height: 300 }}>
-                        <div ref={timelineChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={timelineChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={agentDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={agentDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={severityDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={severityDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={controlDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={controlDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={familyDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={familyDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
             </Grid>
@@ -834,50 +870,64 @@ const NISTDashboard = () => {
                         </TableHead>
 
                         <TableBody>
-                            {nistLogs
-                            .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                            .map((log, index) => (
-                                <TableRow key={index} hover>
-                                    <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
-                                    <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
-                                    <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={log.parsed.rule?.level || '0'}
-                                            color={getRuleLevelColor(log.parsed.rule?.level)}
-                                            size="small"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        {log.parsed.rule?.nist_800_53?.map((control, idx) => (
-                                            <Chip
-                                                key={idx}
-                                                label={control}
-                                                size="small"
-                                                sx={{ m: 0.5 }}
-                                            />
-                                        ))}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Link
-                                            component="button"
-                                            variant="body2"
-                                            onClick={() => handleViewDetails(log)}
-                                        >
-                                            View Details
-                                        </Link>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {loading ? (
+                                // Show loading skeletons for the table
+                                [...Array(5)].map((_, index) => (
+                                    <TableRow key={`skeleton-${index}`}>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton width={60} /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton width={80} /></TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                nistLogs
+                                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                                    .map((log, index) => (
+                                        <TableRow key={index} hover>
+                                            <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
+                                            <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
+                                            <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={log.parsed.rule?.level || '0'}
+                                                    color={getRuleLevelColor(log.parsed.rule?.level)}
+                                                    size="small"
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                {log.parsed.rule?.nist_800_53?.map((control, idx) => (
+                                                    <Chip
+                                                        key={idx}
+                                                        label={control}
+                                                        size="small"
+                                                        sx={{ m: 0.5 }}
+                                                    />
+                                                ))}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Link
+                                                    component="button"
+                                                    variant="body2"
+                                                    onClick={() => handleViewDetails(log)}
+                                                >
+                                                    View Details
+                                                </Link>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                            )}
                         </TableBody>
                     </Table>
                 </TableContainer>
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}
                     component="div"
-                    count={nistLogs.length}
+                    count={loading ? 0 : nistLogs.length}
                     rowsPerPage={rowsPerPage}
-                    page={page}
+                    page={loading ? 0 : page}
                     onPageChange={(event, newPage) => setPage(newPage)}
                     onRowsPerPageChange={(event) => {
                         setRowsPerPage(parseInt(event.target.value, 10));

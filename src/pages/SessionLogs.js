@@ -1,31 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-    Box,
-    Typography,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Alert,
-    TextField,
-    InputAdornment,
-    CircularProgress,
-    Link,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    IconButton,
-    Chip,
-    Pagination,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Grid
-} from '@mui/material';
+import {Box,Typography,Table,TableBody,TableCell,TableContainer,TableHead,TableRow,Paper,
+        Alert,TextField,InputAdornment,CircularProgress,Link,Dialog,DialogTitle,DialogContent,
+        IconButton,Chip,Pagination,FormControl,InputLabel,Select,MenuItem,Grid
+    } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import ComplianceIcon from '@mui/icons-material/VerifiedUser';
@@ -34,6 +11,8 @@ import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import { useTheme } from '@mui/material/styles';
+import Skeleton from '@mui/material/Skeleton';
+
 
 const SessionLogs = () => {
     const [logs, setLogs] = useState([]);
@@ -185,13 +164,7 @@ const SessionLogs = () => {
         setPage(1); // Reset to first page when changing rows per page
     };
 
-    if (loading && !logs.length) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
-                <CircularProgress />
-            </Box>
-        );
-    }
+
 
     return (
         <Box p={4}>
@@ -212,7 +185,7 @@ const SessionLogs = () => {
                 InputProps={{
                     startAdornment: (
                         <InputAdornment position="start">
-                            <SearchIcon />
+                            {loading ? <CircularProgress size={20} /> : <SearchIcon />}
                         </InputAdornment>
                     ),
                 }}
@@ -230,7 +203,13 @@ const SessionLogs = () => {
                 severity="info"
                 sx={{ mb: 3 }}
             >
-                {filteredLogs.length} compliance-related logs found
+                {loading ? (
+        <Box display="flex" alignItems="center">
+            <CircularProgress size={20} sx={{ mr: 1 }} /> Loading compliance logs...
+        </Box>
+    ) : (
+        `${filteredLogs.length} compliance-related logs found`
+    )}
             </Alert>
 
             <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 400px)' }}>
@@ -246,90 +225,109 @@ const SessionLogs = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {displayedLogs.map((log) => {
-                            const parsedLog = log.parsed;
-                            const rule = parsedLog.rule || {};
+    {loading ? (
+        // Show loading skeletons for the table
+        [...Array(rowsPerPage)].map((_, index) => (
+            <TableRow key={`skeleton-${index}`}>
+                <TableCell><Skeleton /></TableCell>
+                <TableCell><Skeleton /></TableCell>
+                <TableCell><Skeleton width={60} /></TableCell>
+                <TableCell><Skeleton /></TableCell>
+                <TableCell><Skeleton width={120} /></TableCell>
+                <TableCell><Skeleton width={80} /></TableCell>
+            </TableRow>
+        ))
+    ) : (
+        displayedLogs.map((log) => {
+            const parsedLog = log.parsed;
+            const rule = parsedLog.rule || {};
 
-                            const complianceTypes = [
-                                rule.hipaa?.length && 'HIPAA',
-                                rule.gdpr?.length && 'GDPR',
-                                rule.nist_800_53?.length && 'NIST',
-                                rule.pci_dss?.length && 'PCI DSS',
-                                rule.tsc?.length && 'TSC',
-                                rule.gpg13?.length && 'GPG13'
-                            ].filter(Boolean);
+            const complianceTypes = [
+                rule.hipaa?.length && 'HIPAA',
+                rule.gdpr?.length && 'GDPR',
+                rule.nist_800_53?.length && 'NIST',
+                rule.pci_dss?.length && 'PCI DSS',
+                rule.tsc?.length && 'TSC',
+                rule.gpg13?.length && 'GPG13'
+            ].filter(Boolean);
 
-                            return (
-                                <TableRow key={log._id} hover>
-                                    <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
-                                    <TableCell>{parsedLog.agent.name}</TableCell>
-                                    <TableCell>
-                                        <Chip 
-                                            label={rule.level} 
-                                            size="small"
-                                            color={getRuleLevelColor(rule.level)}
-                                        />
-                                    </TableCell>
-                                    <TableCell>{rule.description}</TableCell>
-                                    <TableCell>
-                                        <Box display="flex" gap={0.5} flexWrap="wrap">
-                                            {complianceTypes.map((type) => (
-                                                <Chip
-                                                    key={type}
-                                                    label={type}
-                                                    size="small"
-                                                    color="primary"
-                                                    variant="outlined"
-                                                />
-                                            ))}
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Link
-                                            component="button"
-                                            variant="body2"
-                                            onClick={() => handleViewDetails(log)}
-                                            sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
-                                        >
-                                            View Details
-                                        </Link>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
-                    </TableBody>
+            return (
+                <TableRow key={log._id} hover>
+                    <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
+                    <TableCell>{parsedLog.agent.name}</TableCell>
+                    <TableCell>
+                        <Chip 
+                            label={rule.level} 
+                            size="small"
+                            color={getRuleLevelColor(rule.level)}
+                        />
+                    </TableCell>
+                    <TableCell>{rule.description}</TableCell>
+                    <TableCell>
+                        <Box display="flex" gap={0.5} flexWrap="wrap">
+                            {complianceTypes.map((type) => (
+                                <Chip
+                                    key={type}
+                                    label={type}
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
+                                />
+                            ))}
+                        </Box>
+                    </TableCell>
+                    <TableCell>
+                        <Link
+                            component="button"
+                            variant="body2"
+                            onClick={() => handleViewDetails(log)}
+                            sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                        >
+                            View Details
+                        </Link>
+                    </TableCell>
+                </TableRow>
+            );
+        })
+    )}
+</TableBody>
                 </Table>
             </TableContainer>
 
             {/* Pagination Controls */}
-            <Grid container spacing={2} alignItems="center" sx={{ mt: 2 }}>
-                <Grid item xs={12} sm={6} md={4}>
-                    <FormControl variant="outlined" size="small" fullWidth>
-                        <InputLabel id="rows-per-page-label">Rows per page</InputLabel>
-                        <Select
-                            labelId="rows-per-page-label"
-                            value={rowsPerPage}
-                            onChange={handleChangeRowsPerPage}
-                            label="Rows per page"
-                        >
-                            <MenuItem value={10}>10</MenuItem>
-                            <MenuItem value={25}>25</MenuItem>
-                            <MenuItem value={50}>50</MenuItem>
-                            <MenuItem value={100}>100</MenuItem>
-                        </Select>
-                    </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6} md={8} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <Pagination 
-                        count={totalPages} 
-                        page={page} 
-                        onChange={handleChangePage} 
-                        color="primary"
-                        showFirstButton
-                        showLastButton
-                    />
-                </Grid>
-            </Grid>
+<Grid container spacing={2} alignItems="center" sx={{ mt: 2 }}>
+    <Grid item xs={12} sm={6} md={4}>
+        <FormControl variant="outlined" size="small" fullWidth>
+            <InputLabel id="rows-per-page-label">Rows per page</InputLabel>
+            <Select
+                labelId="rows-per-page-label"
+                value={rowsPerPage}
+                onChange={handleChangeRowsPerPage}
+                label="Rows per page"
+                disabled={loading}
+            >
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={25}>25</MenuItem>
+                <MenuItem value={50}>50</MenuItem>
+                <MenuItem value={100}>100</MenuItem>
+            </Select>
+        </FormControl>
+    </Grid>
+    <Grid item xs={12} sm={6} md={8} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        {loading ? (
+            <Skeleton variant="rectangular" width={300} height={36} />
+        ) : (
+            <Pagination 
+                count={totalPages} 
+                page={page} 
+                onChange={handleChangePage} 
+                color="primary"
+                showFirstButton
+                showLastButton
+            />
+        )}
+    </Grid>
+</Grid>
 
             <Dialog
                 open={Boolean(selectedLog)}

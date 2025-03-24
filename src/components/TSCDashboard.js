@@ -33,6 +33,7 @@ import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
 import ExportPDF from '../components/ExportPDF';
+import Skeleton from '@mui/material/Skeleton';
 
 const TSCDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -743,13 +744,7 @@ const TSCDashboard = () => {
         fetchLogs();
     }, [fetchLogs]);
 
-    if (loading && !logs.length) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
-                <CircularProgress />
-            </Box>
-        );
-    }
+
 
     return (
         <Box ref={dashboardRef} p={4}>
@@ -764,13 +759,19 @@ const TSCDashboard = () => {
                     dashboardRef={dashboardRef}
                 />
             </Typography>
-
+            {tscLogs.length} TSC compliance events detected across {tscStats.uniqueTscCriteria.length} unique TSC criteria
             <Alert
                 icon={<SecurityIcon />}
                 severity="info"
                 sx={{ mb: 3 }}
             >
-                {tscLogs.length} TSC compliance events detected across {tscStats.uniqueTscCriteria.length} unique TSC criteria
+                {loading ? (
+                    <Box display="flex" alignItems="center">
+                        <CircularProgress size={20} sx={{ mr: 1 }} /> Loading TSC compliance data...
+                    </Box>
+                ) : (
+                    `${tscLogs.length} TSC compliance events detected across ${tscStats.uniqueTscCriteria.length} unique TSC criteria`
+                )}
             </Alert>
 
             {error && (
@@ -787,9 +788,13 @@ const TSCDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Total TSC Events
                             </Typography>
-                            <Typography variant="h4">
-                                {tscLogs.length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {tscLogs.length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -799,9 +804,14 @@ const TSCDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Unique TSC Criteria
                             </Typography>
-                            <Typography variant="h4">
-                                {tscStats.uniqueTscCriteria.length}
-                            </Typography>
+
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {tscStats.uniqueTscCriteria.length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -811,9 +821,14 @@ const TSCDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Security Events (CC)
                             </Typography>
-                            <Typography variant="h4">
-                                {tscStats.controlDistribution['CC'] || 0}
-                            </Typography>
+
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {tscStats.controlDistribution['CC'] || 0}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -823,9 +838,14 @@ const TSCDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 High Severity (12+)
                             </Typography>
-                            <Typography variant="h4">
-                                {tscLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
-                            </Typography>
+
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {tscLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -835,32 +855,62 @@ const TSCDashboard = () => {
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12}>
                     <Paper sx={{ p: 2, height: 300 }}>
-                        <div ref={timelineChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={timelineChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={agentDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={agentDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={severityDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={severityDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={controlDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={controlDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={categoryDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={categoryDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={criteriaDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={criteriaDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+
+                        )}
                     </Paper>
                 </Grid>
             </Grid>
@@ -901,50 +951,64 @@ const TSCDashboard = () => {
                         </TableHead>
 
                         <TableBody>
-                            {tscLogs
-                                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                .map((log, index) => (
-                                    <TableRow key={index} hover>
-                                        <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
-                                        <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
-                                        <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={log.parsed.rule?.level || '0'}
-                                                color={getRuleLevelColor(log.parsed.rule?.level)}
-                                                size="small"
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            {log.parsed.rule?.tsc?.map((criterion, idx) => (
-                                                <Chip
-                                                    key={idx}
-                                                    label={criterion}
-                                                    size="small"
-                                                    sx={{ m: 0.5 }}
-                                                />
-                                            ))}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Link
-                                                component="button"
-                                                variant="body2"
-                                                onClick={() => handleViewDetails(log)}
-                                            >
-                                                View Details
-                                            </Link>
-                                        </TableCell>
+                            {loading ? (
+                                // Show loading skeletons for the table
+                                [...Array(5)].map((_, index) => (
+                                    <TableRow key={`skeleton-${index}`}>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton width={60} /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton width={80} /></TableCell>
                                     </TableRow>
-                                ))}
+                                ))
+                            ) : (
+                                tscLogs
+                                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                                    .map((log, index) => (
+                                        <TableRow key={index} hover>
+                                            <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
+                                            <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
+                                            <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={log.parsed.rule?.level || '0'}
+                                                    color={getRuleLevelColor(log.parsed.rule?.level)}
+                                                    size="small"
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                {log.parsed.rule?.tsc?.map((criterion, idx) => (
+                                                    <Chip
+                                                        key={idx}
+                                                        label={criterion}
+                                                        size="small"
+                                                        sx={{ m: 0.5 }}
+                                                    />
+                                                ))}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Link
+                                                    component="button"
+                                                    variant="body2"
+                                                    onClick={() => handleViewDetails(log)}
+                                                >
+                                                    View Details
+                                                </Link>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                            )}
                         </TableBody>
                     </Table>
                 </TableContainer>
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}
                     component="div"
-                    count={tscLogs.length}
+                    count={loading ? 0 : tscLogs.length}
                     rowsPerPage={rowsPerPage}
-                    page={page}
+                    page={loading ? 0 : page}
                     onPageChange={(event, newPage) => setPage(newPage)}
                     onRowsPerPageChange={(event) => {
                         setRowsPerPage(parseInt(event.target.value, 10));

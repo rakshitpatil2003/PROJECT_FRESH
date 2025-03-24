@@ -33,6 +33,7 @@ import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
 import ExportPDF from '../components/ExportPDF';
+import Skeleton from '@mui/material/Skeleton';
 
 const GDPRDashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -743,14 +744,6 @@ const GDPRDashboard = () => {
         fetchLogs();
     }, [fetchLogs]);
 
-    if (loading && !logs.length) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
     return (
         <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#4CAF50', mb: 2 }}>
@@ -770,7 +763,13 @@ const GDPRDashboard = () => {
                 severity="info"
                 sx={{ mb: 3 }}
             >
-                {gdprLogs.length} GDPR compliance events detected across {gdprStats.uniqueGdprArticles.length} unique GDPR articles
+                {loading ? (
+        <Box display="flex" alignItems="center">
+            <CircularProgress size={20} sx={{ mr: 1 }} /> Loading GDPR compliance data...
+        </Box>
+    ) : (
+        `${gdprLogs.length} GDPR compliance events detected across ${gdprStats.uniqueGdprArticles.length} unique GDPR articles`
+    )}
             </Alert>
 
             {error && (
@@ -787,9 +786,13 @@ const GDPRDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Total GDPR Events
                             </Typography>
-                            <Typography variant="h4">
-                                {gdprLogs.length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {gdprLogs.length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -799,9 +802,13 @@ const GDPRDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Unique GDPR Articles
                             </Typography>
-                            <Typography variant="h4">
-                                {gdprStats.uniqueGdprArticles.length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {gdprStats.uniqueGdprArticles.length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -811,9 +818,13 @@ const GDPRDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 Affected Countries
                             </Typography>
-                            <Typography variant="h4">
-                                {Object.keys(gdprStats.countryDistribution).length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {Object.keys(gdprStats.countryDistribution).length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -823,9 +834,13 @@ const GDPRDashboard = () => {
                             <Typography color="textSecondary" gutterBottom>
                                 High Severity (12+)
                             </Typography>
-                            <Typography variant="h4">
-                                {gdprLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
-                            </Typography>
+                            {loading ? (
+                                <Skeleton variant="rectangular" width="100%" height={40} />
+                            ) : (
+                                <Typography variant="h4">
+                                    {gdprLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>
@@ -835,32 +850,56 @@ const GDPRDashboard = () => {
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12}>
                     <Paper sx={{ p: 2, height: 300 }}>
-                        <div ref={timelineChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={timelineChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={agentDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={agentDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={severityDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={severityDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={countryDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={countryDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={dsrTypeChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={dsrTypeChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12}>
                     <Paper sx={{ p: 2, height: 400 }}>
-                        <div ref={articleDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        {loading ? (
+                            <Skeleton variant="rectangular" width="100%" height="100%" />
+                        ) : (
+                            <div ref={articleDistributionChartRef} style={{ width: '100%', height: '100%' }} />
+                        )}
                     </Paper>
                 </Grid>
             </Grid>
@@ -902,51 +941,65 @@ const GDPRDashboard = () => {
                         </TableHead>
 
                         <TableBody>
-                            {gdprLogs
-                                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                .map((log, index) => (
-                                    <TableRow key={index} hover>
-                                        <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
-                                        <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
-                                        <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={log.parsed.rule?.level || '0'}
-                                                color={getRuleLevelColor(log.parsed.rule?.level)}
-                                                size="small"
-                                            />
-                                        </TableCell>
-                                        <TableCell>{log.parsed.geoip?.country_name || 'Unknown'}</TableCell>
-                                        <TableCell>
-                                            {log.parsed.rule?.gdpr?.map((article, idx) => (
-                                                <Chip
-                                                    key={idx}
-                                                    label={article}
-                                                    size="small"
-                                                    sx={{ m: 0.5 }}
-                                                />
-                                            ))}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Link
-                                                component="button"
-                                                variant="body2"
-                                                onClick={() => handleViewDetails(log)}
-                                            >
-                                                View Details
-                                            </Link>
-                                        </TableCell>
+                            {loading ? (
+                                // Show loading skeletons for the table
+                                [...Array(5)].map((_, index) => (
+                                    <TableRow key={`skeleton-${index}`}>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton width={60} /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton width={80} /></TableCell>
                                     </TableRow>
-                                ))}
+                                ))
+                            ) : (
+                                gdprLogs
+                                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                                    .map((log, index) => (
+                                        <TableRow key={index} hover>
+                                            <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
+                                            <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
+                                            <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={log.parsed.rule?.level || '0'}
+                                                    color={getRuleLevelColor(log.parsed.rule?.level)}
+                                                    size="small"
+                                                />
+                                            </TableCell>
+                                            <TableCell>{log.parsed.geoip?.country_name || 'Unknown'}</TableCell>
+                                            <TableCell>
+                                                {log.parsed.rule?.gdpr?.map((article, idx) => (
+                                                    <Chip
+                                                        key={idx}
+                                                        label={article}
+                                                        size="small"
+                                                        sx={{ m: 0.5 }}
+                                                    />
+                                                ))}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Link
+                                                    component="button"
+                                                    variant="body2"
+                                                    onClick={() => handleViewDetails(log)}
+                                                >
+                                                    View Details
+                                                </Link>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                            )}
                         </TableBody>
                     </Table>
                 </TableContainer>
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}
                     component="div"
-                    count={gdprLogs.length}
+                    count={loading ? 0 : gdprLogs.length}
                     rowsPerPage={rowsPerPage}
-                    page={page}
+                    page={loading ? 0 : page}
                     onPageChange={(event, newPage) => setPage(newPage)}
                     onRowsPerPageChange={(event) => {
                         setRowsPerPage(parseInt(event.target.value, 10));

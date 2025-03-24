@@ -28,15 +28,14 @@ const FIM = () => {
   const [uniqueDescriptions, setUniqueDescriptions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Fetch all logs from the API
+  // Fetch all logs from the API - without event filtering
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      // Removed pagination parameters, requesting all logs at once
+      // Request all logs at once without event filtering parameter
       const response = await axios.get(`${API_URL}/api/logs/fim`, {
         params: {
-          // Only keep the event filter if active
-          event: activeFilter,
+          // Remove the event filter parameter entirely
           // Set a very high limit to get all logs
           limit: 10000
         }
@@ -44,7 +43,13 @@ const FIM = () => {
       
       const fetchedLogs = response.data.logs;
       setLogs(fetchedLogs);
-      applyFilters(fetchedLogs, activeFilter, searchTerm);
+      
+      // Calculate counts for all logs first
+      calculateEventCounts(fetchedLogs);
+      
+      // Then apply any active filters
+      const activeSearchTerm = activeFilter ? `"${activeFilter}` : searchTerm;
+      applyFilters(fetchedLogs, activeFilter, activeSearchTerm);
       
     } catch (error) {
       console.error('Error fetching FIM logs:', error);
@@ -53,19 +58,8 @@ const FIM = () => {
     }
   };
 
-  // Calculate stats and apply filters
-  const applyFilters = (logsData, eventFilter, search) => {
-    // Apply search filter if provided
-    let filtered = logsData;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = logsData.filter(log => {
-        const logString = JSON.stringify(log).toLowerCase();
-        return logString.includes(searchLower);
-      });
-    }
-
-    // Calculate event counts
+  // Calculate event counts from all logs
+  const calculateEventCounts = (logsData) => {
     const counts = { added: 0, modified: 0, deleted: 0 };
     const descriptions = new Set();
     
@@ -87,20 +81,39 @@ const FIM = () => {
     
     setEventCounts(counts);
     setUniqueDescriptions([...descriptions]);
+  };
+
+  // Apply filters to the already fetched logs
+  const applyFilters = (logsData, eventFilter, search) => {
+    // Start with all logs
+    let filtered = logsData;
+
+    // Apply search filter if provided (this will handle both regular search and event filtering)
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = logsData.filter(log => {
+        const logString = JSON.stringify(log).toLowerCase();
+        return logString.includes(searchLower);
+      });
+    }
+    
+    // Set the filtered logs for display
     setFilteredLogs(filtered);
   };
 
   // Initial fetch
   useEffect(() => {
     fetchLogs();
-  }, [activeFilter]);
+  }, []);
 
-  // Apply search filter without refetching
+  // Apply filters when activeFilter or searchTerm change
   useEffect(() => {
     if (logs.length > 0) {
-      applyFilters(logs, activeFilter, searchTerm);
+      // If there's an active filter, create the special search string
+      const activeSearchTerm = activeFilter ? `"${activeFilter}` : searchTerm;
+      applyFilters(logs, activeFilter, activeSearchTerm);
     }
-  }, [searchTerm]);
+  }, [activeFilter, searchTerm, logs]);
 
   // Open log details dialog
   const handleViewLog = (log) => {
@@ -116,19 +129,33 @@ const FIM = () => {
     setSelectedLog(null);
   };
 
-  // Handle filter click
+  // Handle filter click - IMPROVED VERSION
   const handleFilterClick = (filter) => {
-    setActiveFilter(activeFilter === filter ? '' : filter);
+    if (activeFilter === filter) {
+      // Clear filter if clicking the same one again
+      setActiveFilter('');
+      // Don't modify searchTerm here to preserve user's search
+    } else {
+      // Set the active filter
+      setActiveFilter(filter);
+      // Don't modify searchTerm here - we'll use activeFilter in our useEffect
+    }
   };
 
   // Handle search change
   const handleSearchChange = (event) => {
+    // Clear active filter when user manually searches
+    if (activeFilter && event.target.value) {
+      setActiveFilter('');
+    }
     setSearchTerm(event.target.value);
   };
 
   // Execute client-side search for specific events
   const handleSearchExecute = () => {
-    applyFilters(logs, activeFilter, searchTerm);
+    // If there's an active filter, create the special search string
+    const activeSearchTerm = activeFilter ? `"${activeFilter}` : searchTerm;
+    applyFilters(logs, activeFilter, activeSearchTerm);
   };
 
   // Get event type chip color
@@ -323,25 +350,25 @@ const FIM = () => {
         
         {/* Common Rule Descriptions Card */}
         {uniqueDescriptions.length > 0 && (
-  <Paper elevation={1} sx={{ p: 2, mt: 3, mb: 3 }}>
-    <Typography variant="subtitle1" gutterBottom>
-      Detected Rule Types ({uniqueDescriptions.length})
-    </Typography>
-    <List dense sx={{ maxHeight: '300px', overflow: 'auto' }}>
-      {uniqueDescriptions.map((desc, index) => (
-        <React.Fragment key={index}>
-          <ListItem>
-            <ListItemText 
-              primary={desc}
-              primaryTypographyProps={{ variant: 'body2' }}
-            />
-          </ListItem>
-          {index < uniqueDescriptions.length - 1 && <Divider />}
-        </React.Fragment>
-      ))}
-    </List>
-  </Paper>
-)}
+          <Paper elevation={1} sx={{ p: 2, mt: 3, mb: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Detected Rule Types ({uniqueDescriptions.length})
+            </Typography>
+            <List dense sx={{ maxHeight: '300px', overflow: 'auto' }}>
+              {uniqueDescriptions.map((desc, index) => (
+                <React.Fragment key={index}>
+                  <ListItem>
+                    <ListItemText 
+                      primary={desc}
+                      primaryTypographyProps={{ variant: 'body2' }}
+                    />
+                  </ListItem>
+                  {index < uniqueDescriptions.length - 1 && <Divider />}
+                </React.Fragment>
+              ))}
+            </List>
+          </Paper>
+        )}
       </Paper>
 
       {/* Logs Table */}
