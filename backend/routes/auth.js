@@ -171,27 +171,4 @@ router.get('/profile', (req, res) => {
   }
 });
 
-// Get request history route
-// router.get('/requests/history', (req, res) => {
-//   // Get token from authorization header
-//   const authHeader = req.headers.authorization;
-//   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-//     return res.status(401).json({ message: 'Unauthorized' });
-//   }
-  
-//   const token = authHeader.split(' ')[1];
-  
-//   try {
-//     // Verify token
-//     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key');
-    
-//     // Find user's request history
-//     const userRequests = requestHistory.filter(req => req.userId === decoded.userId);
-    
-//     res.json(userRequests);
-//   } catch (error) {
-//     res.status(401).json({ message: 'Invalid token' });
-//   }
-// });
-
 module.exports = router;

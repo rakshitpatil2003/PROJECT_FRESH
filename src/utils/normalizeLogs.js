@@ -1,20 +1,5 @@
-import React, { useState } from 'react';
-import { 
-  Typography, 
-  Box, 
-  Paper, 
-  //Accordion, 
-  //AccordionSummary, 
-  //AccordionDetails, 
-  Chip, 
-  Divider,
-  Grid,
-  IconButton,
-  Tooltip,
-  Tab,
-  Tabs,
-  styled,
-  useTheme
+import React, { useState, useEffect, useRef } from 'react';
+import {Typography,Box,Paper,Chip,Divider,Grid,IconButton,Tooltip,Tab,Tabs,styled,useTheme
 } from '@mui/material';
 //import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -25,192 +10,171 @@ import EventIcon from '@mui/icons-material/Event';
 import CodeIcon from '@mui/icons-material/Code';
 import LockIcon from '@mui/icons-material/Lock';
 import ShieldIcon from '@mui/icons-material/Shield';
+import { Snackbar, Alert } from '@mui/material';
 
 // Keep the parseLogMessage function as it is
 export const parseLogMessage = (logEntry) => {
   if (!logEntry) return null;
-  
+
   try {
-      // Parse message data (keep this the same as your original code)
-      let messageData;
-      if (logEntry.rawLog?.message) {
-          try {
-              messageData = typeof logEntry.rawLog.message === 'string' ? 
-                  JSON.parse(logEntry.rawLog.message) : logEntry.rawLog.message;
-          } catch (e) {
-              messageData = logEntry.rawLog.message;
-          }
-      } else if (typeof logEntry.message === 'string') {
-          try {
-              messageData = JSON.parse(logEntry.message);
-          } catch (e) {
-              messageData = logEntry.message;
-          }
-      } else {
-          messageData = logEntry.message || logEntry;
+    // Parse message data (keep this the same as your original code)
+    let messageData;
+    if (logEntry.rawLog?.message) {
+      try {
+        messageData = typeof logEntry.rawLog.message === 'string' ?
+          JSON.parse(logEntry.rawLog.message) : logEntry.rawLog.message;
+      } catch (e) {
+        messageData = logEntry.rawLog.message;
       }
+    } else if (typeof logEntry.message === 'string') {
+      try {
+        messageData = JSON.parse(logEntry.message);
+      } catch (e) {
+        messageData = logEntry.message;
+      }
+    } else {
+      messageData = logEntry.message || logEntry;
+    }
 
-      // Extract rule data with compliance fields (same as your original code)
-      const ruleData = messageData?.rule || logEntry?.rule || {};
-      
-      // Get the data object - this is the one change we need
-      const dataField = messageData?.data || {};
-      
-      // Keep the same structure as your original return, just add the data field and update references
-      return {
-          timestamp: messageData?.data?.timestamp || 
-                  messageData?.timestamp || 
-                  logEntry?.timestamp || 
-                  logEntry?.rawLog?.timestamp,
-          agent: {
-              name: messageData?.agent?.name || messageData?.manager?.name || logEntry?.agent?.name || 'N/A',
-              id: messageData?.agent?.id || 'N/A'
-          },
-          rule: {
-              level: String(ruleData?.level || '0'),
-              description: ruleData?.description || 'No description',
-              id: ruleData?.id || 'N/A',
-              groups: ruleData?.groups || [],
-              hipaa: ruleData?.hipaa || [],
-              pci_dss: ruleData?.pci_dss || [],
-              gdpr: ruleData?.gdpr || [],
-              nist_800_53: ruleData?.nist_800_53 || [],
-              mitre: ruleData?.mitre || {
-                  id: [],
-                  tactic: [],
-                  technique: []
-              },
-              tsc: ruleData?.tsc || [],
-              gpg13: ruleData?.gpg13 || []
-          },
-          syscheck: {
-            path: messageData?.syscheck?.path || logEntry?.syscheck?.path || logEntry?.rawLog?.syscheck?.path || 'N/A',
-            mode: messageData?.syscheck?.mode || logEntry?.syscheck?.mode || logEntry?.rawLog?.syscheck?.mode || 'N/A',
-            event: messageData?.syscheck?.event || logEntry?.syscheck?.event || logEntry?.rawLog?.syscheck?.event || 'N/A',
-            size_after: messageData?.syscheck?.size_after || logEntry?.syscheck?.size_after || logEntry?.rawLog?.syscheck?.size_after || 'N/A',
-            size_before: messageData?.syscheck?.size_before || logEntry?.syscheck?.size_before || logEntry?.rawLog?.syscheck?.size_before || 'N/A',
-            md5_after: messageData?.syscheck?.md5_after || logEntry?.syscheck?.md5_after || logEntry?.rawLog?.syscheck?.md5_after || 'N/A',
-            md5_before: messageData?.syscheck?.md5_before || logEntry?.syscheck?.md5_before || logEntry?.rawLog?.syscheck?.md5_before || 'N/A',
-            sha1_after: messageData?.syscheck?.sha1_after || logEntry?.syscheck?.sha1_after || logEntry?.rawLog?.syscheck?.sha1_after || 'N/A',
-            sha1_before: messageData?.syscheck?.sha1_before || logEntry?.syscheck?.sha1_before || logEntry?.rawLog?.syscheck?.sha1_before || 'N/A',
-            mtime_after: messageData?.syscheck?.mtime_after || logEntry?.syscheck?.mtime_after || logEntry?.rawLog?.syscheck?.mtime_after || 'N/A',
-            mtime_before: messageData?.syscheck?.mtime_before || logEntry?.syscheck?.mtime_before || logEntry?.rawLog?.syscheck?.mtime_before || 'N/A',
-          },
-          location: messageData?.location || logEntry?.location || logEntry?.rawLog?.location || 'N/A',
-          network: {
-              srcIp: messageData?.data?.src_ip || dataField?.srcip || dataField?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
-              srcPort: messageData?.data?.src_port || 'N/A',
-              destIp: messageData?.data?.dest_ip || logEntry?.network?.destIp || 'N/A',
-              destPort: messageData?.data?.dest_port || 'N/A',
-              protocol: messageData?.data?.proto || logEntry?.network?.protocol || 'N/A',
-              flow: {
-                  pktsToServer: messageData?.data?.flow?.pkts_toserver || 'N/A',
-                  pktsToClient: messageData?.data?.flow?.pkts_toclient || 'N/A',
-                  bytesToServer: messageData?.data?.flow?.bytes_toserver || 'N/A',
-                  bytesToClient: messageData?.data?.flow?.bytes_toclient || 'N/A',
-                  state: messageData?.data?.flow?.state || 'N/A'
-              }
-          },
-          event: {
-              type: messageData?.data?.event_type || 'N/A',
-              interface: messageData?.data?.in_iface || 'N/A'
-          },
-          // Store all vulnerability info at the top level even though it's inside data
-          // This maintains compatibility with any code using these fields directly
-          vulnerability: {
-              cve: dataField?.vulnerability?.cve || 'N/A',
-              package: dataField?.vulnerability?.package || {
-                  name: 'N/A',
-                  version: 'N/A',
-                  architecture: 'N/A',
-                  condition: 'N/A'
-              },
-              severity: dataField?.vulnerability?.severity || 'N/A',
-              published: dataField?.vulnerability?.published || 'N/A',
-              updated: dataField?.vulnerability?.updated || 'N/A',
-              title: dataField?.vulnerability?.title || 'N/A',
-              cvss: dataField?.vulnerability?.cvss || {
-                  cvss3: { base_score: 'N/A' }
-              },
-              reference: dataField?.vulnerability?.reference || 'N/A',
-              rationale: dataField?.vulnerability?.rationale || 'N/A',
-              status: dataField?.vulnerability?.status || 'N/A'
-          },
+    // Extract rule data with compliance fields (same as your original code)
+    const ruleData = messageData?.rule || logEntry?.rule || {};
 
-          traffic: {
-            action: dataField?.action || 'N/A',
-            srcCountry: dataField?.srccountry || 'N/A',
-            dstCountry: dataField?.dstcountry || 'N/A',
-            appcat: dataField?.appcat || 'N/A',
-            app: dataField?.app || 'N/A',
-            appid: dataField?.appid || 'N/A',
-            appRisk: dataField?.apprisk || 'N/A',
-            direction: dataField?.direction || 'N/A',
-            service: dataField?.service || 'N/A',
-            devName: dataField?.devname || 'N/A',
-            policyId: dataField?.policyid || 'N/A',
-            msg: dataField?.msg || 'N/A',
-            eventType: dataField?.eventtype || 'N/A',
-            subType: dataField?.subtype || 'N/A'
-            },
-          // Store the complete data field
-          data: dataField,
-          rawData: messageData
-      };
+    // Get the data object - this is the one change we need
+    const dataField = messageData?.data || {};
+
+    // Keep the same structure as your original return, just add the data field and update references
+    return {
+      timestamp: messageData?.data?.timestamp ||
+        messageData?.timestamp ||
+        logEntry?.timestamp ||
+        logEntry?.rawLog?.timestamp,
+      agent: {
+        name: messageData?.agent?.name || messageData?.manager?.name || logEntry?.agent?.name || 'N/A',
+        id: messageData?.agent?.id || 'N/A'
+      },
+      rule: {
+        level: String(ruleData?.level || '0'),
+        description: ruleData?.description || 'No description',
+        id: ruleData?.id || 'N/A',
+        groups: ruleData?.groups || [],
+        hipaa: ruleData?.hipaa || [],
+        pci_dss: ruleData?.pci_dss || [],
+        gdpr: ruleData?.gdpr || [],
+        nist_800_53: ruleData?.nist_800_53 || [],
+        mitre: ruleData?.mitre || {
+          id: [],
+          tactic: [],
+          technique: []
+        },
+        tsc: ruleData?.tsc || [],
+        gpg13: ruleData?.gpg13 || []
+      },
+      syscheck: {
+        path: messageData?.syscheck?.path || logEntry?.syscheck?.path || logEntry?.rawLog?.syscheck?.path || 'N/A',
+        mode: messageData?.syscheck?.mode || logEntry?.syscheck?.mode || logEntry?.rawLog?.syscheck?.mode || 'N/A',
+        event: messageData?.syscheck?.event || logEntry?.syscheck?.event || logEntry?.rawLog?.syscheck?.event || 'N/A',
+        size_after: messageData?.syscheck?.size_after || logEntry?.syscheck?.size_after || logEntry?.rawLog?.syscheck?.size_after || 'N/A',
+        size_before: messageData?.syscheck?.size_before || logEntry?.syscheck?.size_before || logEntry?.rawLog?.syscheck?.size_before || 'N/A',
+        md5_after: messageData?.syscheck?.md5_after || logEntry?.syscheck?.md5_after || logEntry?.rawLog?.syscheck?.md5_after || 'N/A',
+        md5_before: messageData?.syscheck?.md5_before || logEntry?.syscheck?.md5_before || logEntry?.rawLog?.syscheck?.md5_before || 'N/A',
+        sha1_after: messageData?.syscheck?.sha1_after || logEntry?.syscheck?.sha1_after || logEntry?.rawLog?.syscheck?.sha1_after || 'N/A',
+        sha1_before: messageData?.syscheck?.sha1_before || logEntry?.syscheck?.sha1_before || logEntry?.rawLog?.syscheck?.sha1_before || 'N/A',
+        mtime_after: messageData?.syscheck?.mtime_after || logEntry?.syscheck?.mtime_after || logEntry?.rawLog?.syscheck?.mtime_after || 'N/A',
+        mtime_before: messageData?.syscheck?.mtime_before || logEntry?.syscheck?.mtime_before || logEntry?.rawLog?.syscheck?.mtime_before || 'N/A',
+      },
+      location: messageData?.location || logEntry?.location || logEntry?.rawLog?.location || 'N/A',
+      network: {
+        srcIp: messageData?.data?.src_ip || dataField?.srcip || dataField?.src_ip || logEntry?.network?.srcIp || logEntry?.source || 'N/A',
+        srcPort: messageData?.data?.src_port || 'N/A',
+        destIp: messageData?.data?.dest_ip || logEntry?.network?.destIp || 'N/A',
+        destPort: messageData?.data?.dest_port || 'N/A',
+        protocol: messageData?.data?.proto || logEntry?.network?.protocol || 'N/A',
+        flow: {
+          pktsToServer: messageData?.data?.flow?.pkts_toserver || 'N/A',
+          pktsToClient: messageData?.data?.flow?.pkts_toclient || 'N/A',
+          bytesToServer: messageData?.data?.flow?.bytes_toserver || 'N/A',
+          bytesToClient: messageData?.data?.flow?.bytes_toclient || 'N/A',
+          state: messageData?.data?.flow?.state || 'N/A'
+        }
+      },
+      event: {
+        type: messageData?.data?.event_type || 'N/A',
+        interface: messageData?.data?.in_iface || 'N/A'
+      },
+      // Store all vulnerability info at the top level even though it's inside data
+      // This maintains compatibility with any code using these fields directly
+      vulnerability: {
+        cve: dataField?.vulnerability?.cve || 'N/A',
+        package: dataField?.vulnerability?.package || {
+          name: 'N/A',
+          version: 'N/A',
+          architecture: 'N/A',
+          condition: 'N/A'
+        },
+        severity: dataField?.vulnerability?.severity || 'N/A',
+        published: dataField?.vulnerability?.published || 'N/A',
+        updated: dataField?.vulnerability?.updated || 'N/A',
+        title: dataField?.vulnerability?.title || 'N/A',
+        cvss: dataField?.vulnerability?.cvss || {
+          cvss3: { base_score: 'N/A' }
+        },
+        reference: dataField?.vulnerability?.reference || 'N/A',
+        rationale: dataField?.vulnerability?.rationale || 'N/A',
+        status: dataField?.vulnerability?.status || 'N/A'
+      },
+
+      traffic: {
+        action: dataField?.action || 'N/A',
+        srcCountry: dataField?.srccountry || 'N/A',
+        dstCountry: dataField?.dstcountry || 'N/A',
+        appcat: dataField?.appcat || 'N/A',
+        app: dataField?.app || 'N/A',
+        appid: dataField?.appid || 'N/A',
+        appRisk: dataField?.apprisk || 'N/A',
+        direction: dataField?.direction || 'N/A',
+        service: dataField?.service || 'N/A',
+        devName: dataField?.devname || 'N/A',
+        policyId: dataField?.policyid || 'N/A',
+        msg: dataField?.msg || 'N/A',
+        eventType: dataField?.eventtype || 'N/A',
+        subType: dataField?.subtype || 'N/A'
+      },
+      // Store the complete data field
+      data: dataField,
+      rawData: messageData
+    };
   } catch (error) {
-      console.error('Error parsing log message:', error);
-      return {
-          timestamp: logEntry?.timestamp || new Date().toISOString(),
-          agent: { name: 'Parse Error', id: 'N/A' },
-          rule: {
-              level: '0',
-              description: 'Error parsing log data',
-              id: 'N/A',
-              groups: [],
-              hipaa: [],
-              pci_dss: [],
-              gdpr: [],
-              nist_800_53: [],
-              mitre: { id: [], tactic: [], technique: [] },
-              tsc: [],
-              gpg13: []
-          },
-          network: {
-              srcIp: 'N/A', srcPort: 'N/A', destIp: 'N/A', destPort: 'N/A', protocol: 'N/A',
-              flow: { pktsToServer: 'N/A', pktsToClient: 'N/A', bytesToServer: 'N/A', bytesToClient: 'N/A', state: 'N/A' }
-          },
-          event: { type: 'N/A', interface: 'N/A' },
-          vulnerability: {
-              cve: 'N/A',
-              package: { name: 'N/A', version: 'N/A', architecture: 'N/A', condition: 'N/A' },
-              severity: 'N/A',
-              published: 'N/A',
-              updated: 'N/A',
-              title: 'N/A',
-              cvss: { cvss3: { base_score: 'N/A' } },
-              reference: 'N/A',
-              rationale: 'N/A',
-              status: 'N/A'
-          },
-          traffic: {
-            action: 'N/A',
-            srcCountry: 'N/A',
-            dstCountry: 'N/A',
-            appcat: 'N/A',
-            app: 'N/A',
-            appid: 'N/A',
-            appRisk: 'N/A',
-            direction: 'N/A',
-            service: 'N/A',
-            devName: 'N/A',
-            policyId: 'N/A',
-            msg: 'N/A',
-            eventType: 'N/A',
-            subType: 'N/A'
-          },
-          data: {},
-          rawData: logEntry
-      };
+    console.error('Error parsing log message:', error);
+    return {
+      timestamp: logEntry?.timestamp || new Date().toISOString(),
+      agent: { name: 'Parse Error', id: 'N/A' },
+      rule: {
+        level: '0',
+        description: 'Error parsing log data',
+        id: 'N/A',
+        groups: [],
+        hipaa: [],
+        pci_dss: [],
+        gdpr: [],
+        nist_800_53: [],
+        mitre: { id: [], tactic: [], technique: [] },
+        tsc: [],
+        gpg13: []
+      },
+      network: {
+        srcIp: 'N/A', srcPort: 'N/A', destIp: 'N/A', destPort: 'N/A', protocol: 'N/A',
+        flow: { pktsToServer: 'N/A', pktsToClient: 'N/A', bytesToServer: 'N/A', bytesToClient: 'N/A', state: 'N/A' }
+      },
+      event: { type: 'N/A', interface: 'N/A' },
+      vulnerability: {
+        cve: 'N/A',
+        package: { name: 'N/A', version: 'N/A', architecture: 'N/A', condition: 'N/A' },severity: 'N/A',published: 'N/A',updated: 'N/A',title: 'N/A',cvss: { cvss3: { base_score: 'N/A' } },reference: 'N/A',rationale: 'N/A',status: 'N/A'
+      },
+      traffic: {action: 'N/A',srcCountry: 'N/A',dstCountry: 'N/A',appcat: 'N/A',app: 'N/A',appid: 'N/A',appRisk: 'N/A',direction: 'N/A',service: 'N/A',devName: 'N/A',policyId: 'N/A',msg: 'N/A',eventType: 'N/A',subType: 'N/A'
+      },
+      data: {},
+      rawData: logEntry
+    };
   }
 };
 
@@ -218,7 +182,33 @@ export const parseLogMessage = (logEntry) => {
 export const StructuredLogView = ({ data }) => {
   const [tabValue, setTabValue] = useState(0);
   const theme = useTheme();
-  
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const textAreaRef = useRef(null);
+
+  useEffect(() => {
+    // Check if we're in a browser environment with clipboard access
+    const hasClipboardAccess = typeof navigator !== 'undefined' &&
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === 'function';
+
+    console.log("Clipboard API available:", hasClipboardAccess);
+
+    // Check if execCommand is available as fallback
+    const hasExecCommand = typeof document !== 'undefined' &&
+      typeof document.execCommand === 'function';
+
+    console.log("execCommand available:", hasExecCommand);
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (textAreaRef.current) {
+        document.body.removeChild(textAreaRef.current);
+      }
+    };
+  }, []);
+
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
@@ -233,22 +223,41 @@ export const StructuredLogView = ({ data }) => {
     );
   }
 
+  
+  // Improved copyToClipboard function
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
+    try {
+      // Create a visible but out-of-way textarea if it doesn't exist yet
+      if (!textAreaRef.current) {
+        const textarea = document.createElement('textarea');
+        textarea.style.position = 'fixed';
+        textarea.style.right = '-9999px'; // Position off-screen
+        textarea.style.top = '0';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textAreaRef.current = textarea;
+      }
+
+      // Set value and select
+      textAreaRef.current.value = text;
+      textAreaRef.current.focus();
+      textAreaRef.current.select();
+
+      // Execute copy command
+      const successful = document.execCommand('copy');
+
+      if (successful) {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 3000);
+      } else {
+        console.error('Copy command failed');
+      }
+    } catch (err) {
+      console.error('Error during copy operation:', err);
+    }
   };
 
-  const renderValue = (value) => {
-    if (value === null || value === undefined) return 'N/A';
-    if (Array.isArray(value)) return value.join(', ');
-    if (typeof value === 'object') {
-      try {
-        return JSON.stringify(value, null, 2);
-      } catch (e) {
-        return 'Complex Object';
-      }
-    }
-    return String(value);
-  };
+
 
   // Get severity color based on rule level
   const getSeverityColor = (level) => {
@@ -362,7 +371,7 @@ export const StructuredLogView = ({ data }) => {
   // Render network flow details in a structured grid
   const renderNetworkFlow = () => {
     if (!data.network.flow) return null;
-    
+
     return (
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle2" gutterBottom>
@@ -406,22 +415,22 @@ export const StructuredLogView = ({ data }) => {
 
   const renderSyscheckDetails = () => {
     if (!data.syscheck || (!data.syscheck.path && !data.syscheck.event)) return null;
-    
+
     const eventColorMap = {
       added: '#4caf50',
       modified: '#2196f3',
       deleted: '#f44336'
     };
-    
+
     const eventColor = eventColorMap[data.syscheck.event?.toLowerCase()] || '#9e9e9e';
-    
+
     return (
       <Box sx={{ mb: 3 }}>
         <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
           <SecurityIcon sx={{ mr: 1 }} />
           File Integrity Monitoring Details
         </Typography>
-        
+
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
             <Paper variant="outlined" sx={{ p: 2 }}>
@@ -429,14 +438,14 @@ export const StructuredLogView = ({ data }) => {
               <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>{data.syscheck.path}</Typography>
             </Paper>
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Typography variant="caption" color="text.secondary">Event Type</Typography>
               <Box sx={{ mt: 1 }}>
-                <Chip 
+                <Chip
                   label={data.syscheck.event}
-                  sx={{ 
+                  sx={{
                     bgcolor: `${eventColor}15`,
                     color: eventColor,
                     fontWeight: 'bold'
@@ -445,7 +454,7 @@ export const StructuredLogView = ({ data }) => {
               </Box>
             </Paper>
           </Grid>
-          
+
           {data.syscheck.mode && (
             <Grid item xs={12} md={6}>
               <Paper variant="outlined" sx={{ p: 2 }}>
@@ -454,7 +463,7 @@ export const StructuredLogView = ({ data }) => {
               </Paper>
             </Grid>
           )}
-          
+
           {data.syscheck.size_after && (
             <Grid item xs={12} md={6}>
               <Paper variant="outlined" sx={{ p: 2 }}>
@@ -463,7 +472,7 @@ export const StructuredLogView = ({ data }) => {
               </Paper>
             </Grid>
           )}
-          
+
           {data.syscheck.md5_after && (
             <Grid item xs={12}>
               <Paper variant="outlined" sx={{ p: 2 }}>
@@ -472,7 +481,7 @@ export const StructuredLogView = ({ data }) => {
               </Paper>
             </Grid>
           )}
-          
+
           {data.syscheck.sha1_after && (
             <Grid item xs={12}>
               <Paper variant="outlined" sx={{ p: 2 }}>
@@ -481,7 +490,7 @@ export const StructuredLogView = ({ data }) => {
               </Paper>
             </Grid>
           )}
-          
+
           {data.syscheck.mtime_after && (
             <Grid item xs={12} md={6}>
               <Paper variant="outlined" sx={{ p: 2 }}>
@@ -494,7 +503,7 @@ export const StructuredLogView = ({ data }) => {
       </Box>
     );
   };
-  
+
   // Format timestamp to be more readable
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return 'N/A';
@@ -519,10 +528,10 @@ export const StructuredLogView = ({ data }) => {
             </Typography>
           </Grid>
           <Grid item xs={12} md={4} sx={{ textAlign: { xs: 'left', md: 'right' } }}>
-            <Chip 
-              icon={<WarningIcon />} 
+            <Chip
+              icon={<WarningIcon />}
               label={`Level ${data.rule.level} - ${getSeverityText(data.rule.level)}`}
-              sx={{ 
+              sx={{
                 bgcolor: `${getSeverityColor(data.rule.level)}15`,
                 color: getSeverityColor(data.rule.level),
                 fontWeight: 'bold',
@@ -534,14 +543,14 @@ export const StructuredLogView = ({ data }) => {
       </Paper>
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-      <Tabs value={tabValue} onChange={handleTabChange} aria-label="log details tabs" variant="scrollable" scrollButtons="auto">
-        <Tab icon={<SecurityIcon />} iconPosition="start" label="Rule Details" />
-        <Tab icon={<DnsIcon />} iconPosition="start" label="Network" />
-        <Tab icon={<EventIcon />} iconPosition="start" label="Event Info" />
-        <Tab icon={<ShieldIcon />} iconPosition="start" label="Syscheck" />
-        <Tab icon={<LockIcon />} iconPosition="start" label="Compliance" />
-        <Tab icon={<CodeIcon />} iconPosition="start" label="Raw Data" />
-      </Tabs>
+        <Tabs value={tabValue} onChange={handleTabChange} aria-label="log details tabs" variant="scrollable" scrollButtons="auto">
+          <Tab icon={<SecurityIcon />} iconPosition="start" label="Rule Details" />
+          <Tab icon={<DnsIcon />} iconPosition="start" label="Network" />
+          <Tab icon={<EventIcon />} iconPosition="start" label="Event Info" />
+          <Tab icon={<ShieldIcon />} iconPosition="start" label="Syscheck" />
+          <Tab icon={<LockIcon />} iconPosition="start" label="Compliance" />
+          <Tab icon={<CodeIcon />} iconPosition="start" label="Raw Data" />
+        </Tabs>
       </Box>
 
       {/* Rule Details Tab */}
@@ -626,9 +635,9 @@ export const StructuredLogView = ({ data }) => {
                 <Grid item xs={12}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="subtitle2" gutterBottom>Protocol</Typography>
-                  <Chip 
-                    label={data.network.protocol} 
-                    size="small" 
+                  <Chip
+                    label={data.network.protocol}
+                    size="small"
                     sx={{ bgcolor: '#e3f2fd', color: '#1976d2' }}
                   />
                 </Grid>
@@ -708,27 +717,47 @@ export const StructuredLogView = ({ data }) => {
                   Raw Data
                 </Typography>
                 <Tooltip title="Copy raw data">
-                  <IconButton 
-                    size="small" 
-                    onClick={() => copyToClipboard(JSON.stringify(data.rawData, null, 2))}
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      try {
+                        // First try to create a string version of the data
+                        const dataStr = JSON.stringify(data.rawData, null, 2);
+                        copyToClipboard(dataStr);
+                      } catch (error) {
+                        console.error("Error stringifying data:", error);
+                        // If that fails, try a simpler approach
+                        copyToClipboard(Object.keys(data.rawData).join(', '));
+                      }
+                    }}
                     sx={{ bgcolor: '#f5f5f5' }}
                   >
                     <ContentCopyIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
               </Box>
-              <Box 
-                component="pre" 
-                sx={{ 
-                  bgcolor: '#f8f9fa', 
-                  p: 2, 
-                  borderRadius: 1, 
+              <Box
+                component="pre"
+                sx={{
+                  bgcolor: '#f8f9fa',
+                  p: 2,
+                  borderRadius: 1,
                   overflow: 'auto',
                   maxHeight: '400px',
                   fontSize: '0.875rem'
                 }}
               >
                 {JSON.stringify(data.rawData, null, 2)}
+                <Snackbar
+                  open={copySuccess}
+                  autoHideDuration={3000}
+                  onClose={() => setCopySuccess(false)}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                >
+                  <Alert onClose={() => setCopySuccess(false)} severity="success" sx={{ width: '100%' }}>
+                    Copied to clipboard!
+                  </Alert>
+                </Snackbar>
               </Box>
             </Paper>
           </Box>

@@ -6,6 +6,7 @@ const cleanupOldLogs = require('./utils/cleanupLogs');
 const removeDuplicateLogs = require('./utils/dedupLogs');
 const normalizeLogLevels = require('./utils/normalizeLogLevels');
 
+
 if (cluster.isMaster) {
   console.log(`Master ${process.pid} is running`);
 
@@ -108,6 +109,7 @@ if (cluster.isMaster) {
   const logsRoutes = require('./routes/Logs');
   const authRoutes = require('./routes/auth');
   const newsticker = require('./routes/news');
+  const soarRoutes = require('./routes/soarRoutes');
 
   const app = express();
 
@@ -132,7 +134,8 @@ if (cluster.isMaster) {
           'http://192.168.77.78:3000',
           'http://192.168.77.78:5000',
           'http://103.76.143.84:3000',
-          'http://103.76.143.84:5000'
+          'http://103.76.143.84:5000',
+          'https://192.168.1.70:3443'
         ],
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -178,14 +181,15 @@ if (cluster.isMaster) {
       app.use('/api/auth', authRoutes);
       app.use('/api/logs', logsRoutes);
       app.use('/api/news', newsticker);
+      app.use('/api/soar', soarRoutes);
 
       // Test endpoint
       app.get('/api/test', (req, res) => {
         res.json({ 
           message: 'API is working',
           worker: process.pid,
-          server: '192.168.77.78',
-          mongodb: '192.168.77.78'
+          server: '192.168.1.67',
+          mongodb: '192.168.1.71'
         });
       });
 

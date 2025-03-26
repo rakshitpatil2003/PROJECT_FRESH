@@ -40,6 +40,7 @@ import GppBadIcon from '@mui/icons-material/GppBad';
 import logoImage from '../assets/images/vg-logo.png';
 import axios from 'axios';
 import CircularProgress from '@mui/material/CircularProgress';
+import SecurityIcon from '@mui/icons-material/Security'; 
 
 const drawerWidth = 240;
 
@@ -104,6 +105,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
     { text: 'Major Logs', icon: <ErrorIcon />, path: '/major-logs' },
     { text: 'Session Logs', icon: <SupervisorAccountIcon />, path: '/session-logs' },
     { text: 'FIM Logs', icon: <SupervisorAccountIcon/>, path: '/fim'},
+    { text: 'SOAR Playbook', icon: <SecurityIcon/>, path: '/soar-playbook'},
   ];
 
   const securityPolicyItems = [

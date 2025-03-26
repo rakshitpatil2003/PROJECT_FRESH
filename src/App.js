@@ -28,6 +28,7 @@ import TSCDashboard from './components/TSCDashboard';
 import NewsTicker from './components/NewsTicker';
 import UserDetails from './pages/UserDetails';
 import FIM from './pages/FIM';
+import SOARPlaybook from './pages/SOARPlaybook';
 
 const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   const token = localStorage.getItem('token');
@@ -137,22 +138,22 @@ const App = () => {
   };
 
   return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Router>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                localStorage.getItem('token') ? (
-                  <Navigate to="/dashboard" />
-                ) : (
-                  <Navigate to="/login" />
-                )
-              }
-            />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              localStorage.getItem('token') ? (
+                <Navigate to="/dashboard" />
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
 
-            <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Login />} />
 
           {/* Protected Routes */}
           <Route
@@ -237,7 +238,7 @@ const App = () => {
               </ProtectedLayout>
             }
           />
-          
+
           <Route
             path="/pcidss-dashboard"
             element={
@@ -245,7 +246,7 @@ const App = () => {
                 <PCIDSSDashboard />
               </ProtectedLayout>
             }
-          /> 
+          />
           <Route
             path="/nist-dashboard"
             element={
@@ -261,7 +262,7 @@ const App = () => {
                 <TSCDashboard />
               </ProtectedLayout>
             }
-          /> 
+          />
           <Route
             path="/mitre-attack"
             element={
@@ -285,7 +286,15 @@ const App = () => {
                 <VulnerabilityDetection />
               </ProtectedLayout>
             }
-          /> 
+          />
+          <Route
+            path="/soar-playbook"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <SOARPlaybook />
+              </ProtectedLayout>
+            }
+          />
           <Route
             path="/profile"
             element={
@@ -293,7 +302,7 @@ const App = () => {
                 <UserDetails />
               </ProtectedLayout>
             }
-          /> 
+          />
           {/* Footer Pages Routes */}
           <Route
             path="/terms"
@@ -328,10 +337,10 @@ const App = () => {
             }
           />
 
-            <Route path="*" element={<Navigate to="/login" />} />
-          </Routes>
-        </Router>
-      </ThemeProvider>
+          <Route path="*" element={<Navigate to="/login" />} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
 };
 
