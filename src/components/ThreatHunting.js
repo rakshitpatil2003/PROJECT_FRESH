@@ -631,11 +631,11 @@ const ThreatHunting = () => {
       const chart = am4core.create("chartdiv", am4maps.MapChart);
       chartInstanceRef.current = chart;
   
-      // Set map definition
-      chart.geodata = am4geodata_worldLow;
-  
-      // Set projection
-      chart.projection = new am4maps.projections.Miller();
+      // Set initial zoom level and center position
+    chart.homeZoomLevel = 1.8;  // Increased initial zoom
+    chart.homeGeoPoint = { longitude: 20, latitude: 30 };
+    chart.geodata = am4geodata_worldLow;
+    chart.projection = new am4maps.projections.Miller();
   
       // Create map polygon series
       const polygonSeries = chart.series.push(new am4maps.MapPolygonSeries());
@@ -860,7 +860,8 @@ const ThreatHunting = () => {
     }, [connectionData]);
   
     return (
-      <Box id="chartdiv" style={{ width: "100%", height: "600px" }}></Box>
+      <Box id="chartdiv" style={{ width: "100%", height: "600px",position: "relative",
+        backgroundColor: "#454545" }}></Box>
     );
   };
 

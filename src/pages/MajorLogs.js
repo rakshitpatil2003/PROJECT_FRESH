@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -19,16 +19,62 @@ import {
   DialogContent,
   IconButton,
   Chip,
-  Tooltip
+  Grid,
+  Tab,
+  Tabs,
+  TablePagination,
+  Skeleton
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import WarningIcon from '@mui/icons-material/Warning';
 import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
+import { StructuredLogView } from '../utils/normalizeLogs';
 import { API_URL } from '../config';
-import SessionLogView from '../components/SessionLogView';
 import { useTheme } from '@mui/material/styles';
+
+// ECharts Imports
+import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts/core';
+import {
+  LineChart,
+  PieChart,
+  BarChart
+} from 'echarts/charts';
+import {
+  GridComponent,
+  TooltipComponent,
+  TitleComponent,
+  LegendComponent
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+
+// Register ECharts components
+echarts.use([
+  LineChart,
+  PieChart,
+  BarChart,
+  GridComponent,
+  TooltipComponent,
+  TitleComponent,
+  LegendComponent,
+  CanvasRenderer
+]);
+
+// Custom color palette with more vibrant and distinct colors
+const COLOR_PALETTE = [
+  '#3366FF',   // Deep Blue
+  '#FF6B6B',   // Vibrant Red
+  '#4ECDC4',   // Teal
+  '#FFA726',   // Bright Orange
+  '#9C27B0',   // Purple
+  '#2196F3',   // Bright Blue
+  '#4CAF50',   // Green
+  '#FF5722',   // Deep Orange
+  '#607D8B',   // Blue Gray
+  '#795548'    // Brown
+];
 
 const MajorLogs = () => {
   const [logs, setLogs] = useState([]);
@@ -36,22 +82,25 @@ const MajorLogs = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const theme = useTheme();
 
   const fetchMajorLogs = useCallback(async (search) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication token not found');
       }
-  
+
       const response = await axios.get(
         `${API_URL}/api/logs/major${search ? `?search=${encodeURIComponent(search)}` : ''}`,
         {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
@@ -59,33 +108,24 @@ const MajorLogs = () => {
           withCredentials: true
         }
       );
-  
+
       if (!Array.isArray(response.data)) {
         throw new Error('Invalid response format from server');
       }
-  
+
       // Enhanced validation to ensure we catch all logs >= 12
       const validLogs = response.data.filter(log => {
         const ruleLevel = parseInt(log.rule?.level);
-        const isValidLevel = !isNaN(ruleLevel) && ruleLevel >= 12;
-        if (!isValidLevel) {
-          console.warn(`Filtered out log with invalid level: ${log.rule?.level}`);
-        }
-        return isValidLevel;
+        return !isNaN(ruleLevel) && ruleLevel >= 12;
       });
-  
-      // Sort by level (descending) and then by timestamp
-      const sortedLogs = validLogs.sort((a, b) => {
-        // const levelA = parseInt(a.rule?.level) || 0;
-        // const levelB = parseInt(b.rule?.level) || 0;
-        // if (levelB !== levelA) {
-        //   return levelB - levelA;
-        // }
-        return new Date(b.timestamp) - new Date(a.timestamp);
-      });
-  
+
+      // Sort by timestamp in DESCENDING order (latest first)
+      const sortedLogs = validLogs.sort((a, b) =>
+        new Date(b.timestamp) - new Date(a.timestamp)
+      );
+
       setLogs(sortedLogs);
-      
+
     } catch (error) {
       console.error('Error fetching major logs:', error);
       setError(error.response?.data?.message || error.message || 'Failed to fetch major logs');
@@ -95,14 +135,361 @@ const MajorLogs = () => {
     }
   }, []);
 
-  useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      fetchMajorLogs(searchTerm);
-    }, 500);
+  const getRuleLevelSeverity = (level) => {
+    const numLevel = parseInt(level);
+    if (numLevel >= 15) return 'Critical';
+    if (numLevel >= 13) return 'High';
+    if (numLevel >= 12) return 'Major';
+    return 'Normal';
+  };
 
-    return () => clearTimeout(debounceTimer);
-  }, [searchTerm, fetchMajorLogs]);
+  // Memoized data processing for visualizations
+  const visualizationData = useMemo(() => {
+    if (!logs.length) return {};
 
+    // Timeline Data - sorted in ascending order (oldest first)
+    const timelineData = logs.reduce((acc, log) => {
+      const date = new Date(log.timestamp).toLocaleDateString();
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Sort timeline keys in ascending order (oldest to newest)
+    const sortedTimelineKeys = Object.keys(timelineData).sort((a, b) => {
+      return new Date(a) - new Date(b);
+    });
+    const orderedTimelineData = {};
+    sortedTimelineKeys.forEach(key => {
+      orderedTimelineData[key] = timelineData[key];
+    });
+
+    // Agent Distribution with Top 10
+    const agentDistribution = logs.reduce((acc, log) => {
+      const agent = log.agent?.name || 'Unknown';
+      acc[agent] = (acc[agent] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Rule Level Distribution
+    const ruleLevelDistribution = logs.reduce((acc, log) => {
+      const level = log.rule?.level?.toString() || 'Unknown';
+      acc[level] = (acc[level] || 0) + 1;
+      return acc;
+    }, {});
+
+    // MITRE Techniques - Enhanced processing
+    const mitreTechniques = logs.reduce((acc, log) => {
+      const mitre = log.rule?.mitre || log.rawLog?.message?.rule?.mitre || {};
+      let techniques = [];
+
+      // Handle both array and string cases
+      if (Array.isArray(mitre.technique)) {
+        techniques = mitre.technique;
+      } else if (mitre.technique) {
+        techniques = [mitre.technique];
+      }
+
+      // Also check rawLog.message if needed
+      if (techniques.length === 0 && log.rawLog?.message?.rule?.mitre?.technique) {
+        if (Array.isArray(log.rawLog.message.rule.mitre.technique)) {
+          techniques = log.rawLog.message.rule.mitre.technique;
+        } else {
+          techniques = [log.rawLog.message.rule.mitre.technique];
+        }
+      }
+
+      techniques.forEach(tech => {
+        if (tech) {
+          const cleanTech = tech.split('(')[0].trim();
+          acc[cleanTech] = (acc[cleanTech] || 0) + 1;
+        }
+      });
+      return acc;
+    }, {});
+
+
+    // Severity Distribution
+    const severityDistribution = logs.reduce((acc, log) => {
+      const severity = getRuleLevelSeverity(log.rule?.level);
+      acc[severity] = (acc[severity] || 0) + 1;
+      return acc;
+    }, {});
+
+    // MITRE Tactics - Enhanced processing
+    const mitreTactics = logs.reduce((acc, log) => {
+      const mitre = log.rule?.mitre || log.rawLog?.message?.rule?.mitre || {};
+      let tactics = [];
+
+      if (Array.isArray(mitre.tactic)) {
+        tactics = mitre.tactic;
+      } else if (mitre.tactic) {
+        tactics = [mitre.tactic];
+      }
+
+      if (tactics.length === 0 && log.rawLog?.message?.rule?.mitre?.tactic) {
+        if (Array.isArray(log.rawLog.message.rule.mitre.tactic)) {
+          tactics = log.rawLog.message.rule.mitre.tactic;
+        } else {
+          tactics = [log.rawLog.message.rule.mitre.tactic];
+        }
+      }
+
+      tactics.forEach(tactic => {
+        if (tactic) {
+          const cleanTactic = tactic.split('(')[0].trim();
+          acc[cleanTactic] = (acc[cleanTactic] || 0) + 1;
+        }
+      });
+      return acc;
+    }, {});
+
+
+    // Rule Groups - Enhanced processing
+    const ruleGroups = logs.reduce((acc, log) => {
+      const groups = log.rule?.groups || log.rawLog?.message?.rule?.groups || [];
+      let groupArray = [];
+
+      if (Array.isArray(groups)) {
+        groupArray = groups;
+      } else if (groups) {
+        groupArray = [groups];
+      }
+
+      if (groupArray.length === 0 && log.rawLog?.message?.rule?.groups) {
+        if (Array.isArray(log.rawLog.message.rule.groups)) {
+          groupArray = log.rawLog.message.rule.groups;
+        } else {
+          groupArray = [log.rawLog.message.rule.groups];
+        }
+      }
+
+      groupArray.forEach(group => {
+        if (group) {
+          acc[group] = (acc[group] || 0) + 1;
+        }
+      });
+      return acc;
+    }, {});
+
+    return {
+      timelineData: orderedTimelineData, // Now ordered oldest to newest
+      agentDistribution,
+      ruleLevelDistribution,
+      mitreTechniques,
+      mitreTactics,
+      ruleGroups,
+      severityDistribution,
+      totalLogs: logs.length
+    };
+  }, [logs]);
+
+  // Update the getTimelineChartOption to ensure proper ordering
+  const getTimelineChartOption = (data) => {
+    const dates = Object.keys(data);
+    const values = Object.values(data);
+
+    return {
+      title: {
+        text: 'Alert Timeline',
+        left: 'center',
+        textStyle: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      tooltip: { trigger: 'axis' },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+          rotate: 45
+        },
+        // This ensures the axis shows in the order we provided (oldest to newest)
+        inverse: false
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      series: [{
+        data: values,
+        type: 'line',
+        smooth: true,
+        itemStyle: { color: COLOR_PALETTE[1] }
+      }],
+      backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+    };
+  };
+
+  const getPieChartOption = (data, title) => ({
+    title: {
+      text: title,
+      left: 'center',
+      textStyle: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie',
+      radius: '60%',
+      data: Object.entries(data)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)  // Top 10 entries
+        .map(([name, value], index) => ({
+          name,
+          value,
+          itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
+        })),
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      }
+    }],
+    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+  });
+
+  const getBarChartOption = (data, title) => ({
+    title: {
+      text: title,
+      left: 'center',
+      textStyle: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: Object.keys(data),
+      axisLabel: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+        rotate: 45
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    series: [{
+      data: Object.values(data),
+      type: 'bar',
+      itemStyle: {
+        color: (params) => COLOR_PALETTE[params.dataIndex % COLOR_PALETTE.length]
+      }
+    }],
+    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+  });
+
+  const getMitreChartOption = (data, title) => {
+    const entries = Object.entries(data)
+      .filter(([_, count]) => count > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    return {
+      title: {
+        text: title,
+        left: 'center',
+        textStyle: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      tooltip: { trigger: 'item' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: true,
+        itemStyle: { borderRadius: 10 },
+        data: entries.map(([name, value], index) => ({
+          name,
+          value,
+          itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
+        })),
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)'
+          }
+        },
+        label: {
+          formatter: '{b}: {c} ({d}%)'
+        }
+      }],
+      backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+    };
+  };
+
+  // Add this new function for horizontal bar chart with labels
+  const getHorizontalBarChartOption = (data, title) => {
+    // Sort data by value (descending) and take top 10
+    const sortedEntries = Object.entries(data)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const categories = sortedEntries.map(([name]) => name);
+    const values = sortedEntries.map(([_, value]) => value);
+
+    return {
+      title: {
+        text: title,
+        left: 'center',
+        textStyle: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'shadow'
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      yAxis: {
+        type: 'category',
+        data: categories,
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+          interval: 0
+        }
+      },
+      series: [{
+        name: title,
+        type: 'bar',
+        data: values,
+        itemStyle: {
+          color: (params) => COLOR_PALETTE[params.dataIndex % COLOR_PALETTE.length]
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c}'
+        }
+      }],
+      backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+    };
+  };
+
+  // Rest of the component remains the same as in the previous implementation...
+  // (Include all the previous methods like getRuleLevelColor, formatTimestamp, etc.)
   const getRuleLevelColor = (level) => {
     const numLevel = parseInt(level);
     if (numLevel >= 15) return '#d32f2f'; // Red
@@ -111,13 +498,7 @@ const MajorLogs = () => {
     return '#1976d2'; // Blue (default)
   };
 
-  const getRuleLevelSeverity = (level) => {
-    const numLevel = parseInt(level);
-    if (numLevel >= 15) return 'Critical';
-    if (numLevel >= 13) return 'High';
-    if (numLevel >= 12) return 'Major';
-    return 'Normal';
-  };
+
 
   const formatTimestamp = (timestamp) => {
     try {
@@ -135,14 +516,22 @@ const MajorLogs = () => {
     }
   };
 
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      fetchMajorLogs(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm, fetchMajorLogs]);
+
   if (loading && !logs.length) {
     return (
-      <Box 
-        p={4} 
-        display="flex" 
-        flexDirection="column" 
+      <Box
+        p={4}
+        display="flex"
+        flexDirection="column"
         alignItems="center"
-        justifyContent="center" 
+        justifyContent="center"
         minHeight="50vh"
       >
         <CircularProgress size={40} />
@@ -153,6 +542,7 @@ const MajorLogs = () => {
     );
   }
 
+  // Render method starts here...
   return (
     <Box p={4}>
       <Typography variant="h4" gutterBottom sx={{ color: '#d32f2f', mb: 3 }}>
@@ -162,134 +552,213 @@ const MajorLogs = () => {
         </Typography>
       </Typography>
 
-      <TextField
-        fullWidth
-        margin="normal"
-        variant="outlined"
-        placeholder="Search by agent name, description, rule level..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
+      <Tabs
+        value={activeTab}
+        onChange={(e, newValue) => setActiveTab(newValue)}
         sx={{ mb: 3 }}
-      />
+      >
+        <Tab label="Dashboard" />
+        <Tab label="Events" />
+      </Tabs>
 
-      {error && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }}
-          action={
-            <IconButton
-              aria-label="close"
-              color="inherit"
-              size="small"
-              onClick={() => setError(null)}
-            >
-              <CloseIcon fontSize="inherit" />
-            </IconButton>
-          }
-        >
-          {error}
-        </Alert>
+      {activeTab === 0 && (
+        <Grid container spacing={3}>
+          {/* Timeline Chart - now shows oldest on left, newest on right */}
+          <Grid item xs={12} md={6}>
+            {loading ? (
+              <Skeleton variant="rectangular" height={300} />
+            ) : (
+              <ReactECharts
+                option={getTimelineChartOption(visualizationData.timelineData || {})}
+                style={{ height: 300 }}
+              />
+            )}
+          </Grid>
+
+          {/* Rule Level Distribution - Changed to horizontal bar */}
+          <Grid item xs={12} md={6}>
+            {loading ? (
+              <Skeleton variant="rectangular" height={300} />
+            ) : (
+              <ReactECharts
+                option={getHorizontalBarChartOption(visualizationData.ruleLevelDistribution || {}, 'Rule Level Distribution')}
+                style={{ height: 300 }}
+              />
+            )}
+          </Grid>
+
+          {/* Agent Distribution */}
+          <Grid item xs={12} md={6}>
+            {loading ? (
+              <Skeleton variant="rectangular" height={300} />
+            ) : (
+              <ReactECharts
+                option={getBarChartOption(visualizationData.agentDistribution || {}, 'Agent Distribution')}
+                style={{ height: 300 }}
+              />
+            )}
+          </Grid>
+
+          {/* Severity Distribution */}
+          <Grid item xs={12} md={6}>
+            {loading ? (
+              <Skeleton variant="rectangular" height={300} />
+            ) : (
+              <ReactECharts
+                option={getPieChartOption(visualizationData.severityDistribution || {}, 'Severity Distribution')}
+                style={{ height: 300 }}
+              />
+            )}
+          </Grid>
+
+          {/* MITRE Tactics */}
+          <Grid item xs={12} md={6}>
+            {loading ? (
+              <Skeleton variant="rectangular" height={300} />
+            ) : (
+              <ReactECharts
+                option={getMitreChartOption(visualizationData.mitreTactics || {}, 'MITRE Tactics')}
+                style={{ height: 300 }}
+              />
+            )}
+          </Grid>
+
+          {/* MITRE Techniques */}
+          <Grid item xs={12} md={6}>
+            {loading ? (
+              <Skeleton variant="rectangular" height={300} />
+            ) : (
+              <ReactECharts
+                option={getMitreChartOption(visualizationData.mitreTechniques || {}, 'MITRE Techniques')}
+                style={{ height: 300 }}
+              />
+            )}
+          </Grid>
+
+
+
+
+          {/* Rule Groups */}
+          <Grid item xs={12} md={6}>
+            {loading ? (
+              <Skeleton variant="rectangular" height={300} />
+            ) : (
+              <ReactECharts
+                option={getMitreChartOption(visualizationData.ruleGroups || {}, 'Rule Groups')}
+                style={{ height: 300 }}
+              />
+            )}
+          </Grid>
+        </Grid>
       )}
 
-      <Alert 
-        severity={logs.length > 0 ? "warning" : "info"} 
-        sx={{ mb: 3 }}
-        icon={logs.length > 0 ? <WarningIcon /> : undefined}
-      >
-        {logs.length > 0 
-          ? `Found ${logs.length} major security logs that require attention`
-          : 'No major logs found for the specified criteria'}
-      </Alert>
+      {/* Rest of the component remains the same as in the previous implementation */}
+      {/* (Include the Events Tab and Log Details Dialog) */}
+      {activeTab === 1 && (
+        <Box>
+          <TextField
+            fullWidth
+            margin="normal"
+            variant="outlined"
+            placeholder="Search by agent name, description, rule level..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 3 }}
+          />
 
-      <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Timestamp</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Agent Name</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Rule Level</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Severity</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Description</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#ffebee' }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {logs.map((log) => {
-              const parsedLog = parseLogMessage(log);
-              return (
-                <TableRow 
-                  key={log.uniqueIdentifier || log._id} 
-                  hover
-                  sx={{
-                    '&:nth-of-type(odd)': {
-                      backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                    },
-                  }}
-                >
-                  <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
-                  <TableCell>{parsedLog.agent.name}</TableCell>
-                  <TableCell>
-                    <Typography sx={{ color: getRuleLevelColor(parsedLog.rule.level), fontWeight: 'bold' }}>
-                      {parsedLog.rule.level}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={getRuleLevelSeverity(parsedLog.rule.level)}
-                      sx={{ 
-                        backgroundColor: getRuleLevelColor(parsedLog.rule.level),
-                        color: 'white',
-                        fontWeight: 'bold'
-                      }}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title={parsedLog.rule.description}>
-                      <span>
-                        {parsedLog.rule.description.length > 100
-                          ? `${parsedLog.rule.description.substring(0, 100)}...`
-                          : parsedLog.rule.description}
-                      </span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      component="button"
-                      variant="body2"
-                      onClick={() => setSelectedLog(parsedLog)}
-                      sx={{ 
-                        textDecoration: 'none',
-                        '&:hover': {
-                          textDecoration: 'underline'
-                        }
-                      }}
-                    >
-                      View Details
-                    </Link>
-                  </TableCell>
+          <Alert
+            severity={logs.length > 0 ? "warning" : "info"}
+            sx={{ mb: 3 }}
+            icon={logs.length > 0 ? <WarningIcon /> : undefined}
+          >
+            {logs.length > 0
+              ? `Found ${logs.length} major security logs that require attention`
+              : 'No major logs found for the specified criteria'}
+          </Alert>
+
+          <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Timestamp</TableCell>
+                  <TableCell>Agent Name</TableCell>
+                  <TableCell>Rule Level</TableCell>
+                  <TableCell>Severity</TableCell>
+                  <TableCell>Description</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              </TableHead>
+              <TableBody>
+                {logs
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map((log) => {
+                    const parsedLog = parseLogMessage(log);
+                    return (
+                      <TableRow key={parsedLog.timestamp}>
+                        <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
+                        <TableCell>{parsedLog.agent.name}</TableCell>
+                        <TableCell>
+                          <Typography sx={{ color: getRuleLevelColor(parsedLog.rule.level), fontWeight: 'bold' }}>
+                            {parsedLog.rule.level}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={getRuleLevelSeverity(parsedLog.rule.level)}
+                            sx={{
+                              backgroundColor: getRuleLevelColor(parsedLog.rule.level),
+                              color: 'white',
+                              fontWeight: 'bold'
+                            }}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>{parsedLog.rule.description}</TableCell>
+                        <TableCell>
+                          <Link
+                            component="button"
+                            onClick={() => setSelectedLog(parsedLog)}
+                          >
+                            View Details
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[10, 25, 50]}
+            component="div"
+            count={logs.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={(e, newPage) => setPage(newPage)}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+          />
+        </Box>
+      )}
 
+      {/* Log Details Dialog */}
       <Dialog
         open={Boolean(selectedLog)}
         onClose={() => setSelectedLog(null)}
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle sx={{ 
-          backgroundColor: '#ffebee', 
+        <DialogTitle sx={{
+          backgroundColor: '#ffebee',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
@@ -304,7 +773,7 @@ const MajorLogs = () => {
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
-          <SessionLogView data={selectedLog} />
+          <StructuredLogView data={selectedLog} />
         </DialogContent>
       </Dialog>
     </Box>
