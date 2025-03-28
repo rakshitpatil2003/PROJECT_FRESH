@@ -188,7 +188,7 @@ if (cluster.isMaster) {
         res.json({ 
           message: 'API is working',
           worker: process.pid,
-          server: '192.168.1.67',
+          server: '192.168.1.151',
           mongodb: '192.168.1.71'
         });
       });

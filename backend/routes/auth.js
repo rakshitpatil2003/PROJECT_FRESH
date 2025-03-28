@@ -15,6 +15,8 @@ const users = [
     avatar: 'A',
     lastLogin: new Date().toISOString(),
     active: true,
+    plan: 'Platinum',
+    planExpiryDate: new Date(Date.now() + 20).toISOString(), // 30 days from now
     additionalInfo: {
       'Department': 'IT Security',
       'Location': 'HQ'
@@ -28,8 +30,10 @@ const users = [
     email: 'YDCC@example.com',
     role: 'Security Analyst',
     avatar: 'Y',
-    lastLogin: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
+    lastLogin: new Date().toISOString(),
     active: true,
+    plan: 'Basic',
+    planExpiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
     additionalInfo: {
       'Department': 'SOC',
       'Location': 'Yavatmal'
@@ -37,33 +41,7 @@ const users = [
   }
 ];
 
-// Mock request history data
-const requestHistory = [
-  {
-    id: 'req-001',
-    userId: 1,
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-    type: 'API Request',
-    description: 'Vulnerability scan initiated',
-    status: 'Completed'
-  },
-  {
-    id: 'req-002',
-    userId: 1,
-    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-    type: 'Report Generation',
-    description: 'Monthly security report',
-    status: 'Completed'
-  },
-  {
-    id: 'req-003',
-    userId: 2,
-    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-    type: 'API Request',
-    description: 'Network traffic analysis',
-    status: 'Completed'
-  }
-];
+
 
 // Mock tokens data
 const tokens = [
@@ -111,7 +89,9 @@ router.post('/login', (req, res) => {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
-      avatar: user.avatar
+      avatar: user.avatar,
+      plan: user.plan,  
+      planExpiryDate: user.planExpiryDate
     };
     
     // Generate a JWT token with user info
@@ -161,6 +141,8 @@ router.get('/profile', (req, res) => {
       avatar: user.avatar,
       lastLogin: user.lastLogin,
       active: user.active,
+      plan: user.plan,
+      planExpiryDate: user.planExpiryDate,
       additionalInfo: user.additionalInfo,
       tokens: userTokens
     };
