@@ -7,8 +7,7 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import ComplianceIcon from '@mui/icons-material/VerifiedUser';
 import axios from 'axios';
-import { parseLogMessage } from '../utils/normalizeLogs';
-import SessionLogView from '../components/SessionLogView';
+import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
 import { API_URL } from '../config';
 import { useTheme } from '@mui/material/styles';
 import Skeleton from '@mui/material/Skeleton';
@@ -351,7 +350,7 @@ const SessionLogs = () => {
                     </IconButton>
                 </DialogTitle>
                 <DialogContent>
-                    <SessionLogView data={selectedLog} />
+                    <StructuredLogView data={selectedLog} />
                 </DialogContent>
             </Dialog>
         </Box>
