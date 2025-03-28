@@ -138,7 +138,7 @@ if (cluster.isMaster) {
           'https://192.168.1.70:3443'
         ],
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
         allowedHeaders: ['Content-Type', 'Authorization', 'Accept','Cache-Control', 'X-Requested-With', 'Origin'],
         exposedHeaders: ['Authorization']
       };
@@ -188,7 +188,7 @@ if (cluster.isMaster) {
         res.json({ 
           message: 'API is working',
           worker: process.pid,
-          server: '192.168.1.67',
+          server: '192.168.1.151',
           mongodb: '192.168.1.71'
         });
       });

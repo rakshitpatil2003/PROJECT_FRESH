@@ -1,48 +1,61 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  Container, Card, CardHeader, CardContent, Grid, CircularProgress, 
-  Alert, Typography, Box, Chip, Table, TableBody, TableCell, 
-  TableContainer, TableHead, TableRow, Paper, Tabs, Tab
+import {
+  Container, Card, CardHeader, CardContent, Grid, CircularProgress,
+  Alert, Typography, Box, Chip, Button, Dialog, DialogTitle, DialogContent
 } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
 import { API_URL } from '../config';
+import { StructuredLogView } from '../utils/normalizeLogs';
 
 const UserDetails = () => {
   const [user, setUser] = useState(null);
-  const [requestHistory] = useState([]);
+  const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [tabValue, setTabValue] = useState(0);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+
+  const calculateRemainingDays = (expiryDate) => {
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const timeDiff = expiry.getTime() - today.getTime();
+    return Math.ceil(timeDiff / (1000 * 3600 * 24));
+  };
+
+  const fetchUserTickets = async (token) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/auth/user-tickets`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTickets(response.data);
+    } catch (err) {
+      console.error('Failed to fetch tickets:', err);
+    }
+  };
 
   useEffect(() => {
     const fetchUserDetails = async () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
-        
+
         if (!token) {
           setError('No authentication token found. Please login again.');
           setLoading(false);
           return;
         }
-        
+
         // Fetch user profile
         const profileResponse = await axios.get(`${API_URL}/api/auth/profile`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
-        
-        setUser(profileResponse.data);
 
-        // Fetch request/token history
-        // const historyResponse = await axios.get(`${API_URL}/api/requests/history`, {
-        //   headers: {
-        //     Authorization: `Bearer ${token}`
-        //   }
-        // });
-        
-        // setRequestHistory(historyResponse.data || []);
+        setUser(profileResponse.data);
+        // Fetch user tickets
+        await fetchUserTickets(token);
+
         setError(null);
       } catch (err) {
         setError('Failed to fetch user data. Please try again later.');
@@ -51,9 +64,87 @@ const UserDetails = () => {
         setLoading(false);
       }
     };
-  
+
     fetchUserDetails();
   }, []);
+
+  // Update ticket status (for admin)
+  const handleUpdateTicketStatus = async (ticketId, status) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.patch(
+        `${API_URL}/api/auth/update-ticket/${ticketId}`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Update tickets in state
+      setTickets(prevTickets =>
+        prevTickets.map(ticket =>
+          ticket.id === ticketId ? response.data : ticket
+        )
+      );
+    } catch (err) {
+      console.error('Failed to update ticket:', err);
+    }
+  };
+
+  const handleTicketStatusUpdate = async (status) => {
+    if (selectedTicket && user.role === 'Administrator') {
+      await handleUpdateTicketStatus(selectedTicket.id, status);
+      setSelectedTicket(null); // Close modal after update
+    }
+  };
+
+  // Columns for ticket table
+  const columns = [
+    {
+      field: 'id',
+      headerName: 'Ticket ID',
+      width: 150
+    },
+    {
+      field: 'createdAt',
+      headerName: 'Created Date',
+      width: 200,
+      valueFormatter: (params) => new Date(params.value).toLocaleString()
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 150,
+      renderCell: (params) => (
+        <Chip
+          label={params.value}
+          color={
+            params.value === 'Resolved' ? 'success' :
+              params.value === 'In Review' ? 'warning' :
+                'default'
+          }
+          size="small"
+        />
+      )
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 200,
+      renderCell: (params) => (
+        user && user.role === 'Administrator' ? (
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setSelectedTicket(params.row);
+              // Optional: Add modal for status update
+            }}
+          >
+            Update Status
+          </Button>
+        ) : null
+      )
+    }
+  ];
 
   if (loading) {
     return (
@@ -71,17 +162,18 @@ const UserDetails = () => {
     );
   }
 
+
   // Determine user status dynamically based on active flag and last activity
   const getUserStatus = () => {
     if (!user) return { label: 'Unknown', color: 'default' };
-    
+
     if (!user.active) return { label: 'Inactive', color: 'error' };
-    
+
     // Check if last login was within the last 30 days
     const lastLoginDate = user.lastLogin ? new Date(user.lastLogin) : null;
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     if (lastLoginDate && lastLoginDate > thirtyDaysAgo) {
       return { label: 'Active', color: 'success' };
     } else {
@@ -91,18 +183,14 @@ const UserDetails = () => {
 
   const status = getUserStatus();
 
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-  };
-
   return (
     <Container sx={{ mt: 4 }}>
       <Typography variant="h4" sx={{ mb: 4 }}>User Profile</Typography>
-      
+
       {user && (
         <>
           <Card sx={{ mb: 4 }}>
-            <CardHeader 
+            <CardHeader
               title={<Typography variant="h5">{user.name || 'User'}</Typography>}
             />
             <CardContent>
@@ -118,9 +206,9 @@ const UserDetails = () => {
                   </Typography>
                   <Typography>
                     <Box component="span" fontWeight="bold">Status:</Box>{' '}
-                    <Chip 
-                      label={status.label} 
-                      color={status.color} 
+                    <Chip
+                      label={status.label}
+                      color={status.color}
                       size="small"
                     />
                   </Typography>
@@ -139,95 +227,68 @@ const UserDetails = () => {
                   </Grid>
                 </Box>
               )}
+
+              {user.planExpiryDate && (
+                <Typography>
+                  <Box component="span" fontWeight="bold">Plan Expiry:</Box>{' '}
+                  {new Date(user.planExpiryDate).toLocaleDateString()}
+                  {` (${calculateRemainingDays(user.planExpiryDate)} days remaining)`}
+                </Typography>
+              )}
             </CardContent>
           </Card>
-
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs value={tabValue} onChange={handleTabChange} aria-label="user data tabs">
-              <Tab label="Request History" />
-              <Tab label="API Tokens" />
-            </Tabs>
-          </Box>
-
-          {tabValue === 0 && (
-            <TableContainer component={Paper}>
-              <Table sx={{ minWidth: 650 }} aria-label="request history table">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Timestamp</TableCell>
-                    <TableCell>Request ID</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {requestHistory.length > 0 ? (
-                    requestHistory.map((req) => (
-                      <TableRow key={req.id}>
-                        <TableCell>{new Date(req.timestamp).toLocaleString()}</TableCell>
-                        <TableCell>{req.id}</TableCell>
-                        <TableCell>{req.type}</TableCell>
-                        <TableCell>{req.description}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={req.status} 
-                            color={req.status === 'Completed' ? 'success' : req.status === 'Failed' ? 'error' : 'warning'} 
-                            size="small"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">No request history found</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-
-          {tabValue === 1 && (
-            <TableContainer component={Paper}>
-              <Table sx={{ minWidth: 650 }} aria-label="token history table">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Generated On</TableCell>
-                    <TableCell>Token ID</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Expiry</TableCell>
-                    <TableCell>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {user.tokens && user.tokens.length > 0 ? (
-                    user.tokens.map((token) => (
-                      <TableRow key={token.id}>
-                        <TableCell>{new Date(token.createdAt).toLocaleString()}</TableCell>
-                        <TableCell>{token.id}</TableCell>
-                        <TableCell>{token.name}</TableCell>
-                        <TableCell>{token.expiry ? new Date(token.expiry).toLocaleDateString() : 'Never'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={token.active ? 'Active' : 'Expired'} 
-                            color={token.active ? 'success' : 'error'} 
-                            size="small"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">No tokens generated</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
         </>
       )}
+
+      {/* Tickets Section */}
+      <Card sx={{ mt: 4 }}>
+        <CardHeader title="Tickets" />
+        <CardContent>
+          <DataGrid
+            rows={tickets}
+            columns={columns}
+            pageSize={5}
+            rowsPerPageOptions={[5]}
+            autoHeight
+            disableSelectionOnClick
+          />
+        </CardContent>
+      </Card>
+
+      {/* Ticket Details Dialog */}
+      <Dialog
+        open={!!selectedTicket}
+        onClose={() => setSelectedTicket(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Ticket Details: {selectedTicket?.id}</DialogTitle>
+        <DialogContent>
+          {selectedTicket && (
+            <>
+              <StructuredLogView data={selectedTicket.logData} />
+              {user.role === 'Administrator' && (
+                <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => handleTicketStatusUpdate('Resolved')}
+                  >
+                    Resolve
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={() => handleTicketStatusUpdate('In Review')}
+                  >
+                    In Review
+                  </Button>
+                </Box>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </Container>
   );
 };

@@ -19,7 +19,7 @@ import HIPAADashboard from './components/HipaaDashboard';
 import MitreAttack from './components/MitreAttack';
 import VulnerabilityDetection from './components/VulnerabilityDetection';
 import ThreatHunting from './components/ThreatHunting';
-
+import FIMUpgradeModal from './components/FIMUpgradeModal';
 import jwtDecode from 'jwt-decode';
 import GDPRDashboard from './components/GDPRDashboard';
 import NISTDashboard from './components/NISTDashboard';
@@ -32,6 +32,7 @@ import SOARPlaybook from './pages/SOARPlaybook';
 
 const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   const token = localStorage.getItem('token');
+
   if (!token) {
     return <Navigate to="/login" />;
   }
@@ -40,39 +41,50 @@ const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
     const decoded = jwtDecode(token);
     const currentTime = Date.now() / 1000;
 
+    // Check token expiration
     if (decoded.exp < currentTime) {
       localStorage.removeItem('token');
       return <Navigate to="/login" />;
     }
+
+    // Check plan expiry
+    const userInfo = decoded.userInfo;
+    if (userInfo.planExpiryDate) {
+      const expiryDate = new Date(userInfo.planExpiryDate);
+      if (expiryDate < new Date()) {
+        localStorage.removeItem('token');
+        return <Navigate to="/login" />;
+      }
+    }
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Box sx={{ display: 'flex', flex: 1 }}>
+          <Sidebar toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              p: 3,
+              backgroundColor: 'background.default',
+              minHeight: '100vh',
+              width: `calc(100% - 240px)`,
+              marginLeft: '0',
+              paddingBottom: '150px'
+            }}
+          >
+            {children}
+          </Box>
+        </Box>
+        <NewsTicker />
+        <Footer />
+      </Box>
+    );
   } catch (error) {
     console.error('Error decoding token:', error);
     localStorage.removeItem('token');
     return <Navigate to="/login" />;
   }
-
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Box sx={{ display: 'flex', flex: 1 }}>
-        <Sidebar toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            p: 3,
-            backgroundColor: 'background.default',
-            minHeight: '100vh',
-            width: `calc(100% - 240px)`,
-            marginLeft: '0',
-            paddingBottom: '150px'
-          }}
-        >
-          {children}
-        </Box>
-      </Box>
-      <NewsTicker />
-      <Footer />
-    </Box>
-  );
 };
 
 const App = () => {
@@ -208,7 +220,26 @@ const App = () => {
             path="/fim"
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                <FIM />
+                {(() => {
+                  const token = localStorage.getItem('token');
+                  const user = token ? jwtDecode(token).userInfo : null;
+
+                  if (user && user.plan === 'Platinum') {
+                    return <FIM />;
+                  } else {
+                    return (
+                      <Box sx={{ position: 'relative', height: '100%' }}>
+                        <FIMUpgradeModal
+                          onClose={() => {
+                            // Add any specific close logic if needed
+                          }}
+                        />
+                        <Box sx={{ filter: 'blur(5px)', pointerEvents: 'none' }}>                          <FIM />
+                        </Box>
+                      </Box>
+                    );
+                  }
+                })()}
               </ProtectedLayout>
             }
           />

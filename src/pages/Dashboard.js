@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-
-import { API_URL } from '../config';
-import { 
-  Box, 
-  Typography, 
-  Alert, 
-  CircularProgress, 
-  Container, 
-  Grid, 
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import jwtDecode from 'jwt-decode';
+import {
+  Box,
+  Container,
+  Grid,
   Paper,
+  Typography,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import Header from '../components/Header';
 import TimeRangeSelector from '../components/TimeRangeSelector';
@@ -16,9 +17,10 @@ import KeyMetrics from '../components/Keymetrics';
 import Charts from '../components/Charts';
 import RecentLogs from '../components/RecentLogs';
 import WorldMap from '../components/WorldMap';
+import FIMUpgradeModal from '../components/FIMUpgradeModal';
+import { API_URL } from '../config';
 
 const Dashboard = () => {
-
   const [logs, setLogs] = useState({
     items: [],
     metrics: {
@@ -38,8 +40,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const token = localStorage.getItem('token');
-
-  
+  const userInfo = token ? jwtDecode(token).userInfo : null;
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -89,9 +90,26 @@ const Dashboard = () => {
     }
   }, [token]);
 
+  React.useEffect(() => {
+    if (userInfo) {
+      const toastShown = localStorage.getItem('toastShown');
+      if (!toastShown) {
+        toast.success(`Welcome ${userInfo.plan} Plan User!`, {
+          position: "top-center",
+          autoClose: false,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        localStorage.setItem('toastShown', 'true');
+      }
+    }
+  }, [userInfo]);
+
   useEffect(() => {
     let intervalId;
-    
+
     const initFetch = async () => {
       await fetchLogs();
       if (isUpdating) {
@@ -118,12 +136,13 @@ const Dashboard = () => {
   }
 
   return (
-    <Box sx={{ flexGrow: 1 }}>
+    
+      <Box sx={{ flexGrow: 1 }}>
+      <ToastContainer />
       <Container maxWidth="xl">
         <Box p={4}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
             <Header />
-            
           </Box>
 
           <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
@@ -141,50 +160,50 @@ const Dashboard = () => {
             <Alert severity="error" sx={{ mb: 2 }}>Error: {error}</Alert>
           )}
 
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Paper elevation={2} sx={{ p: 2 }}>
-                <Typography variant="h5" gutterBottom>
-                  Key Metrics
-                </Typography>
-                <KeyMetrics metrics={logs.metrics} />
-              </Paper>
-            </Grid>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Paper elevation={2} sx={{ p: 2 }}>
+                  <Typography variant="h5" gutterBottom>
+                    Key Metrics
+                  </Typography>
+                  <KeyMetrics metrics={logs.metrics} />
+                </Paper>
+              </Grid>
 
-            <Grid item xs={12}>
-              <Paper elevation={2} sx={{ p: 2 }}>
-                <Typography variant="h5" gutterBottom>
-                  Recent Logs
-                </Typography>
-                <RecentLogs logs={logs.items} />
-              </Paper>
-            </Grid>
+              <Grid item xs={12}>
+                <Paper elevation={2} sx={{ p: 2 }}>
+                  <Typography variant="h5" gutterBottom>
+                    Recent Logs
+                  </Typography>
+                  <RecentLogs logs={logs.items} />
+                </Paper>
+              </Grid>
 
-            <Grid item xs={12}>
-              <Paper elevation={2} sx={{ p: 2 }}>
-                <Typography variant="h5" gutterBottom>
-                  Log Analysis Charts
-                </Typography>
-                <Charts
-                  logs={logs.items}
-                />
-              </Paper>
-            </Grid>
+              <Grid item xs={12}>
+                <Paper elevation={2} sx={{ p: 2 }}>
+                  <Typography variant="h5" gutterBottom>
+                    Log Analysis Charts
+                  </Typography>
+                  <Charts
+                    logs={logs.items}
+                  />
+                </Paper>
+              </Grid>
 
-            <Grid item xs={12}>
-              <Paper elevation={2} sx={{ p: 2 }}>
-                <Typography variant="h5" gutterBottom>
-                  Network Traffic Visualization
-                </Typography>
-                <Box sx={{ height: '400px', width: '100%' }}>
-                  <WorldMap logs={logs.items} />
-                </Box>
-              </Paper>
+              <Grid item xs={12}>
+                <Paper elevation={2} sx={{ p: 2 }}>
+                  <Typography variant="h5" gutterBottom>
+                    Network Traffic Visualization
+                  </Typography>
+                  <Box sx={{ height: '400px', width: '100%' }}>
+                    <WorldMap logs={logs.items} />
+                  </Box>
+                </Paper>
+              </Grid>
             </Grid>
-          </Grid>
-        </Box>
-      </Container>
-    </Box>
+          </Box>
+        </Container>
+      </Box>
   );
 };
 
