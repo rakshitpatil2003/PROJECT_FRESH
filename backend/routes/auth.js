@@ -65,7 +65,7 @@ router.post('/generate-ticket', (req, res) => {
     const newTicket = {
       id: `TICKET-${ticketCounter++}`,
       userId: user.id,
-      userName: user.fullName,
+      userName: user.username,
       logData: req.body.logData, // Expect log data to be sent from frontend
       status: 'Pending',
       createdAt: new Date().toISOString(),
@@ -101,9 +101,9 @@ router.get('/user-tickets', (req, res) => {
 
     // If admin, return all tickets, else return user-specific tickets
     const userTickets = user.role === 'Administrator' 
-      ? tickets 
-      : tickets.filter(ticket => ticket.userId === user.id);
-
+    ? tickets 
+    : tickets.filter(ticket => ticket.userName === user.username); // Change from userId to username
+  
     res.json(userTickets);
   } catch (error) {
     res.status(401).json({ message: 'Invalid token' });

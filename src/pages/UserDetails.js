@@ -89,6 +89,13 @@ const UserDetails = () => {
     }
   };
 
+  const handleTicketStatusUpdate = async (status) => {
+    if (selectedTicket && user.role === 'Administrator') {
+      await handleUpdateTicketStatus(selectedTicket.id, status);
+      setSelectedTicket(null); // Close modal after update
+    }
+  };
+
   // Columns for ticket table
   const columns = [
     {
@@ -123,13 +130,18 @@ const UserDetails = () => {
       headerName: 'Actions',
       width: 200,
       renderCell: (params) => (
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={() => setSelectedTicket(params.row)}
-        >
-          View Details
-        </Button>
+        user && user.role === 'Administrator' ? (
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setSelectedTicket(params.row);
+              // Optional: Add modal for status update
+            }}
+          >
+            Update Status
+          </Button>
+        ) : null
       )
     }
   ];
@@ -253,7 +265,27 @@ const UserDetails = () => {
         <DialogTitle>Ticket Details: {selectedTicket?.id}</DialogTitle>
         <DialogContent>
           {selectedTicket && (
-            <StructuredLogView data={selectedTicket.logData} />
+            <>
+              <StructuredLogView data={selectedTicket.logData} />
+              {user.role === 'Administrator' && (
+                <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => handleTicketStatusUpdate('Resolved')}
+                  >
+                    Resolve
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={() => handleTicketStatusUpdate('In Review')}
+                  >
+                    In Review
+                  </Button>
+                </Box>
+              )}
+            </>
           )}
         </DialogContent>
       </Dialog>

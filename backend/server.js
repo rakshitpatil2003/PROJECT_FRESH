@@ -138,7 +138,7 @@ if (cluster.isMaster) {
           'https://192.168.1.70:3443'
         ],
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
         allowedHeaders: ['Content-Type', 'Authorization', 'Accept','Cache-Control', 'X-Requested-With', 'Origin'],
         exposedHeaders: ['Authorization']
       };
