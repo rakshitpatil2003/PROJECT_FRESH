@@ -10,7 +10,9 @@ import EventIcon from '@mui/icons-material/Event';
 import CodeIcon from '@mui/icons-material/Code';
 import LockIcon from '@mui/icons-material/Lock';
 import ShieldIcon from '@mui/icons-material/Shield';
-import { Snackbar, Alert } from '@mui/material';
+import { Snackbar, Alert, Button } from '@mui/material';
+import { API_URL } from '../config';
+import axios from 'axios';
 
 // Keep the parseLogMessage function as it is
 export const parseLogMessage = (logEntry) => {
@@ -185,6 +187,11 @@ export const StructuredLogView = ({ data }) => {
   const [copySuccess, setCopySuccess] = useState(false);
 
   const textAreaRef = useRef(null);
+  const [ticketSnackbar, setTicketSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
 
   useEffect(() => {
     // Check if we're in a browser environment with clipboard access
@@ -223,6 +230,47 @@ export const StructuredLogView = ({ data }) => {
     );
   }
 
+  const handleGenerateTicket = async () => {
+    try {
+      // Get the token from local storage
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setTicketSnackbar({
+          open: true,
+          message: 'Please log in to generate a ticket',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Make API call to generate ticket
+      const response = await axios.post(
+        `${API_URL}/api/auth/generate-ticket`, 
+        { logData: data },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Show success snackbar
+      setTicketSnackbar({
+        open: true,
+        message: `Ticket ${response.data.id} generated successfully!`,
+        severity: 'success'
+      });
+    } catch (error) {
+      // Show error snackbar
+      setTicketSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Failed to generate ticket',
+        severity: 'error'
+      });
+    }
+  };
   
   // Improved copyToClipboard function
   const copyToClipboard = (text) => {
@@ -763,6 +811,34 @@ export const StructuredLogView = ({ data }) => {
           </Box>
         )}
       </Box>
+      {/* Ticket Generation Button */}
+      <Tooltip title="Generate a support ticket for this log entry">
+        <Button 
+          variant="contained" 
+          color="primary" 
+          onClick={handleGenerateTicket}
+          sx={{ mt: 2 }}
+        >
+          Generate Ticket
+        </Button>
+      </Tooltip>
+
+      {/* Snackbar for ticket generation feedback */}
+      <Snackbar
+        open={ticketSnackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setTicketSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setTicketSnackbar(prev => ({ ...prev, open: false }))}
+          severity={ticketSnackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {ticketSnackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

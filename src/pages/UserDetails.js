@@ -2,19 +2,35 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   Container, Card, CardHeader, CardContent, Grid, CircularProgress,
-  Alert, Typography, Box, Chip
+  Alert, Typography, Box, Chip, Button, Dialog, DialogTitle, DialogContent
 } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
 import { API_URL } from '../config';
+import { StructuredLogView } from '../utils/normalizeLogs';
 
 const UserDetails = () => {
   const [user, setUser] = useState(null);
+  const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+
   const calculateRemainingDays = (expiryDate) => {
     const today = new Date();
     const expiry = new Date(expiryDate);
     const timeDiff = expiry.getTime() - today.getTime();
     return Math.ceil(timeDiff / (1000 * 3600 * 24));
+  };
+
+  const fetchUserTickets = async (token) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/auth/user-tickets`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTickets(response.data);
+    } catch (err) {
+      console.error('Failed to fetch tickets:', err);
+    }
   };
 
   useEffect(() => {
@@ -37,7 +53,8 @@ const UserDetails = () => {
         });
 
         setUser(profileResponse.data);
-
+        // Fetch user tickets
+        await fetchUserTickets(token);
 
         setError(null);
       } catch (err) {
@@ -50,6 +67,72 @@ const UserDetails = () => {
 
     fetchUserDetails();
   }, []);
+
+  // Update ticket status (for admin)
+  const handleUpdateTicketStatus = async (ticketId, status) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.patch(
+        `${API_URL}/api/auth/update-ticket/${ticketId}`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Update tickets in state
+      setTickets(prevTickets =>
+        prevTickets.map(ticket =>
+          ticket.id === ticketId ? response.data : ticket
+        )
+      );
+    } catch (err) {
+      console.error('Failed to update ticket:', err);
+    }
+  };
+
+  // Columns for ticket table
+  const columns = [
+    {
+      field: 'id',
+      headerName: 'Ticket ID',
+      width: 150
+    },
+    {
+      field: 'createdAt',
+      headerName: 'Created Date',
+      width: 200,
+      valueFormatter: (params) => new Date(params.value).toLocaleString()
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 150,
+      renderCell: (params) => (
+        <Chip
+          label={params.value}
+          color={
+            params.value === 'Resolved' ? 'success' :
+              params.value === 'In Review' ? 'warning' :
+                'default'
+          }
+          size="small"
+        />
+      )
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 200,
+      renderCell: (params) => (
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={() => setSelectedTicket(params.row)}
+        >
+          View Details
+        </Button>
+      )
+    }
+  ];
 
   if (loading) {
     return (
@@ -66,6 +149,7 @@ const UserDetails = () => {
       </Container>
     );
   }
+
 
   // Determine user status dynamically based on active flag and last activity
   const getUserStatus = () => {
@@ -143,6 +227,36 @@ const UserDetails = () => {
           </Card>
         </>
       )}
+
+      {/* Tickets Section */}
+      <Card sx={{ mt: 4 }}>
+        <CardHeader title="Tickets" />
+        <CardContent>
+          <DataGrid
+            rows={tickets}
+            columns={columns}
+            pageSize={5}
+            rowsPerPageOptions={[5]}
+            autoHeight
+            disableSelectionOnClick
+          />
+        </CardContent>
+      </Card>
+
+      {/* Ticket Details Dialog */}
+      <Dialog
+        open={!!selectedTicket}
+        onClose={() => setSelectedTicket(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Ticket Details: {selectedTicket?.id}</DialogTitle>
+        <DialogContent>
+          {selectedTicket && (
+            <StructuredLogView data={selectedTicket.logData} />
+          )}
+        </DialogContent>
+      </Dialog>
     </Container>
   );
 };
