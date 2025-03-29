@@ -777,10 +777,9 @@ const PCIDSSDashboard = () => {
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     Payment Card Industry Data Security Standard
                 </Typography>
-                <ExportPDF
-                    fetchData={fetchLogs}
-                    currentData={pciDssLogs}
-                    dashboardRef={dashboardRef}
+                <ExportPDF 
+                  dashboardRef={dashboardRef} 
+                  currentDashboard="pci_dss" 
                 />
             </Typography>
 

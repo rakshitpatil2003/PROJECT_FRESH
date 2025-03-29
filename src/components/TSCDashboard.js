@@ -753,10 +753,9 @@ const TSCDashboard = () => {
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     Trust Services Criteria
                 </Typography>
-                <ExportPDF
-                    fetchData={fetchLogs}
-                    currentData={tscLogs}
-                    dashboardRef={dashboardRef}
+                <ExportPDF 
+                  dashboardRef={dashboardRef} 
+                  currentDashboard="tsc" 
                 />
             </Typography>
             {tscLogs.length} TSC compliance events detected across {tscStats.uniqueTscCriteria.length} unique TSC criteria

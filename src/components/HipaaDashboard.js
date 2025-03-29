@@ -1,39 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Box,
-    Typography,
-    Paper,
-    Grid,
-    Alert,
-    CircularProgress,
-    Card,
-    CardContent,
-    Chip,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Link,
-    TextField,
-    InputAdornment,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    IconButton,
+    Box, Typography, Paper, Grid, Alert, CircularProgress, Card, CardContent,
+    Chip, Link, TextField, InputAdornment, Dialog, DialogTitle, DialogContent, IconButton, Button
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import axios from 'axios';
-import TablePagination from '@mui/material/TablePagination';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import SessionLogView from '../components/SessionLogView';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
 import ExportPDF from '../components/ExportPDF';
 import Skeleton from '@mui/material/Skeleton';
+import { DataGrid } from '@mui/x-data-grid';
 
 const HIPAADashboard = () => {
     const [logs, setLogs] = useState([]);
@@ -49,7 +29,6 @@ const HIPAADashboard = () => {
         timelineData: [],
         controlSeverity: {},
     });
-    const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
 
     // Charts references
@@ -66,6 +45,56 @@ const HIPAADashboard = () => {
         if (numLevel >= 4) return "info";
         return "success";
     };
+
+    const [timeRange, setTimeRange] = useState('7d'); // Default to 7 days
+    const timeRangeOptions = [
+        { value: '1h', label: 'Last Hour' },
+        { value: '3h', label: 'Last 3 Hours' },
+        { value: '12h', label: 'Last 12 Hours' },
+        { value: '24h', label: 'Last 24 Hours' },
+        { value: '7d', label: 'Last 7 Days' },
+        { value: 'all', label: 'All Time' },
+    ];
+
+    const filterLogsByTime = useCallback((logs) => {
+        if (timeRange === 'all') return logs;
+
+        const now = new Date().getTime();
+        let milliseconds;
+
+        switch (timeRange) {
+            case '1h':
+                milliseconds = 60 * 60 * 1000;
+                break;
+            case '3h':
+                milliseconds = 3 * 60 * 60 * 1000;
+                break;
+            case '12h':
+                milliseconds = 12 * 60 * 60 * 1000;
+                break;
+            case '24h':
+                milliseconds = 24 * 60 * 60 * 1000;
+                break;
+            case '7d':
+                milliseconds = 7 * 24 * 60 * 60 * 1000;
+                break;
+            default:
+                milliseconds = 7 * 24 * 60 * 60 * 1000; // Default to 7 days
+        }
+
+        return logs.filter(log => {
+            const timestamp = log.parsed.timestamp;
+            let logTime;
+
+            if (typeof timestamp === 'number') {
+                logTime = timestamp * 1000;
+            } else {
+                logTime = new Date(timestamp).getTime();
+            }
+
+            return (now - logTime) <= milliseconds;
+        });
+    }, [timeRange]);
 
     const fetchLogs = useCallback(async () => {
         try {
@@ -195,7 +224,6 @@ const HIPAADashboard = () => {
     // Initialize and update charts
     useEffect(() => {
         if (loading) return;
-
         // Timeline Chart
         if (timelineChartRef.current && hipaaStats.timelineData.length > 0) {
             const timelineChart = echarts.init(timelineChartRef.current);
@@ -263,7 +291,7 @@ const HIPAADashboard = () => {
                 timelineChart.dispose();
             };
         }
-    }, [hipaaStats.timelineData, loading]);
+    }, [hipaaStats.timelineData, loading, timeRange]);
 
     // Agent Distribution Chart
     useEffect(() => {
@@ -333,7 +361,6 @@ const HIPAADashboard = () => {
             agentChart.dispose();
         };
     }, [hipaaStats.agentDistribution, loading]);
-
     // Control Distribution Chart
     useEffect(() => {
         if (loading || !controlDistributionChartRef.current) return;
@@ -404,7 +431,6 @@ const HIPAADashboard = () => {
         const handleResize = () => {
             controlChart.resize();
         };
-
         window.addEventListener('resize', handleResize);
 
         return () => {
@@ -412,7 +438,6 @@ const HIPAADashboard = () => {
             controlChart.dispose();
         };
     }, [hipaaStats.controlSeverity, loading]);
-
     // Severity Distribution Chart
     useEffect(() => {
         if (loading || !severityDistributionChartRef.current) return;
@@ -506,7 +531,6 @@ const HIPAADashboard = () => {
             return 'Invalid Date';
         }
     };
-
     // Handle view log details
     const handleViewDetails = (log) => {
         const severity = getSeverityLabel(log.parsed.rule?.level);
@@ -516,25 +540,28 @@ const HIPAADashboard = () => {
             severity: severity
         });
     };
-
     // Filter logs on search
+    // Filter logs on search and time range
     useEffect(() => {
+        // First filter all logs by HIPAA criteria
+        const hipaaFilteredLogs = logs.filter(log => {
+            const parsedLog = log.parsed;
+            return parsedLog?.rule?.hipaa && parsedLog.rule.hipaa.length > 0;
+        });
+
+        // Then filter by time range
+        const timeFilteredLogs = filterLogsByTime(hipaaFilteredLogs);
+
+        // Then filter by search term
         if (!searchTerm.trim()) {
-            setHipaaLogs(logs.filter(log => {
-                const parsedLog = log.parsed;
-                return parsedLog?.rule?.hipaa && parsedLog.rule.hipaa.length > 0;
-            }));
+            setHipaaLogs(timeFilteredLogs);
+            processHipaaStats(timeFilteredLogs);
             return;
         }
 
         const lowerSearchTerm = searchTerm.toLowerCase();
-        const filtered = logs.filter(log => {
+        const searchFilteredLogs = timeFilteredLogs.filter(log => {
             const parsedLog = log.parsed;
-
-            // Only include HIPAA logs
-            if (!parsedLog?.rule?.hipaa || parsedLog.rule.hipaa.length === 0) {
-                return false;
-            }
 
             // Search in agent name
             if (parsedLog.agent?.name?.toLowerCase().includes(lowerSearchTerm)) {
@@ -556,14 +583,13 @@ const HIPAADashboard = () => {
             return false;
         });
 
-        setHipaaLogs(filtered);
-    }, [searchTerm, logs]);
-
+        setHipaaLogs(searchFilteredLogs);
+        processHipaaStats(searchFilteredLogs);
+    }, [searchTerm, logs, timeRange, filterLogsByTime]);
     // Fetch logs on component mount
     useEffect(() => {
         fetchLogs();
     }, [fetchLogs]);
-
     return (
         <Box ref={dashboardRef} p={4}>
             <Typography variant="h4" gutterBottom sx={{ color: '#2196f3', mb: 2 }}>
@@ -571,13 +597,11 @@ const HIPAADashboard = () => {
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     Health Insurance Portability and Accountability Act
                 </Typography>
-                <ExportPDF
-                    fetchData={fetchLogs}
-                    currentData={hipaaLogs}
-                    dashboardRef={dashboardRef}
+                <ExportPDF 
+                  dashboardRef={dashboardRef} 
+                  currentDashboard="hipaa" 
                 />
             </Typography>
-
             <Alert
                 icon={<VerifiedUserIcon />}
                 severity="info"
@@ -598,18 +622,92 @@ const HIPAADashboard = () => {
                 </Alert>
             )}
 
+            {timeRange !== 'all' && (
+                <Alert
+                    severity="info"
+                    sx={{ mb: 3 }}
+                >
+                    Showing data from the {timeRangeOptions.find(option => option.value === timeRange)?.label.toLowerCase()}
+                </Alert>
+            )}
             {/* Key Metrics Cards */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} sm={6} md={3}>
-                    <Card>
+                    <Card
+                        elevation={0}
+                        sx={{
+                            background: 'rgba(255, 255, 255, 0.15)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            position: 'relative',
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                                transform: 'translateY(-5px)',
+                                boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
+                            },
+                            '&::before': {
+                                content: '""',
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '2px',
+                                background: 'linear-gradient(90deg, transparent, rgba(66, 165, 245, 0.8), transparent)',
+                                animation: 'glowAnimation 2s linear infinite',
+                            },
+                            '@keyframes glowAnimation': {
+                                '0%': { backgroundPosition: '-300px 0' },
+                                '100%': { backgroundPosition: '300px 0' }
+                            },
+                            // This ensures visibility in both light and dark themes
+                            '.MuiTypography-root': {
+                                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.87)',
+                            },
+                            '.MuiTypography-colorTextSecondary': {
+                                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+                            }
+                        }}
+                    >
                         <CardContent>
-                            <Typography color="textSecondary" gutterBottom>
+                            <Typography
+                                color="textSecondary"
+                                gutterBottom
+                                sx={{
+                                    fontWeight: 500,
+                                    letterSpacing: '0.5px',
+                                    fontSize: '0.875rem',
+                                    textTransform: 'uppercase'
+                                }}
+                            >
                                 Total HIPAA Events
                             </Typography>
                             {loading ? (
-                                <Skeleton variant="rectangular" width="100%" height={40} />
+                                <Skeleton
+                                    variant="rectangular"
+                                    width="100%"
+                                    height={40}
+                                    sx={{
+                                        bgcolor: 'rgba(255, 255, 255, 0.1)'
+                                    }}
+                                />
                             ) : (
-                                <Typography variant="h4">
+                                <Typography
+                                    variant="h4"
+                                    sx={{
+                                        fontWeight: 600,
+                                        mt: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        fontSize: '2rem',
+                                        background: 'linear-gradient(45deg, #2196f3, #21cbf3)',
+                                        backgroundClip: 'text',
+                                        textFillColor: 'transparent',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent'
+                                    }}
+                                >
                                     {hipaaLogs.length}
                                 </Typography>
                             )}
@@ -617,15 +715,80 @@ const HIPAADashboard = () => {
                     </Card>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
-                    <Card>
+                    <Card
+                        elevation={0}
+                        sx={{
+                            background: 'rgba(255, 255, 255, 0.15)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            position: 'relative',
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                                transform: 'translateY(-5px)',
+                                boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
+                            },
+                            '&::before': {
+                                content: '""',
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '2px',
+                                background: 'linear-gradient(90deg, transparent, rgba(66, 165, 245, 0.8), transparent)',
+                                animation: 'glowAnimation 2s linear infinite',
+                            },
+                            '@keyframes glowAnimation': {
+                                '0%': { backgroundPosition: '-300px 0' },
+                                '100%': { backgroundPosition: '300px 0' }
+                            },
+                            '.MuiTypography-root': {
+                                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.87)',
+                            },
+                            '.MuiTypography-colorTextSecondary': {
+                                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+                            }
+                        }}
+                    >
                         <CardContent>
-                            <Typography color="textSecondary" gutterBottom>
+                            <Typography
+                                color="textSecondary"
+                                gutterBottom
+                                sx={{
+                                    fontWeight: 500,
+                                    letterSpacing: '0.5px',
+                                    fontSize: '0.875rem',
+                                    textTransform: 'uppercase'
+                                }}
+                            >
                                 Unique HIPAA Controls
                             </Typography>
                             {loading ? (
-                                <Skeleton variant="rectangular" width="100%" height={40} />
+                                <Skeleton
+                                    variant="rectangular"
+                                    width="100%"
+                                    height={40}
+                                    sx={{
+                                        bgcolor: 'rgba(255, 255, 255, 0.1)'
+                                    }}
+                                />
                             ) : (
-                                <Typography variant="h4">
+                                <Typography
+                                    variant="h4"
+                                    sx={{
+                                        fontWeight: 600,
+                                        mt: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        fontSize: '2rem',
+                                        background: 'linear-gradient(45deg, #2196f3, #21cbf3)',
+                                        backgroundClip: 'text',
+                                        textFillColor: 'transparent',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent'
+                                    }}
+                                >
                                     {hipaaStats.uniqueHipaaControls.length}
                                 </Typography>
                             )}
@@ -633,15 +796,81 @@ const HIPAADashboard = () => {
                     </Card>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
-                    <Card>
+
+                    <Card
+                        elevation={0}
+                        sx={{
+                            background: 'rgba(255, 255, 255, 0.15)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            position: 'relative',
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                                transform: 'translateY(-5px)',
+                                boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
+                            },
+                            '&::before': {
+                                content: '""',
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '2px',
+                                background: 'linear-gradient(90deg, transparent, rgba(66, 165, 245, 0.8), transparent)',
+                                animation: 'glowAnimation 2s linear infinite',
+                            },
+                            '@keyframes glowAnimation': {
+                                '0%': { backgroundPosition: '-300px 0' },
+                                '100%': { backgroundPosition: '300px 0' }
+                            },
+                            '.MuiTypography-root': {
+                                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.87)',
+                            },
+                            '.MuiTypography-colorTextSecondary': {
+                                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+                            }
+                        }}
+                    >
                         <CardContent>
-                            <Typography color="textSecondary" gutterBottom>
+                            <Typography
+                                color="textSecondary"
+                                gutterBottom
+                                sx={{
+                                    fontWeight: 500,
+                                    letterSpacing: '0.5px',
+                                    fontSize: '0.875rem',
+                                    textTransform: 'uppercase'
+                                }}
+                            >
                                 Unique Agent Sources
                             </Typography>
                             {loading ? (
-                                <Skeleton variant="rectangular" width="100%" height={40} />
+                                <Skeleton
+                                    variant="rectangular"
+                                    width="100%"
+                                    height={40}
+                                    sx={{
+                                        bgcolor: 'rgba(255, 255, 255, 0.1)'
+                                    }}
+                                />
                             ) : (
-                                <Typography variant="h4">
+                                <Typography
+                                    variant="h4"
+                                    sx={{
+                                        fontWeight: 600,
+                                        mt: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        fontSize: '2rem',
+                                        background: 'linear-gradient(45deg, #2196f3, #21cbf3)',
+                                        backgroundClip: 'text',
+                                        textFillColor: 'transparent',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent'
+                                    }}
+                                >
                                     {Object.keys(hipaaStats.agentDistribution).length}
                                 </Typography>
                             )}
@@ -649,23 +878,89 @@ const HIPAADashboard = () => {
                     </Card>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
-                    <Card>
+
+                    <Card
+                        elevation={0}
+                        sx={{
+                            background: 'rgba(255, 255, 255, 0.15)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            position: 'relative',
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                                transform: 'translateY(-5px)',
+                                boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
+                            },
+                            '&::before': {
+                                content: '""',
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '2px',
+                                background: 'linear-gradient(90deg, transparent, rgba(66, 165, 245, 0.8), transparent)',
+                                animation: 'glowAnimation 2s linear infinite',
+                            },
+                            '@keyframes glowAnimation': {
+                                '0%': { backgroundPosition: '-300px 0' },
+                                '100%': { backgroundPosition: '300px 0' }
+                            },
+                            '.MuiTypography-root': {
+                                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.87)',
+                            },
+                            '.MuiTypography-colorTextSecondary': {
+                                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+                            }
+                        }}
+                    >
                         <CardContent>
-                            <Typography color="textSecondary" gutterBottom>
+                            <Typography
+                                color="textSecondary"
+                                gutterBottom
+                                sx={{
+                                    fontWeight: 500,
+                                    letterSpacing: '0.5px',
+                                    fontSize: '0.875rem',
+                                    textTransform: 'uppercase'
+                                }}
+                            >
                                 High Severity (12+)
                             </Typography>
                             {loading ? (
-                                <Skeleton variant="rectangular" width="100%" height={40} />
+                                <Skeleton
+                                    variant="rectangular"
+                                    width="100%"
+                                    height={40}
+                                    sx={{
+                                        bgcolor: 'rgba(255, 255, 255, 0.1)'
+                                    }}
+                                />
                             ) : (
-                                <Typography variant="h4">
+                                <Typography
+                                    variant="h4"
+                                    sx={{
+                                        fontWeight: 600,
+                                        mt: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        fontSize: '2rem',
+                                        background: 'linear-gradient(45deg, #2196f3, #21cbf3)',
+                                        backgroundClip: 'text',
+                                        textFillColor: 'transparent',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent'
+                                    }}
+                                >
                                     {hipaaLogs.filter(log => parseInt(log.parsed.rule?.level) >= 12).length}
                                 </Typography>
                             )}
                         </CardContent>
                     </Card>
+
                 </Grid>
             </Grid>
-
             {/* Charts */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12}>
@@ -705,110 +1000,189 @@ const HIPAADashboard = () => {
                     </Paper>
                 </Grid>
             </Grid>
-
-            {/* HIPAA Logs Table */}
+            {/* HIPAA Logs DataGrid */}
             <Box sx={{ mb: 3 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Typography variant="h6">
                         HIPAA Compliance Logs
                     </Typography>
-                    <TextField
-                        size="small"
-                        placeholder="Search by agent, description, or control..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon />
-                                </InputAdornment>
-                            ),
-                        }}
-                        sx={{ width: 300 }}
-                    />
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        {/* Time range selector */}
+                        <Box component="form" sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ mr: 1 }}>Time Range:</Typography>
+                            <TextField
+                                select
+                                size="small"
+                                value={timeRange}
+                                onChange={(e) => setTimeRange(e.target.value)}
+                                sx={{ width: 150 }}
+                                SelectProps={{
+                                    native: true,
+                                }}
+                            >
+                                {timeRangeOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </TextField>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                    setTimeRange('all');
+                                    setSearchTerm('');
+                                }}
+                                sx={{ ml: 1 }}
+                            >
+                                Reset Filters
+                            </Button>
+                        </Box>
+
+                        {/* Existing search field */}
+                        <TextField
+                            size="small"
+                            placeholder="Search by agent, description, or control..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{ width: 300 }}
+                        />
+                    </Box>
                 </Box>
-
-                <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
-                    <Table stickyHeader size="small">
-                        <TableHead>
-                            <TableRow>
-                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Timestamp</TableCell>
-                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Agent</TableCell>
-                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Description</TableCell>
-                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Level</TableCell>
-                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>HIPAA Controls</TableCell>
-                                <TableCell style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Actions</TableCell>
-                            </TableRow>
-                        </TableHead>
-
-                        <TableBody>
-                            {loading ? (
-                                // Show loading skeletons for the table
-                                [...Array(5)].map((_, index) => (
-                                    <TableRow key={`skeleton-${index}`}>
-                                        <TableCell><Skeleton /></TableCell>
-                                        <TableCell><Skeleton /></TableCell>
-                                        <TableCell><Skeleton /></TableCell>
-                                        <TableCell><Skeleton width={60} /></TableCell>
-                                        <TableCell><Skeleton /></TableCell>
-                                        <TableCell><Skeleton width={80} /></TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                hipaaLogs
-                                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                    .map((log, index) => (
-                                        // Existing table row code...
-                                        <TableRow key={index} hover>
-                                            <TableCell>{formatTimestamp(log.parsed.timestamp)}</TableCell>
-                                            <TableCell>{log.parsed.agent?.name || 'Unknown'}</TableCell>
-                                            <TableCell>{log.parsed.rule?.description || 'No description'}</TableCell>
-                                            <TableCell>
-                                                <Chip
-                                                    label={log.parsed.rule?.level || '0'}
-                                                    color={getRuleLevelColor(log.parsed.rule?.level)}
-                                                    size="small"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                {log.parsed.rule?.hipaa?.map((control, idx) => (
+                <Paper sx={{
+                    height: 400,
+                    width: '100%',
+                    overflow: 'hidden',  // Prevent overflow
+                    position: 'relative' // Create a positioning context
+                }}>
+                    {loading ? (
+                        <Box sx={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <Box sx={{
+                            height: '100%',
+                            width: '100%',
+                            overflow: 'auto' // Make this box scrollable
+                        }}>
+                            <DataGrid
+                                rows={hipaaLogs.map((log, index) => ({
+                                    id: index,
+                                    timestamp: formatTimestamp(log.parsed.timestamp),
+                                    agent: log.parsed.agent?.name || 'Unknown',
+                                    description: log.parsed.rule?.description || 'No description',
+                                    level: log.parsed.rule?.level || '0',
+                                    hipaaControls: log.parsed.rule?.hipaa || [],
+                                    rawLog: log
+                                }))}
+                                columns={[
+                                    {
+                                        field: 'timestamp',
+                                        headerName: 'Timestamp',
+                                        width: 200,
+                                        sortable: true
+                                    },
+                                    {
+                                        field: 'agent',
+                                        headerName: 'Agent',
+                                        width: 150,
+                                        sortable: true
+                                    },
+                                    {
+                                        field: 'description',
+                                        headerName: 'Description',
+                                        width: 250,
+                                        sortable: true,
+                                        flex: 1
+                                    },
+                                    {
+                                        field: 'level',
+                                        headerName: 'Level',
+                                        width: 100,
+                                        sortable: true,
+                                        renderCell: (params) => (
+                                            <Chip
+                                                label={params.value}
+                                                color={getRuleLevelColor(params.value)}
+                                                size="small"
+                                            />
+                                        )
+                                    },
+                                    {
+                                        field: 'hipaaControls',
+                                        headerName: 'HIPAA Controls',
+                                        width: 250,
+                                        sortable: false,
+                                        renderCell: (params) => (
+                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                {params.value.map((control, idx) => (
                                                     <Chip
                                                         key={idx}
                                                         label={control}
                                                         size="small"
-                                                        sx={{ m: 0.5 }}
                                                     />
                                                 ))}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Link
-                                                    component="button"
-                                                    variant="body2"
-                                                    onClick={() => handleViewDetails(log)}
-                                                >
-                                                    View Details
-                                                </Link>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-                <TablePagination
-                    rowsPerPageOptions={[5, 10, 25, 50]}
-                    component="div"
-                    count={loading ? 0 : hipaaLogs.length}
-                    rowsPerPage={rowsPerPage}
-                    page={loading ? 0 : page}
-                    onPageChange={(event, newPage) => setPage(newPage)}
-                    onRowsPerPageChange={(event) => {
-                        setRowsPerPage(parseInt(event.target.value, 10));
-                        setPage(0);
-                    }}
-                />
+                                            </Box>
+                                        )
+                                    },
+                                    {
+                                        field: 'actions',
+                                        headerName: 'Actions',
+                                        width: 120,
+                                        sortable: false,
+                                        renderCell: (params) => (
+                                            <Link
+                                                component="button"
+                                                variant="body2"
+                                                onClick={() => handleViewDetails(params.row.rawLog)}
+                                            >
+                                                View Details
+                                            </Link>
+                                        )
+                                    }
+                                ]}
+                                initialState={{
+                                    pagination: {
+                                        paginationModel: {
+                                            pageSize: rowsPerPage,
+                                        },
+                                    },
+                                    sorting: {
+                                        sortModel: [{ field: 'timestamp', sort: 'desc' }],
+                                    },
+                                }}
+                                pageSizeOptions={[5, 10, 25, 50]}
+                                disableRowSelectionOnClick
+                                autoHeight={false} // Important! Don't use autoHeight
+                                sx={{
+                                    // These styles ensure the DataGrid is properly contained
+                                    height: '100%',
+                                    width: '100%',
+                                    '& .MuiDataGrid-main': {
+                                        // Ensure the main content area is properly sized
+                                        overflow: 'hidden',
+                                        width: '100%'
+                                    },
+                                    // Ensure footer sticks to bottom of container
+                                    '& .MuiDataGrid-footerContainer': {
+                                        position: 'sticky',
+                                        bottom: 0,
+                                        backgroundColor: 'background.paper',
+                                        zIndex: 2
+                                    }
+                                }}
+                            />
+                        </Box>
+                    )}
+                </Paper>
             </Box>
-
             {/* Log Details Dialog */}
             {selectedLog && (
                 <Dialog
@@ -840,5 +1214,4 @@ const HIPAADashboard = () => {
         </Box >
     );
 };
-
 export default HIPAADashboard;

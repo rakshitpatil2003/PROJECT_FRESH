@@ -689,10 +689,9 @@ const NISTDashboard = () => {
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
                     National Institute of Standards and Technology Special Publication 800-53
                 </Typography>
-                <ExportPDF
-                    fetchData={fetchLogs}
-                    currentData={nistLogs}
-                    dashboardRef={dashboardRef}
+                <ExportPDF 
+                  dashboardRef={dashboardRef} 
+                  currentDashboard="nist_800_53" 
                 />
             </Typography>
 
