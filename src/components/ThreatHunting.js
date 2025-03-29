@@ -687,9 +687,14 @@ const ThreatHunting = () => {
         line.x = 3;
       }
 
+      serverSeries.mapImages.template.horizontalCenter = "middle";
+      serverSeries.mapImages.template.verticalCenter = "middle";
+      serverSeries.zIndex = 1000; // This will place server icons above all other elements
+      serverSeries.mapImages.template.zIndex = 1000;
+      serverTemplate.zIndex = 1000;
       // Center the server icon properly
       serverTemplate.horizontalCenter = "middle";
-      serverTemplate.verticalCenter = "bottom";
+      serverTemplate.verticalCenter = "middle";
 
       // Add server tooltip
       serverSeries.mapImages.template.tooltipText = "{title} (Server)";
@@ -760,10 +765,47 @@ const ThreatHunting = () => {
         series.mapLines.template.line.stroke = am4core.color(color);
         series.mapLines.template.line.strokeOpacity = 0.8;
         series.mapLines.template.line.nonScalingStroke = true;
+        series.zIndex = 10;
+
+        // Increase the hit area for the lines
+        series.mapLines.template.interactive = true;
+        series.mapLines.template.strokeWidth = 2;
+        series.mapLines.template.interactionsEnabled = true;
+
+        // Create a wider invisible stroke for better hover detection
+        const hitArea = series.mapLines.template.createChild(am4core.Line);
+        hitArea.strokeWidth = 40; // Much wider than the visible line
+        hitArea.stroke = am4core.color("#000");
+        hitArea.strokeOpacity = 0.0; // Completely transparent
+        hitArea.interactiveChildren = false;
+        hitArea.isMeasured = false;
+
+        // Make sure the hit area follows the same path as the visible line
+        series.mapLines.template.events.on("ready", (event) => {
+          const line = event.target;
+          const lineElement = line.line;
+          const hitAreaElement = line.children.getIndex(0);
+
+          if (lineElement && hitAreaElement) {
+            hitAreaElement.path = lineElement.path;
+          }
+        });
+
+        // This is the key part - set a much larger hit radius for interaction
+        series.mapLines.template.interactiveChildren = true;
+        series.mapLines.template.line.hitRadius = 50; // Increase this value for easier hovering
+        series.mapLines.template.cursorOverStyle = am4core.MouseCursorStyle.pointer;
 
         // Add curved lines (arcs)
         series.mapLines.template.shortestDistance = false;
         series.mapLines.template.line.controlPointDistance = 0.3;
+
+        // Ensure tooltips remain visible longer and appear faster
+        series.tooltip.pointerOrientation = "vertical";
+        series.tooltip.animationDuration = 150; // Faster tooltip appearance
+        series.tooltip.keepTargetHover = true; // Keep tooltip visible when hovering over it
+        series.tooltip.background.strokeWidth = 0;
+        series.tooltip.label.padding(10, 10, 10, 10);
 
         // Add line tooltips
         series.mapLines.template.tooltipText = "{from} → {to}: {value} event(s)";
@@ -786,7 +828,7 @@ const ThreatHunting = () => {
 
           // Create animation
           const animation = line.animate(
-            { property: "strokeDashoffset", from: 0, to: 100 },
+            { property: "strokeDashoffset", from: 100, to: 0 },
             2000,
             am4core.ease.linear
           );
@@ -873,24 +915,69 @@ const ThreatHunting = () => {
       chart.zoomControl = new am4maps.ZoomControl();
       chart.zoomControl.slider.height = 100;
 
+      // Replace the existing legend code with this:
       // Create legend
-      const legend = new am4maps.Legend();
-      legend.parent = chart.chartContainer;
-      legend.align = "bottom";
-      legend.paddingBottom = 10;
-      legend.fontSize = 12;
-      legend.useDefaultMarker = true;
-      legend.data = [
-        { name: "Outgoing from Server", fill: "#00FF00" },
-        { name: "Incoming Threat (<20 events)", fill: "#FF0000" },
-        { name: "Normal Incoming (≥20 events)", fill: "#0000FF" },
-        { name: "External Connection", fill: "#FFFF00" }
-      ];
+const legend = new am4maps.Legend();
+legend.parent = chart.chartContainer;
+legend.align = "bottom";
+legend.paddingBottom = 10;
+legend.fontSize = 12;
+legend.useDefaultMarker = true;
 
-      // Configure legend markers
-      const markerTemplate = legend.markers.template;
-      markerTemplate.width = 16;
-      markerTemplate.height = 16;
+// Make sure all series have proper names for the legend
+outgoingFromReservedSeries.name = "Outgoing from Server";
+incomingThreatSeries.name = "Incoming Threat (<20 events)";
+incomingNormalSeries.name = "Normal Incoming (≥20 events)";
+externalSeries.name = "External Connection";
+
+// Set colors for legend markers
+outgoingFromReservedSeries.fill = am4core.color("#00FF00");
+incomingThreatSeries.fill = am4core.color("#FF0000");
+incomingNormalSeries.fill = am4core.color("#0000FF");
+externalSeries.fill = am4core.color("#FFFF00");
+
+// Configure the legend to show these series
+legend.data = [{
+  name: "Outgoing from Server", 
+  fill: "#00FF00"
+}, {
+  name: "Incoming Threat (<20 events)", 
+  fill: "#FF0000"
+}, {
+  name: "Normal Incoming (≥20 events)", 
+  fill: "#0000FF"
+}, {
+  name: "External Connection", 
+  fill: "#FFFF00"
+}];
+
+// Make the legend items toggleable and clickable
+legend.itemContainers.template.togglable = true;
+legend.itemContainers.template.clickable = true;
+legend.itemContainers.template.cursorOverStyle = am4core.MouseCursorStyle.pointer;
+
+// Map the legend items to the corresponding series
+chart.legend = legend;
+legend.parent = chart.chartContainer;
+
+// Set up click event handler for legend items
+legend.itemContainers.template.events.on("hit", function(ev) {
+  const item = ev.target.dataItem.dataContext;
+  
+  // Toggle the corresponding series visibility
+  if (item.name === "Outgoing from Server") {
+    outgoingFromReservedSeries.hidden = !outgoingFromReservedSeries.hidden;
+  }
+  else if (item.name === "Incoming Threat (<20 events)") {
+    incomingThreatSeries.hidden = !incomingThreatSeries.hidden;
+  }
+  else if (item.name === "Normal Incoming (≥20 events)") {
+    incomingNormalSeries.hidden = !incomingNormalSeries.hidden;
+  }
+  else if (item.name === "External Connection") {
+    externalSeries.hidden = !externalSeries.hidden;
+  }
+});
 
       chartRef.current = chart;
 
