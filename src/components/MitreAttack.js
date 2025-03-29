@@ -1,33 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-    Box,
-    Typography,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Alert,
-    TextField,
-    InputAdornment,
-    CircularProgress,
-    Link,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    IconButton,
-    Chip,
-    Pagination,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Grid,
-    Tooltip,
-    Card,
-    CardContent
+import {Box,Typography,Table,TableBody,TableCell,TableContainer,TableHead,TableRow,Paper,Alert,TextField,InputAdornment,CircularProgress,Link,Dialog,DialogTitle,DialogContent,IconButton,Chip,Pagination,FormControl,InputLabel,Select,MenuItem,Grid,Tooltip,Card,CardContent
 } from '@mui/material';
 import { 
     Search as SearchIcon, 
@@ -57,18 +29,7 @@ import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
 import { API_URL } from '../config';
 import { useTheme } from '@mui/material/styles';
 
-echarts.use([
-    TitleComponent,
-    TooltipComponent,
-    GridComponent,
-    DatasetComponent,
-    TransformComponent,
-    PieChart,
-    BarChart,
-    LineChart,
-    LabelLayout,
-    UniversalTransition,
-    CanvasRenderer
+echarts.use([TitleComponent,TooltipComponent,GridComponent,DatasetComponent,TransformComponent,PieChart,BarChart,LineChart,LabelLayout,UniversalTransition,CanvasRenderer
 ]);
 
 const MitreAttackLogs = () => {
