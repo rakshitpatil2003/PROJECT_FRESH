@@ -44,14 +44,12 @@ const UserDetails = () => {
           setLoading(false);
           return;
         }
-
         // Fetch user profile
         const profileResponse = await axios.get(`${API_URL}/api/auth/profile`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
-
         setUser(profileResponse.data);
         // Fetch user tickets
         await fetchUserTickets(token);
@@ -77,7 +75,6 @@ const UserDetails = () => {
         { status },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
       // Update tickets in state
       setTickets(prevTickets =>
         prevTickets.map(ticket =>
@@ -95,7 +92,6 @@ const UserDetails = () => {
       setSelectedTicket(null); // Close modal after update
     }
   };
-
   // Columns for ticket table
   const columns = [
     {
@@ -161,14 +157,11 @@ const UserDetails = () => {
       </Container>
     );
   }
-
-
   // Determine user status dynamically based on active flag and last activity
   const getUserStatus = () => {
     if (!user) return { label: 'Unknown', color: 'default' };
 
     if (!user.active) return { label: 'Inactive', color: 'error' };
-
     // Check if last login was within the last 30 days
     const lastLoginDate = user.lastLogin ? new Date(user.lastLogin) : null;
     const thirtyDaysAgo = new Date();

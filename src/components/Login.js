@@ -1,16 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';  // Import the API URL
-import {
-  Box,
-  Card,
-  CardContent,
-  TextField,
-  Button,
-  Typography,
-  Alert,
-  Tabs,
-  Tab,
+import {Box,Card,CardContent,TextField,Button,Typography,Alert,Tabs,Tab,
 } from '@mui/material';
 import { keyframes } from '@emotion/react';
 import logoImage from '../assets/images/vg-logo.png';
@@ -68,12 +59,10 @@ const Login = () => {
         setError('Please use an admin account in the Admin Login tab');
         return;
       }
-
       if (tabValue === 1 && credentials.username.toLowerCase().includes('admin')) {
         setError('Admin accounts cannot login in the User Login tab');
         return;
       }
-
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -87,10 +76,8 @@ const Login = () => {
       if (!response.ok) {
         throw new Error('Login failed');
       }
-
       const data = await response.json();
       console.log('Response data:', data);
-
       if (data.token) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('userInfo', JSON.stringify(data.user));
