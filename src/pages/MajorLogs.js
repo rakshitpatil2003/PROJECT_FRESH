@@ -1,29 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Alert,
-  TextField,
-  InputAdornment,
-  CircularProgress,
-  Link,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  IconButton,
-  Chip,
-  Grid,
-  Tab,
-  Tabs,
-  TablePagination,
-  Skeleton
+  Box,Typography,Table,TableBody,TableCell,TableContainer,TableHead,TableRow,Paper,Alert,TextField,InputAdornment,CircularProgress,Link,Dialog,DialogTitle,DialogContent,IconButton,Chip,Grid,Tab,Tabs,TablePagination,Skeleton
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -177,35 +154,30 @@ const MajorLogs = () => {
       return acc;
     }, {});
 
-    // MITRE Techniques - Enhanced processing
-    const mitreTechniques = logs.reduce((acc, log) => {
-      const mitre = log.rule?.mitre || log.rawLog?.message?.rule?.mitre || {};
-      let techniques = [];
-
-      // Handle both array and string cases
-      if (Array.isArray(mitre.technique)) {
-        techniques = mitre.technique;
-      } else if (mitre.technique) {
-        techniques = [mitre.technique];
-      }
-
-      // Also check rawLog.message if needed
-      if (techniques.length === 0 && log.rawLog?.message?.rule?.mitre?.technique) {
-        if (Array.isArray(log.rawLog.message.rule.mitre.technique)) {
-          techniques = log.rawLog.message.rule.mitre.technique;
-        } else {
-          techniques = [log.rawLog.message.rule.mitre.technique];
-        }
-      }
-
-      techniques.forEach(tech => {
-        if (tech) {
-          const cleanTech = tech.split('(')[0].trim();
-          acc[cleanTech] = (acc[cleanTech] || 0) + 1;
-        }
-      });
-      return acc;
-    }, {});
+    // Enhanced MITRE Techniques extraction
+const mitreTechniques = logs.reduce((acc, log) => {
+  // Try multiple approaches to get MITRE technique data
+  let mitre = log.rule?.mitre || {};
+  if (!mitre.technique && log.rawLog?.message?.rule?.mitre) {
+    mitre = log.rawLog.message.rule.mitre;
+  }
+  
+  let techniques = [];
+  // Handle both array and string cases
+  if (Array.isArray(mitre.technique)) {
+    techniques = mitre.technique;
+  } else if (mitre.technique) {
+    techniques = [mitre.technique];
+  }
+  
+  techniques.forEach(tech => {
+    if (tech) {
+      const cleanTech = tech.split('(')[0].trim();
+      acc[cleanTech] = (acc[cleanTech] || 0) + 1;
+    }
+  });
+  return acc;
+}, {});
 
 
     // Severity Distribution
@@ -215,61 +187,56 @@ const MajorLogs = () => {
       return acc;
     }, {});
 
-    // MITRE Tactics - Enhanced processing
-    const mitreTactics = logs.reduce((acc, log) => {
-      const mitre = log.rule?.mitre || log.rawLog?.message?.rule?.mitre || {};
-      let tactics = [];
-
-      if (Array.isArray(mitre.tactic)) {
-        tactics = mitre.tactic;
-      } else if (mitre.tactic) {
-        tactics = [mitre.tactic];
-      }
-
-      if (tactics.length === 0 && log.rawLog?.message?.rule?.mitre?.tactic) {
-        if (Array.isArray(log.rawLog.message.rule.mitre.tactic)) {
-          tactics = log.rawLog.message.rule.mitre.tactic;
-        } else {
-          tactics = [log.rawLog.message.rule.mitre.tactic];
-        }
-      }
-
-      tactics.forEach(tactic => {
-        if (tactic) {
-          const cleanTactic = tactic.split('(')[0].trim();
-          acc[cleanTactic] = (acc[cleanTactic] || 0) + 1;
-        }
-      });
-      return acc;
-    }, {});
+    // Enhanced MITRE Tactics extraction
+const mitreTactics = logs.reduce((acc, log) => {
+  // Try multiple approaches to get MITRE tactic data
+  let mitre = log.rule?.mitre || {};
+  if (!mitre.tactic && log.rawLog?.message?.rule?.mitre) {
+    mitre = log.rawLog.message.rule.mitre;
+  }
+  
+  let tactics = [];
+  // Handle both array and string cases
+  if (Array.isArray(mitre.tactic)) {
+    tactics = mitre.tactic;
+  } else if (mitre.tactic) {
+    tactics = [mitre.tactic];
+  }
+  
+  tactics.forEach(tactic => {
+    if (tactic) {
+      const cleanTactic = tactic.split('(')[0].trim();
+      acc[cleanTactic] = (acc[cleanTactic] || 0) + 1;
+    }
+  });
+  return acc;
+}, {});
 
 
-    // Rule Groups - Enhanced processing
-    const ruleGroups = logs.reduce((acc, log) => {
-      const groups = log.rule?.groups || log.rawLog?.message?.rule?.groups || [];
-      let groupArray = [];
 
-      if (Array.isArray(groups)) {
-        groupArray = groups;
-      } else if (groups) {
-        groupArray = [groups];
-      }
-
-      if (groupArray.length === 0 && log.rawLog?.message?.rule?.groups) {
-        if (Array.isArray(log.rawLog.message.rule.groups)) {
-          groupArray = log.rawLog.message.rule.groups;
-        } else {
-          groupArray = [log.rawLog.message.rule.groups];
-        }
-      }
-
-      groupArray.forEach(group => {
-        if (group) {
-          acc[group] = (acc[group] || 0) + 1;
-        }
-      });
-      return acc;
-    }, {});
+    // Enhanced Rule Groups extraction
+const ruleGroups = logs.reduce((acc, log) => {
+  // Try multiple approaches to get rule groups data
+  let groups = log.rule?.groups || [];
+  if ((!groups || groups.length === 0) && log.rawLog?.message?.rule?.groups) {
+    groups = log.rawLog.message.rule.groups;
+  }
+  
+  let groupArray = [];
+  // Handle both array and string cases
+  if (Array.isArray(groups)) {
+    groupArray = groups;
+  } else if (groups) {
+    groupArray = [groups];
+  }
+  
+  groupArray.forEach(group => {
+    if (group) {
+      acc[group] = (acc[group] || 0) + 1;
+    }
+  });
+  return acc;
+}, {});
 
     return {
       timelineData: orderedTimelineData, // Now ordered oldest to newest
@@ -386,6 +353,149 @@ const MajorLogs = () => {
     }],
     backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
   });
+
+  // MITRE Tactics chart option
+const getMitreTacticsChartOption = () => {
+  const tacticsData = Object.entries(visualizationData.mitreTactics || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, value], index) => ({
+      name,
+      value,
+      itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
+    }));
+
+  return {
+    title: {
+      text: 'MITRE ATT&CK Tactics',
+      left: 'center',
+      textStyle: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      avoidLabelOverlap: true,
+      itemStyle: { borderRadius: 10 },
+      data: tacticsData,
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      },
+      label: {
+        formatter: '{b}: {c} ({d}%)'
+      }
+    }],
+    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+  };
+};
+
+// MITRE Techniques chart option
+const getMitreTechniquesChartOption = () => {
+  // Use horizontal bar chart for techniques as they can have longer names
+  const sortedTechniques = Object.entries(visualizationData.mitreTechniques || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  const categories = sortedTechniques.map(([name]) => name);
+  const values = sortedTechniques.map(([_, value]) => value);
+
+  return {
+    title: {
+      text: 'MITRE ATT&CK Techniques',
+      left: 'center',
+      textStyle: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'value',
+      axisLabel: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    yAxis: {
+      type: 'category',
+      data: categories,
+      axisLabel: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+        interval: 0
+      }
+    },
+    series: [{
+      name: 'Occurrences',
+      type: 'bar',
+      data: values,
+      itemStyle: {
+        color: (params) => COLOR_PALETTE[params.dataIndex % COLOR_PALETTE.length]
+      },
+      label: {
+        show: true,
+        position: 'right',
+        formatter: '{c}'
+      }
+    }],
+    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+  };
+};
+
+// Rule Groups chart option
+const getRuleGroupsChartOption = () => {
+  const groupsData = Object.entries(visualizationData.ruleGroups || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, value], index) => ({
+      name,
+      value,
+      itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
+    }));
+
+  return {
+    title: {
+      text: 'Rule Groups Distribution',
+      left: 'center',
+      textStyle: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      avoidLabelOverlap: true,
+      itemStyle: { borderRadius: 10 },
+      data: groupsData,
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      },
+      label: {
+        formatter: '{b}: {c} ({d}%)'
+      }
+    }],
+    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+  };
+};
 
   const getMitreChartOption = (data, title) => {
     const entries = Object.entries(data)
@@ -617,8 +727,9 @@ const MajorLogs = () => {
               <Skeleton variant="rectangular" height={300} />
             ) : (
               <ReactECharts
-                option={getMitreChartOption(visualizationData.mitreTactics || {}, 'MITRE Tactics')}
-                style={{ height: 300 }}
+                  option={getMitreTacticsChartOption()}
+                  style={{ height: '100%', width: '100%' }}
+                  theme={theme.palette.mode === 'dark' ? 'dark' : ''}
               />
             )}
           </Grid>
@@ -629,8 +740,9 @@ const MajorLogs = () => {
               <Skeleton variant="rectangular" height={300} />
             ) : (
               <ReactECharts
-                option={getMitreChartOption(visualizationData.mitreTechniques || {}, 'MITRE Techniques')}
-                style={{ height: 300 }}
+                option={getMitreTechniquesChartOption()}
+                style={{ height: '100%', width: '100%' }}
+                theme={theme.palette.mode === 'dark' ? 'dark' : ''}
               />
             )}
           </Grid>
@@ -644,8 +756,9 @@ const MajorLogs = () => {
               <Skeleton variant="rectangular" height={300} />
             ) : (
               <ReactECharts
-                option={getMitreChartOption(visualizationData.ruleGroups || {}, 'Rule Groups')}
-                style={{ height: 300 }}
+                option={getRuleGroupsChartOption()}
+                style={{ height: '100%', width: '100%' }}
+                theme={theme.palette.mode === 'dark' ? 'dark' : ''}
               />
             )}
           </Grid>
