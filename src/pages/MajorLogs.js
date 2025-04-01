@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Alert, TextField, InputAdornment, CircularProgress, Link, Dialog, DialogTitle, DialogContent, IconButton, Chip, Grid, Tab, Tabs, TablePagination, Skeleton
+  Box, Typography, Paper, CircularProgress, Link, Dialog, DialogTitle, DialogContent, IconButton, Chip, Grid, Tab, Tabs, Skeleton
 } from '@mui/material';
-import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
-import WarningIcon from '@mui/icons-material/Warning';
 import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import { StructuredLogView } from '../utils/normalizeLogs';
@@ -26,6 +24,7 @@ import {
   LegendComponent
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { DataGrid } from '@mui/x-data-grid';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 
 // Register ECharts components
@@ -62,7 +61,7 @@ const MajorLogs = () => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const theme = useTheme();
   const [fullscreenChart, setFullscreenChart] = useState(null);
   const [fullscreenTitle, setFullscreenTitle] = useState('');
@@ -127,6 +126,65 @@ const MajorLogs = () => {
     setFullscreenChart(option);
     setFullscreenTitle(title);
   };
+
+  const columns = [
+    {
+      field: 'timestamp',
+      headerName: 'Timestamp',
+      flex: 1.5,
+      renderCell: (params) => formatTimestamp(params.value)
+    },
+    {
+      field: 'agentName',
+      headerName: 'Agent Name',
+      flex: 1
+    },
+    {
+      field: 'ruleLevel',
+      headerName: 'Rule Level',
+      flex: 0.7,
+      renderCell: (params) => (
+        <Typography sx={{ color: getRuleLevelColor(params.value), fontWeight: 'bold' }}>
+          {params.value}
+        </Typography>
+      )
+    },
+    {
+      field: 'severity',
+      headerName: 'Severity',
+      flex: 1,
+      renderCell: (params) => (
+        <Chip
+          label={getRuleLevelSeverity(params.row.ruleLevel)}
+          sx={{
+            backgroundColor: getRuleLevelColor(params.row.ruleLevel),
+            color: 'white',
+            fontWeight: 'bold'
+          }}
+          size="small"
+        />
+      )
+    },
+    {
+      field: 'description',
+      headerName: 'Description',
+      flex: 2
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      flex: 0.8,
+      sortable: false,
+      renderCell: (params) => (
+        <Link
+          component="button"
+          onClick={() => setSelectedLog(params.row.fullLog)}
+        >
+          View Details
+        </Link>
+      )
+    }
+  ];
 
   // Memoized data processing for visualizations
   const visualizationData = useMemo(() => {
@@ -783,7 +841,7 @@ const MajorLogs = () => {
 
       {activeTab === 0 && (
         <Grid container spacing={3}>
-          {/* Timeline Chart */} 
+          {/* Timeline Chart */}
           <Grid item xs={12} md={6}>
             {loading ? (
               <Skeleton variant="rectangular" height={300} />
@@ -962,99 +1020,58 @@ const MajorLogs = () => {
       {/* Rest of the component remains the same as in the previous implementation */}
       {/* (Include the Events Tab and Log Details Dialog) */}
       {activeTab === 1 && (
-        <Box>
-          <TextField
-            fullWidth
-            margin="normal"
-            variant="outlined"
-            placeholder="Search by agent name, description, rule level..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ mb: 3 }}
-          />
-
-          <Alert
-            severity={logs.length > 0 ? "warning" : "info"}
-            sx={{ mb: 3 }}
-            icon={logs.length > 0 ? <WarningIcon /> : undefined}
-          >
-            {logs.length > 0
-              ? `Found ${logs.length} major security logs that require attention`
-              : 'No major logs found for the specified criteria'}
-          </Alert>
-
-          <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Timestamp</TableCell>
-                  <TableCell>Agent Name</TableCell>
-                  <TableCell>Rule Level</TableCell>
-                  <TableCell>Severity</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {logs
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((log) => {
-                    const parsedLog = parseLogMessage(log);
-                    return (
-                      <TableRow key={parsedLog.timestamp}>
-                        <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
-                        <TableCell>{parsedLog.agent.name}</TableCell>
-                        <TableCell>
-                          <Typography sx={{ color: getRuleLevelColor(parsedLog.rule.level), fontWeight: 'bold' }}>
-                            {parsedLog.rule.level}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={getRuleLevelSeverity(parsedLog.rule.level)}
-                            sx={{
-                              backgroundColor: getRuleLevelColor(parsedLog.rule.level),
-                              color: 'white',
-                              fontWeight: 'bold'
-                            }}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{parsedLog.rule.description}</TableCell>
-                        <TableCell>
-                          <Link
-                            component="button"
-                            onClick={() => setSelectedLog(parsedLog)}
-                          >
-                            View Details
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            rowsPerPageOptions={[10, 25, 50]}
-            component="div"
-            count={logs.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(e, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-          />
-        </Box>
+        <Paper elevation={2} sx={{ mb: 3 }}>
+          <Box sx={{
+            height: 650,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}>
+            {/* DataGrid code here */}
+            <DataGrid
+              rows={logs.map((log, index) => {
+                const parsedLog = parseLogMessage(log);
+                return {
+                  id: index,
+                  timestamp: parsedLog.timestamp,
+                  agentName: parsedLog.agent.name,
+                  ruleLevel: parsedLog.rule.level,
+                  description: parsedLog.rule.description,
+                  fullLog: parsedLog
+                };
+              })}
+              columns={columns}
+              pageSize={rowsPerPage}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+              onPageSizeChange={(newPageSize) => setRowsPerPage(newPageSize)}
+              pagination
+              disableSelectionOnClick
+              loading={loading}
+              density="standard"
+              initialState={{
+                pagination: {
+                  pageSize: 50,
+                },
+              }}
+              sx={{
+                '& .MuiDataGrid-cell:hover': {
+                  color: 'primary.main',
+                },
+                '& .MuiDataGrid-main': {
+                  // Ensures grid content scrolls but headers remain fixed
+                  overflow: 'auto !important'
+                },
+                // Make sure footer with pagination stays at bottom
+                '& .MuiDataGrid-footerContainer': {
+                  borderTop: '1px solid rgba(224, 224, 224, 1)',
+                },
+                flex: 1, // Take up remaining space in container
+                boxSizing: 'border-box',
+              }}
+            />
+          </Box>
+        </Paper>
       )}
 
       {/* Log Details Dialog */}
