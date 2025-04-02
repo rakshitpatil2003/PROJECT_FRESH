@@ -45,6 +45,8 @@ LogSchema.index({'rule.level': 1, 'rule.description': 1});
 // Add index for syscheck queries
 LogSchema.index({location: 1});
 LogSchema.index({'syscheck.event': 1});
+LogSchema.index({"rule.groups": 1});
+LogSchema.index({"rawLog.message.rule.groups": 1});
 
 // Keep your existing pre-save hook
 LogSchema.pre('save', function(next) {

@@ -17,13 +17,13 @@ let metricsCache = {
 router.get('/summary', auth, async (req, res) => {
   try {
     const { timeRange, logType } = req.query;
-    
+
     // Calculate time filter
     const timeFilter = getTimeFilter(timeRange);
-    
+
     // Base query
     let query = { timestamp: { $gte: timeFilter } };
-    
+
     // Add log type filter if specified
     if (logType && logType !== 'all') {
       query.logType = logType;
@@ -32,16 +32,18 @@ router.get('/summary', auth, async (req, res) => {
     // Get aggregated counts directly from MongoDB
     const [levelCounts] = await Log.aggregate([
       { $match: query },
-      { 
+      {
         $group: {
           _id: null,
           notice: {
             $sum: {
               $cond: [
-                { $and: [
-                  { $gte: [{ $toInt: "$rule.level" }, 1] },
-                  { $lte: [{ $toInt: "$rule.level" }, 7] }
-                ]},
+                {
+                  $and: [
+                    { $gte: [{ $toInt: "$rule.level" }, 1] },
+                    { $lte: [{ $toInt: "$rule.level" }, 7] }
+                  ]
+                },
                 1,
                 0
               ]
@@ -50,10 +52,12 @@ router.get('/summary', auth, async (req, res) => {
           warning: {
             $sum: {
               $cond: [
-                { $and: [
-                  { $gte: [{ $toInt: "$rule.level" }, 8] },
-                  { $lte: [{ $toInt: "$rule.level" }, 11] }
-                ]},
+                {
+                  $and: [
+                    { $gte: [{ $toInt: "$rule.level" }, 8] },
+                    { $lte: [{ $toInt: "$rule.level" }, 11] }
+                  ]
+                },
                 1,
                 0
               ]
@@ -62,10 +66,12 @@ router.get('/summary', auth, async (req, res) => {
           critical: {
             $sum: {
               $cond: [
-                { $and: [
-                  { $gte: [{ $toInt: "$rule.level" }, 12] },
-                  { $lte: [{ $toInt: "$rule.level" }, 16] }
-                ]},
+                {
+                  $and: [
+                    { $gte: [{ $toInt: "$rule.level" }, 12] },
+                    { $lte: [{ $toInt: "$rule.level" }, 16] }
+                  ]
+                },
                 1,
                 0
               ]
@@ -98,43 +104,43 @@ router.get('/charts/:chartType', auth, async (req, res) => {
   try {
     const { chartType } = req.params;
     const { timeRange, logType, protocol } = req.query;
-    
+
     // Calculate time filter
     const timeFilter = getTimeFilter(timeRange);
-    
+
     // Base query
     let query = { timestamp: { $gte: timeFilter } };
-    
+
     // Add log type filter if specified
     if (logType && logType !== 'all') {
       query.logType = logType;
     }
-    
+
     // Add protocol filter if specified and relevant
     if (protocol && protocol !== 'all' && ['protocolDistribution', 'networkConnections'].includes(chartType)) {
       query.protocol = protocol;
     }
-    
+
     // Handle different chart types
     switch (chartType) {
       case 'logLevelsOverTime':
         return await getLogLevelsOverTime(query, res);
-      
+
       case 'protocolDistribution':
         return await getProtocolDistribution(query, res);
-      
+
       case 'topSourceIPs':
         return await getTopSourceIPs(query, res);
-      
+
       case 'levelDistribution':
         return await getLevelDistribution(query, res);
-      
+
       case 'networkConnections':
         return await getNetworkConnections(query, res);
-      
+
       case 'ruleDescriptions':
         return await getRuleDescriptions(query, res);
-      
+
       default:
         return res.status(400).json({ message: 'Invalid chart type' });
     }
@@ -147,11 +153,11 @@ router.get('/charts/:chartType', auth, async (req, res) => {
 router.get('/debug/structure', auth, async (req, res) => {
   try {
     const sampleLog = await Log.findOne().lean();
-    
+
     if (!sampleLog) {
       return res.json({ message: "No logs found in database" });
     }
-    
+
     // Extract the structure of the document
     const structure = {
       hasSourceIP: !!sampleLog.sourceIP,
@@ -159,21 +165,21 @@ router.get('/debug/structure', auth, async (req, res) => {
       hasFieldsSrcIP: !!sampleLog.fields && !!sampleLog.fields.src_ip,
       hasSrcIP: !!sampleLog.src_ip,
       hasNetworkSrcIP: !!sampleLog.network && !!sampleLog.network.srcIp,
-      
+
       hasDestinationIP: !!sampleLog.destinationIP,
       hasDestinationObject: !!sampleLog.destination && !!sampleLog.destination.ip,
       hasFieldsDstIP: !!sampleLog.fields && !!sampleLog.fields.dst_ip,
       hasDstIP: !!sampleLog.dst_ip,
       hasNetworkDestIP: !!sampleLog.network && !!sampleLog.network.destIp,
-      
+
       hasProtocol: !!sampleLog.protocol,
       hasDataProtocol: !!sampleLog.data && !!sampleLog.data.protocol,
       hasFieldsProtocol: !!sampleLog.fields && !!sampleLog.fields.protocol,
       hasNetworkProtocol: !!sampleLog.network && !!sampleLog.network.protocol,
-      
+
       documentKeys: Object.keys(sampleLog)
     };
-    
+
     return res.json({
       message: "Document structure analysis",
       structure,
@@ -181,9 +187,9 @@ router.get('/debug/structure', auth, async (req, res) => {
     });
   } catch (error) {
     console.error("Error analyzing document structure:", error);
-    return res.status(500).json({ 
-      message: "Error analyzing document structure", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Error analyzing document structure",
+      error: error.message
     });
   }
 });
@@ -191,7 +197,7 @@ router.get('/debug/structure', auth, async (req, res) => {
 // Helper function to calculate time filter based on timeRange parameter
 function getTimeFilter(timeRange) {
   const now = new Date();
-  
+
   switch (timeRange) {
     case '1h':
       return new Date(now - 1 * 60 * 60 * 1000);
@@ -213,16 +219,16 @@ async function getLogLevelsOverTime(query, res) {
   const timeRange = query.timestamp.$gte;
   const now = new Date();
   const diffHours = Math.round((now - timeRange) / (1000 * 60 * 60));
-  
+
   // Determine grouping interval (hourly, 3-hourly, daily)
   let interval;
   let format;
-  
+
   if (diffHours <= 24) {
     interval = { $hour: "$timestamp" };
     format = "%H:00";
   } else if (diffHours <= 72) {
-    interval = { 
+    interval = {
       $concat: [
         { $toString: { $dayOfMonth: "$timestamp" } },
         "-",
@@ -234,7 +240,7 @@ async function getLogLevelsOverTime(query, res) {
     interval = { $dayOfMonth: "$timestamp" };
     format = "%m/%d";
   }
-  
+
   const result = await Log.aggregate([
     { $match: query },
     {
@@ -277,13 +283,13 @@ async function getLogLevelsOverTime(query, res) {
     },
     { $sort: { _id: 1 } }
   ]);
-  
+
   // Format the data for the chart
   const timeLabels = result.map(item => item._id);
   const notice = result.map(item => item.notice);
   const warning = result.map(item => item.warning);
   const critical = result.map(item => item.critical);
-  
+
   return res.json({
     timeLabels,
     notice,
@@ -342,7 +348,7 @@ async function getProtocolDistribution(query, res) {
       {
         $project: {
           _id: 0,
-          name: { 
+          name: {
             $cond: [
               { $eq: ["$_id", null] },
               "Unknown",
@@ -353,11 +359,11 @@ async function getProtocolDistribution(query, res) {
         }
       }
     ]);
-    
+
     if (result.length === 0) {
       return res.json([{ name: "No Protocol Data", value: 1 }]);
     }
-    
+
     return res.json(result);
   } catch (error) {
     console.error("Error in protocol distribution:", error);
@@ -421,11 +427,11 @@ async function getTopSourceIPs(query, res) {
         }
       }
     ]);
-    
+
     if (result.length === 0) {
       return res.json([{ name: "No Source IP Data", value: 1 }]);
     }
-    
+
     return res.json(result);
   } catch (error) {
     console.error("Error in top source IPs:", error);
@@ -451,26 +457,26 @@ async function getLevelDistribution(query, res) {
       }
     }
   ]);
-  
+
   // Handle empty results
   if (result.length === 0) {
     return res.json([{ name: "No Data", value: 0 }]);
   }
-  
+
   return res.json(result);
 }
 
 function getNestedValue(obj, path) {
   const parts = path.split('.');
   let current = obj;
-  
+
   for (const part of parts) {
     if (current === null || current === undefined || typeof current !== 'object') {
       return null;
     }
     current = current[part];
   }
-  
+
   return current;
 }
 
@@ -479,7 +485,7 @@ async function getNetworkConnections(query, res) {
     // Define all possible field paths
     const sourceIPPaths = ["network.srcIp", "sourceIP", "source.ip", "fields.src_ip", "rawData.data.src_ip"];
     const destIPPaths = ["network.destIp", "destinationIP", "destination.ip", "fields.dst_ip", "rawData.data.dest_ip"];
-    
+
     // Create projection objects for all possible paths
     const sourceIPProjection = {};
     sourceIPPaths.forEach(path => {
@@ -491,7 +497,7 @@ async function getNetworkConnections(query, res) {
       }
       current[parts[parts.length - 1]] = 1;
     });
-    
+
     const destIPProjection = {};
     destIPPaths.forEach(path => {
       const parts = path.split('.');
@@ -502,14 +508,14 @@ async function getNetworkConnections(query, res) {
       }
       current[parts[parts.length - 1]] = 1;
     });
-    
+
     // Get sample documents to check field paths
     const sampleDocs = await Log.find(query).limit(10).lean();
-    
+
     // Determine which fields actually exist in the documents
     let sourceIPField = null;
     let destinationIPField = null;
-    
+
     for (const doc of sampleDocs) {
       // Check source IP fields
       for (const path of sourceIPPaths) {
@@ -519,7 +525,7 @@ async function getNetworkConnections(query, res) {
           break;
         }
       }
-      
+
       // Check destination IP fields
       for (const path of destIPPaths) {
         const value = getNestedValue(doc, path);
@@ -528,16 +534,16 @@ async function getNetworkConnections(query, res) {
           break;
         }
       }
-      
+
       if (sourceIPField && destinationIPField) break;
     }
-    
+
     // Default to the first option if no field was found
     sourceIPField = sourceIPField || sourceIPPaths[0];
     destinationIPField = destinationIPField || destIPPaths[0];
-    
+
     console.log(`Using source IP field: ${sourceIPField}, destination IP field: ${destinationIPField}`);
-    
+
     // Get top source IPs
     const sourceProjection = { source: `$${sourceIPField}` };
     const topSources = await Log.aggregate([
@@ -548,7 +554,7 @@ async function getNetworkConnections(query, res) {
       { $sort: { count: -1 } },
       { $limit: 10 }
     ]);
-    
+
     // Get top destination IPs
     const destProjection = { destination: `$${destinationIPField}` };
     const topDestinations = await Log.aggregate([
@@ -559,31 +565,31 @@ async function getNetworkConnections(query, res) {
       { $sort: { count: -1 } },
       { $limit: 10 }
     ]);
-    
+
     // Get source-destination connections
     const sourceIDs = topSources.map(s => s._id).filter(Boolean);
     const destIDs = topDestinations.map(d => d._id).filter(Boolean);
-    
+
     let connectionsMatchQuery = { ...query };
-    
+
     // Only add path conditions if we have data
     if (sourceIDs.length > 0) {
       connectionsMatchQuery[sourceIPField] = { $in: sourceIDs };
     }
-    
+
     if (destIDs.length > 0) {
       connectionsMatchQuery[destinationIPField] = { $in: destIDs };
     }
-    
+
     const connectionProjection = {
       source: `$${sourceIPField}`,
       target: `$${destinationIPField}`
     };
-    
+
     const connections = await Log.aggregate([
       { $match: connectionsMatchQuery },
       { $project: connectionProjection },
-      { 
+      {
         $group: {
           _id: { source: "$source", target: "$target" },
           count: { $sum: 1 }
@@ -593,10 +599,10 @@ async function getNetworkConnections(query, res) {
       { $sort: { count: -1 } },
       { $limit: 50 }
     ]);
-    
+
     // Format for force-directed graph
     const nodeMap = new Map();
-    
+
     // Add source nodes
     topSources.forEach(source => {
       if (source._id) {
@@ -607,7 +613,7 @@ async function getNetworkConnections(query, res) {
         });
       }
     });
-    
+
     // Add destination nodes
     topDestinations.forEach(dest => {
       if (dest._id) {
@@ -624,9 +630,9 @@ async function getNetworkConnections(query, res) {
         }
       }
     });
-    
+
     const nodes = Array.from(nodeMap.values());
-    
+
     // Create links
     const links = connections
       .filter(conn => conn._id.source && conn._id.target)
@@ -635,7 +641,7 @@ async function getNetworkConnections(query, res) {
         target: conn._id.target,
         value: conn.count
       }));
-    
+
     // Handle empty results
     if (nodes.length === 0) {
       return res.json({
@@ -648,12 +654,12 @@ async function getNetworkConnections(query, res) {
         ]
       });
     }
-    
+
     // Return the network graph data
     return res.json({
       nodes,
       links: links.length > 0 ? links : [
-        { 
+        {
           source: nodes[0].name,
           target: nodes.length > 1 ? nodes[1].name : nodes[0].name,
           value: 1
@@ -690,12 +696,12 @@ async function getRuleDescriptions(query, res) {
       }
     }
   ]);
-  
+
   // Handle empty results
   if (result.length === 0) {
     return res.json([{ name: "No Rules Found", value: 1 }]);
   }
-  
+
   return res.json(result);
 }
 
@@ -705,7 +711,7 @@ module.exports = router;
 router.get('/metrics', async (req, res) => {
   try {
     console.log('Fetching metrics...');
-    
+
     const [metrics] = await Log.aggregate([
       {
         $addFields: {
@@ -795,7 +801,7 @@ router.get('/major', async (req, res) => {
   try {
     const { search = '' } = req.query;
     console.log('Fetching unique major logs with search:', search);
-    
+
     // Build the base query for major logs with explicit type conversion
     let query = {
       $and: [
@@ -877,17 +883,17 @@ router.get('/major', async (req, res) => {
         }
       },
       // Sort by level (descending) and then timestamp (descending)
-      { 
-        $sort: { 
+      {
+        $sort: {
           numericLevel: -1,
-          timestamp: -1 
-        } 
+          timestamp: -1
+        }
       },
       { $limit: 1000 }
     ]);
 
     console.log(`Found ${majorLogs.length} unique major logs`);
-    
+
     // Add additional validation before sending response
     const validatedLogs = majorLogs.filter(log => {
       const level = parseInt(log.rule.level);
@@ -895,12 +901,12 @@ router.get('/major', async (req, res) => {
     });
 
     console.log(`Validated ${validatedLogs.length} logs with level >= 12`);
-    
+
     res.json(validatedLogs);
   } catch (error) {
     console.error('Error fetching major logs:', error);
-    res.status(500).json({ 
-      message: 'Error fetching major logs', 
+    res.status(500).json({
+      message: 'Error fetching major logs',
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -914,7 +920,7 @@ router.get('/major', async (req, res) => {
 router.get('/session', async (req, res) => {
   try {
     const { search = '' } = req.query;
-    
+
     // Build search query for all compliance standards
     let searchQuery = {
       $or: [
@@ -950,13 +956,13 @@ router.get('/session', async (req, res) => {
       .lean();
 
     console.log(`Found ${sessionLogs.length} compliance-related logs`);
-    
+
     res.json(sessionLogs);
   } catch (error) {
     console.error('Error in /session endpoint:', error);
-    res.status(500).json({ 
-      message: 'Error fetching compliance logs', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error fetching compliance logs',
+      error: error.message
     });
   }
 });
@@ -964,20 +970,20 @@ router.get('/session', async (req, res) => {
 router.get('/fim', async (req, res) => {
   try {
     const { search = '', page = 1, limit = 10, event = '', path = '', startTime = '' } = req.query;
-    
+
     // Base query: find logs that are syscheck-related
-    let searchQuery = { 
+    let searchQuery = {
       $or: [
         { "rawLog.message": { $regex: /syscheck/i } },
         { "rawLog.message.location": { $regex: /syscheck/i } }
-      ] 
+      ]
     };
 
     // Add any additional filters
     if (search) {
       searchQuery.$and = [
         searchQuery,
-        { 
+        {
           $or: [
             { 'agent.name': { $regex: search, $options: 'i' } },
             { 'rule.description': { $regex: search, $options: 'i' } },
@@ -991,7 +997,7 @@ router.get('/fim', async (req, res) => {
     // Filter by event type (added, modified, deleted)
     if (event) {
       searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({ 
+      searchQuery.$and.push({
         $or: [
           { "syscheck.event": { $regex: event, $options: 'i' } },
           { "rawLog.syscheck.event": { $regex: event, $options: 'i' } }
@@ -1002,7 +1008,7 @@ router.get('/fim', async (req, res) => {
     // Filter by file path
     if (path) {
       searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({ 
+      searchQuery.$and.push({
         $or: [
           { 'syscheck.path': { $regex: path, $options: 'i' } },
           { 'rawLog.syscheck.path': { $regex: path, $options: 'i' } }
@@ -1017,7 +1023,7 @@ router.get('/fim', async (req, res) => {
 
     // Count total logs for pagination
     const totalLogs = await Log.countDocuments(searchQuery);
-    
+
     // Fetch the logs
     const fimLogs = await Log.find(searchQuery)
       .sort({ timestamp: -1 })
@@ -1026,7 +1032,7 @@ router.get('/fim', async (req, res) => {
       .lean();
 
     console.log(`Found ${fimLogs.length} FIM-related logs`);
-    
+
     res.json({
       logs: fimLogs,
       totalLogs,
@@ -1035,142 +1041,185 @@ router.get('/fim', async (req, res) => {
     });
   } catch (error) {
     console.error('Error in /fim endpoint:', error);
-    res.status(500).json({ 
-      message: 'Error fetching FIM logs', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error fetching FIM logs',
+      error: error.message
     });
+  }
+});
+
+router.get('/malware', async (req, res) => {
+  try {
+    const { page = 0, pageSize = 10, filters = 'virustotal,yara,rootcheck' } = req.query;
+
+    const pageNum = parseInt(page);
+    const limit = parseInt(pageSize);
+    const skip = pageNum * limit;
+
+    // Parse the filters
+    const filterTypes = filters.split(',').filter(Boolean);
+
+    if (filterTypes.length === 0) {
+      return res.status(400).json({ error: 'At least one filter type must be selected' });
+    }
+
+    // Build the regex pattern for matching any of the requested filter types
+    const filterPattern = filterTypes.map(type => type.trim()).join('|');
+    const regexPattern = new RegExp(`"groups":\\s*\\[[^\\]]*"(${filterPattern})"[^\\]]*\\]`, 'i');
+    // Query for logs with any of the requested security groups
+    const query = { "rawLog.message": { $regex: regexPattern } };
+
+    // Execute the query with pagination
+    const [logs, total] = await Promise.all([
+      Log.find(query)
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Log.countDocuments(query)
+    ]);
+
+    return res.json({
+      logs,
+      total,
+      page: pageNum,
+      pageSize: limit
+    });
+  } catch (error) {
+    console.error('Error fetching malware logs:', error);
+    return res.status(500).json({ error: 'Failed to fetch malware logs' });
   }
 });
 
 // Add this endpoint to your existing Logs.js routes
 router.get('/mitre', async (req, res) => {
   try {
-      const { 
-          search = '', 
-          page = 1, 
-          limit = 10, 
-          tactic = '', 
-          technique = '', 
-          id = '',
-          startTime = '' 
-      } = req.query;
+    const {
+      search = '',
+      page = 1,
+      limit = 10,
+      tactic = '',
+      technique = '',
+      id = '',
+      startTime = ''
+    } = req.query;
 
-      // Build search query for Mitre-related logs
-      let searchQuery = { 
+    // Build search query for Mitre-related logs
+    let searchQuery = {
+      $or: [
+        // Mitre-specific searches
+        { "rawLog.message.rule.mitre.id": { $exists: true, $ne: [] } },
+        { "rawLog.message.rule.mitre.tactic": { $exists: true, $ne: [] } },
+        { "rawLog.message.rule.mitre.technique": { $exists: true, $ne: [] } },
+
+        // Technique ID searches
+        { "rule.mitre.id": { $exists: true, $ne: [] } },
+        { "rule.mitre.tactic": { $exists: true, $ne: [] } },
+        { "rule.mitre.technique": { $exists: true, $ne: [] } },
+
+        // Comprehensive text search across raw message
+        {
+          "rawLog.message": {
+            $regex: /mitre|technique|tactic/i
+          }
+        }
+      ]
+    };
+
+    // Additional filtering based on search term
+    if (search) {
+      searchQuery.$and = [
+        searchQuery,
+        {
           $or: [
-              // Mitre-specific searches
-              { "rawLog.message.rule.mitre.id": { $exists: true, $ne: [] } },
-              { "rawLog.message.rule.mitre.tactic": { $exists: true, $ne: [] } },
-              { "rawLog.message.rule.mitre.technique": { $exists: true, $ne: [] } },
-              
-              // Technique ID searches
-              { "rule.mitre.id": { $exists: true, $ne: [] } },
-              { "rule.mitre.tactic": { $exists: true, $ne: [] } },
-              { "rule.mitre.technique": { $exists: true, $ne: [] } },
+            // Agent and rule-based searches
+            { "agent.name": { $regex: search, $options: 'i' } },
+            { "rule.description": { $regex: search, $options: 'i' } },
 
-              // Comprehensive text search across raw message
-              { 
-                  "rawLog.message": { 
-                      $regex: /mitre|technique|tactic/i 
-                  } 
+            // Raw message searches
+            { "rawLog.message": { $regex: search, $options: 'i' } },
+
+            // Specific Mitre field searches
+            { "rule.mitre.id": { $regex: search, $options: 'i' } },
+            { "rule.mitre.tactic": { $regex: search, $options: 'i' } },
+            { "rule.mitre.technique": { $regex: search, $options: 'i' } },
+
+            // Comprehensive MITRE-related keyword search
+            {
+              "rawLog.message": {
+                $regex: new RegExp(
+                  search.split(/\s+/).map(term =>
+                    `(${term}|${term.toLowerCase()}|${term.toUpperCase()})`
+                  ).join('|'),
+                  'i'
+                )
               }
+            }
           ]
-      };
+        }
+      ];
+    }
 
-      // Additional filtering based on search term
-      if (search) {
-          searchQuery.$and = [
-              searchQuery,
-              { 
-                  $or: [
-                      // Agent and rule-based searches
-                      { "agent.name": { $regex: search, $options: 'i' } },
-                      { "rule.description": { $regex: search, $options: 'i' } },
-                      
-                      // Raw message searches
-                      { "rawLog.message": { $regex: search, $options: 'i' } },
-                      
-                      // Specific Mitre field searches
-                      { "rule.mitre.id": { $regex: search, $options: 'i' } },
-                      { "rule.mitre.tactic": { $regex: search, $options: 'i' } },
-                      { "rule.mitre.technique": { $regex: search, $options: 'i' } },
-                      
-                      // Comprehensive MITRE-related keyword search
-                      { 
-                          "rawLog.message": { 
-                              $regex: new RegExp(
-                                  search.split(/\s+/).map(term => 
-                                      `(${term}|${term.toLowerCase()}|${term.toUpperCase()})`
-                                  ).join('|'),
-                                  'i'
-                              )
-                          } 
-                      }
-                  ]
-              }
-          ];
-      }
+    if (startTime) {
+      searchQuery.timestamp = { $gte: new Date(startTime) };
+      // If your timestamp field is in a different location, adjust accordingly
+      // For example, if it's nested in rawLog:
+      // searchQuery["rawLog.timestamp"] = { $gte: new Date(startTime) };
+    }
 
-      if (startTime) {
-        searchQuery.timestamp = { $gte: new Date(startTime) };
-        // If your timestamp field is in a different location, adjust accordingly
-        // For example, if it's nested in rawLog:
-        // searchQuery["rawLog.timestamp"] = { $gte: new Date(startTime) };
-      }
-
-      // Specific Mitre filtering
-      if (tactic) {
-          searchQuery.$and = searchQuery.$and || [];
-          searchQuery.$and.push({
-              $or: [
-                  { "rule.mitre.tactic": { $regex: tactic, $options: 'i' } },
-                  { "rawLog.message.rule.mitre.tactic": { $regex: tactic, $options: 'i' } }
-              ]
-          });
-      }
-
-      if (technique) {
-          searchQuery.$and = searchQuery.$and || [];
-          searchQuery.$and.push({
-              $or: [
-                  { "rule.mitre.technique": { $regex: technique, $options: 'i' } },
-                  { "rawLog.message.rule.mitre.technique": { $regex: technique, $options: 'i' } }
-              ]
-          });
-      }
-
-      if (id) {
-          searchQuery.$and = searchQuery.$and || [];
-          searchQuery.$and.push({
-              $or: [
-                  { "rule.mitre.id": { $regex: id, $options: 'i' } },
-                  { "rawLog.message.rule.mitre.id": { $regex: id, $options: 'i' } }
-              ]
-          });
-      }
-
-      // Count total documents for pagination
-      const totalLogs = await Log.countDocuments(searchQuery);
-
-      // Execute query with pagination and sorting
-      const mitreAttackLogs = await Log.find(searchQuery)
-          .sort({ timestamp: -1 })
-          .skip((page - 1) * limit)
-          .limit(Number(limit))
-          .lean();
-
-      res.json({
-          logs: mitreAttackLogs,
-          totalLogs,
-          page: Number(page),
-          totalPages: Math.ceil(totalLogs / limit)
+    // Specific Mitre filtering
+    if (tactic) {
+      searchQuery.$and = searchQuery.$and || [];
+      searchQuery.$and.push({
+        $or: [
+          { "rule.mitre.tactic": { $regex: tactic, $options: 'i' } },
+          { "rawLog.message.rule.mitre.tactic": { $regex: tactic, $options: 'i' } }
+        ]
       });
+    }
+
+    if (technique) {
+      searchQuery.$and = searchQuery.$and || [];
+      searchQuery.$and.push({
+        $or: [
+          { "rule.mitre.technique": { $regex: technique, $options: 'i' } },
+          { "rawLog.message.rule.mitre.technique": { $regex: technique, $options: 'i' } }
+        ]
+      });
+    }
+
+    if (id) {
+      searchQuery.$and = searchQuery.$and || [];
+      searchQuery.$and.push({
+        $or: [
+          { "rule.mitre.id": { $regex: id, $options: 'i' } },
+          { "rawLog.message.rule.mitre.id": { $regex: id, $options: 'i' } }
+        ]
+      });
+    }
+
+    // Count total documents for pagination
+    const totalLogs = await Log.countDocuments(searchQuery);
+
+    // Execute query with pagination and sorting
+    const mitreAttackLogs = await Log.find(searchQuery)
+      .sort({ timestamp: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .lean();
+
+    res.json({
+      logs: mitreAttackLogs,
+      totalLogs,
+      page: Number(page),
+      totalPages: Math.ceil(totalLogs / limit)
+    });
   } catch (error) {
-      console.error('Error in /mitre endpoint:', error);
-      res.status(500).json({ 
-          message: 'Error fetching Mitre Attack logs', 
-          error: error.message 
-      });
+    console.error('Error in /mitre endpoint:', error);
+    res.status(500).json({
+      message: 'Error fetching Mitre Attack logs',
+      error: error.message
+    });
   }
 });
 
@@ -1252,14 +1301,14 @@ router.get('/vulnerability', async (req, res) => {
 router.get('/threats', async (req, res) => {
   try {
     const { search = '', page = 1, limit = 10, action = '', srcCountry = '', dstCountry = '', startTime = '' } = req.query;
-    
+
     let searchQuery = {
       $or: [
         { "data.action": { $exists: true } },
         { "rawLog.message": { $regex: /action/i } }
       ]
     };
-    
+
     if (search) {
       searchQuery.$and = [
         searchQuery,
@@ -1275,26 +1324,26 @@ router.get('/threats', async (req, res) => {
         }
       ];
     }
-    
+
     if (startTime) {
       searchQuery.timestamp = { $gte: new Date(startTime) };
     }
-    
+
     if (action) {
       searchQuery.$and = searchQuery.$and || [];
       searchQuery.$and.push({ "data.action": { $regex: action, $options: 'i' } });
     }
-    
+
     if (srcCountry) {
       searchQuery.$and = searchQuery.$and || [];
       searchQuery.$and.push({ "data.srccountry": { $regex: srcCountry, $options: 'i' } });
     }
-    
+
     if (dstCountry) {
       searchQuery.$and = searchQuery.$and || [];
       searchQuery.$and.push({ "data.dstcountry": { $regex: dstCountry, $options: 'i' } });
     }
-    
+
     const totalLogs = await Log.countDocuments(searchQuery);
     const logQuery = Log.find(searchQuery).sort({ timestamp: -1 });
     if (Number(limit) === 0) {
@@ -1312,7 +1361,7 @@ router.get('/threats', async (req, res) => {
         .skip((page - 1) * limit)
         .limit(Number(limit))
         .lean();
-      
+
       res.json({
         logs: threatLogs,
         total: totalLogs,
@@ -1331,7 +1380,7 @@ router.get('/threats', async (req, res) => {
 router.get('/auth-metrics', async (req, res) => {
   try {
     console.log('Fetching authentication metrics...');
-    
+
     const authMetrics = await Log.aggregate([
       {
         // First match only logs that have data.action field
@@ -1364,13 +1413,13 @@ router.get('/auth-metrics', async (req, res) => {
         }
       }
     ]);
-    
+
     // Convert to the expected format
     const result = {
       success: 0,
       failure: 0
     };
-    
+
     authMetrics.forEach(metric => {
       if (metric.type === 'success') {
         result.success = metric.count;
@@ -1378,7 +1427,7 @@ router.get('/auth-metrics', async (req, res) => {
         result.failure = metric.count;
       }
     });
-    
+
     console.log('Auth metrics calculated:', result);
     res.json(result);
   } catch (error) {
@@ -1391,7 +1440,7 @@ router.get('/auth-metrics', async (req, res) => {
 router.get('/top-agents', async (req, res) => {
   try {
     console.log('Fetching top agents...');
-    
+
     const topAgents = await Log.aggregate([
       {
         // Group by agent name and count logs
@@ -1417,7 +1466,7 @@ router.get('/top-agents', async (req, res) => {
         }
       }
     ]);
-    
+
     console.log('Top agents calculated:', topAgents);
     res.json(topAgents);
   } catch (error) {
@@ -1430,11 +1479,11 @@ router.get('/top-agents', async (req, res) => {
 router.get('/alert-trends', async (req, res) => {
   try {
     console.log('Fetching alert trends...');
-    
+
     // Get data for the last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
+
     const alertTrends = await Log.aggregate([
       {
         // Match logs from the last 7 days and make sure rule.level exists
@@ -1447,13 +1496,13 @@ router.get('/alert-trends', async (req, res) => {
         // Add a field for the date and numeric level
         $addFields: {
           date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
-          numericLevel: { 
-            $convert: { 
-              input: "$rule.level", 
-              to: "int", 
-              onError: 0, 
-              onNull: 0 
-            } 
+          numericLevel: {
+            $convert: {
+              input: "$rule.level",
+              to: "int",
+              onError: 0,
+              onNull: 0
+            }
           }
         }
       },
@@ -1469,11 +1518,13 @@ router.get('/alert-trends', async (req, res) => {
           high: {
             $sum: {
               $cond: [
-                { $and: [
-                  { $gte: ["$numericLevel", 12] },
-                  { $lt: ["$numericLevel", 15] }
-                ]},
-                1, 
+                {
+                  $and: [
+                    { $gte: ["$numericLevel", 12] },
+                    { $lt: ["$numericLevel", 15] }
+                  ]
+                },
+                1,
                 0
               ]
             }
@@ -1481,11 +1532,13 @@ router.get('/alert-trends', async (req, res) => {
           medium: {
             $sum: {
               $cond: [
-                { $and: [
-                  { $gte: ["$numericLevel", 8] },
-                  { $lt: ["$numericLevel", 12] }
-                ]},
-                1, 
+                {
+                  $and: [
+                    { $gte: ["$numericLevel", 8] },
+                    { $lt: ["$numericLevel", 12] }
+                  ]
+                },
+                1,
                 0
               ]
             }
@@ -1493,11 +1546,13 @@ router.get('/alert-trends', async (req, res) => {
           low: {
             $sum: {
               $cond: [
-                { $and: [
-                  { $gte: ["$numericLevel", 1] },
-                  { $lt: ["$numericLevel", 8] }
-                ]},
-                1, 
+                {
+                  $and: [
+                    { $gte: ["$numericLevel", 1] },
+                    { $lt: ["$numericLevel", 8] }
+                  ]
+                },
+                1,
                 0
               ]
             }
@@ -1520,7 +1575,7 @@ router.get('/alert-trends', async (req, res) => {
         }
       }
     ]);
-    
+
     console.log('Alert trends calculated:', alertTrends);
     res.json(alertTrends);
   } catch (error) {
@@ -1550,19 +1605,19 @@ router.get('/test', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 1000, 
+    const {
+      page = 1,
+      limit = 1000,
       search = '',
       logType = 'all',
       ruleLevel = 'all'
     } = req.query;
-    
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     // Build query with log type filtering
     let searchQuery = {};
-    
+
     // Apply log type filter
     if (logType === 'fortigate') {
       searchQuery['rawLog.message'] = { $regex: 'FortiGate', $options: 'i' };
@@ -1573,7 +1628,7 @@ router.get('/', async (req, res) => {
     // Apply rule level filter
     if (ruleLevel !== 'all') {
       let ruleLevelRange;
-      
+
       switch (ruleLevel) {
         case 'low':
           ruleLevelRange = { $gte: 1, $lte: 3 };
@@ -1591,12 +1646,12 @@ router.get('/', async (req, res) => {
           ruleLevelRange = { $gte: 17 };
           break;
       }
-      
+
       if (ruleLevelRange) {
         searchQuery['rule.level'] = ruleLevelRange;
       }
     }
-    
+
     // Apply search term filter
     if (search) {
       const searchConditions = [
@@ -1607,7 +1662,7 @@ router.get('/', async (req, res) => {
         { 'network.destIp': { $regex: search, $options: 'i' } },
         { 'rawLog.message': { $regex: search, $options: 'i' } }
       ];
-      
+
       // If we already have a log type filter, use $and to combine both filters
       if (Object.keys(searchQuery).length > 0) {
         searchQuery = {

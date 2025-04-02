@@ -106,6 +106,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
     { text: 'Session Logs', icon: <SupervisorAccountIcon />, path: '/session-logs' },
     { text: 'FIM Logs', icon: <SupervisorAccountIcon/>, path: '/fim'},
     { text: 'SOAR Playbook', icon: <SecurityIcon/>, path: '/soar-playbook'},
+    { text: 'Malware Detection', icon: <SecurityIcon/>, path: '/malware'},
   ];
 
   const securityPolicyItems = [
