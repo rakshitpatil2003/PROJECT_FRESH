@@ -1529,7 +1529,6 @@ router.get('/alert-trends', async (req, res) => {
   }
 });
 
-
 router.get('/test', async (req, res) => {
   try {
     const log = new Log({

@@ -1,11 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { debounce } from 'lodash';
-import {Box,Typography,Table,TableBody,TableCell,TableContainer,TableHead,TableRow,Paper,Alert,TextField,
-  InputAdornment,CircularProgress,Link,Dialog,DialogTitle,DialogContent,IconButton,
-  Pagination,Chip,FormControl,InputLabel,Select,MenuItem,Grid
+import {
+  Box,
+  Typography,
+  Paper,
+  Alert,
+  TextField,
+  InputAdornment,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
+import PauseIcon from '@mui/icons-material/Pause';
+import { DataGrid } from '@mui/x-data-grid';
 import { API_URL } from '../config';
 import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
 import { useTheme } from '@mui/material/styles';
@@ -15,17 +34,19 @@ const LogDetails = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(0); // DataGrid uses 0-based indexing
+  const [pageSize, setPageSize] = useState(100);
+  const [totalRows, setTotalRows] = useState(0);
   const [selectedLog, setSelectedLog] = useState(null);
-  const [logType, setLogType] = useState('all'); // New state for log type filter
-  const [ruleLevel, setRuleLevel] = useState('all'); // New state for rule level filter
+  const [logType, setLogType] = useState('all');
+  const [refreshInterval, setRefreshInterval] = useState('paused');
+  const refreshTimerRef = useRef(null);
 
   const theme = useTheme();
 
   const getRuleLevelColor = (level) => {
     const numLevel = parseInt(level);
-    if (numLevel >= 17) return 'error'; // Added new severity level
+    if (numLevel >= 17) return 'error';
     if (numLevel >= 12) return 'error';
     if (numLevel >= 8) return 'warning';
     if (numLevel >= 4) return 'info';
@@ -53,12 +74,14 @@ const LogDetails = () => {
     }
   };
 
-  const fetchLogs = useCallback(async (currentPage, search, type, level) => {
+  const fetchLogs = useCallback(async (currentPage, pageLimit, search, type) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
+      // Converting to 1-indexed for the API
+      const apiPage = currentPage + 1;
       const response = await fetch(
-        `${API_URL}/api/logs?page=${currentPage}&limit=100&search=${search}&logType=${type}&ruleLevel=${level}`,
+        `${API_URL}/api/logs?page=${apiPage}&limit=${pageLimit}&search=${search}&logType=${type}&ruleLevel=all`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -71,8 +94,22 @@ const LogDetails = () => {
       }
 
       const data = await response.json();
-      setLogs(data.logs || []);
-      setTotalPages(data.pagination.pages);
+      // Add id field for DataGrid
+      const logsWithIds = (data.logs || []).map((log, index) => {
+        const parsedLog = parseLogMessage(log);
+        return {
+          ...log,
+          id: index + (currentPage * pageLimit),
+          // Add extracted fields for DataGrid filtering
+          extractedTimestamp: formatTimestamp(parsedLog.timestamp),
+          extractedAgentName: parsedLog.agent.name,
+          extractedRuleLevel: parsedLog.rule.level,
+          extractedSrcIp: parsedLog.network.srcIp,
+          extractedDescription: parsedLog.rule.description
+        };
+      });
+      setLogs(logsWithIds);
+      setTotalRows(data.pagination?.total || 0);
     } catch (error) {
       console.error('Error fetching logs:', error);
       setError('Failed to fetch logs. Please try again later.');
@@ -82,38 +119,176 @@ const LogDetails = () => {
   }, []);
 
   const debouncedSearch = useCallback(
-    debounce((searchValue, logTypeValue, ruleLevelValue) => {
-      setPage(1);
-      fetchLogs(1, searchValue, logTypeValue, ruleLevelValue);
+    debounce((searchValue, logTypeValue) => {
+      setPage(0);
+      fetchLogs(0, pageSize, searchValue, logTypeValue);
     }, 500),
-    [fetchLogs]
+    [fetchLogs, pageSize]
   );
 
   useEffect(() => {
-    debouncedSearch(searchTerm, logType, ruleLevel);
-  }, [searchTerm, logType, ruleLevel, debouncedSearch]);
+    debouncedSearch(searchTerm, logType);
+  }, [searchTerm, logType, debouncedSearch]);
 
-  const handlePageChange = (event, newPage) => {
+  // Set up auto-refresh mechanism
+  useEffect(() => {
+    // Clear existing timer
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+
+    // Set new timer if not paused
+    if (refreshInterval !== 'paused') {
+      let milliseconds;
+      switch (refreshInterval) {
+        case '10s': milliseconds = 10000; break;
+        case '20s': milliseconds = 20000; break;
+        case '1m': milliseconds = 60000; break;
+        case '5m': milliseconds = 300000; break;
+        default: milliseconds = null;
+      }
+
+      if (milliseconds) {
+        refreshTimerRef.current = setInterval(() => {
+          fetchLogs(page, pageSize, searchTerm, logType);
+        }, milliseconds);
+      }
+    }
+
+    // Cleanup
+    return () => {
+      if (refreshTimerRef.current) {
+        clearInterval(refreshTimerRef.current);
+      }
+    };
+  }, [refreshInterval, fetchLogs, page, pageSize, searchTerm, logType]);
+
+  // Fetch logs on initial load to show most recent logs
+  useEffect(() => {
+    fetchLogs(0, pageSize, searchTerm, logType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePageChange = (newPage) => {
     setPage(newPage);
-    fetchLogs(newPage, searchTerm, logType, ruleLevel);
+    fetchLogs(newPage, pageSize, searchTerm, logType);
+  };
+
+  const handlePageSizeChange = (newPageSize) => {
+    setPageSize(newPageSize);
+    setPage(0);
+    fetchLogs(0, newPageSize, searchTerm, logType);
   };
 
   const handleLogTypeChange = (event) => {
     setLogType(event.target.value);
   };
 
-  const handleRuleLevelChange = (event) => {
-    setRuleLevel(event.target.value);
+  const handleRefreshIntervalChange = (event, newInterval) => {
+    if (newInterval !== null) {
+      setRefreshInterval(newInterval);
+    }
   };
 
-  const handleClickOpen = (log) => {
-    const parsedLog = parseLogMessage(log);
-    setSelectedLog(parsedLog);
+  const handleClickOpen = (params) => {
+    const log = logs.find(log => log.id === params.id || (params.row && params.row.id));
+    if (log) {
+      const parsedLog = parseLogMessage(log);
+      setSelectedLog(parsedLog);
+    }
   };
 
   const handleClose = () => {
     setSelectedLog(null);
   };
+
+  // DataGrid column definitions
+  const columns = [
+    {
+      field: 'timestamp',
+      headerName: 'Timestamp',
+      flex: 1.5,
+      filterable: true,
+      renderCell: (params) => {
+        const parsedLog = parseLogMessage(params.row);
+        return formatTimestamp(parsedLog.timestamp);
+      }
+    },
+    {
+      field: 'agent',
+      headerName: 'Agent Name',
+      flex: 1,
+      filterable: true,
+      renderCell: (params) => {
+        const parsedLog = parseLogMessage(params.row);
+        return parsedLog.agent.name;
+      }
+    },
+    {
+      field: 'ruleLevel',
+      headerName: 'Rule Level',
+      flex: 1,
+      filterable: true,
+      renderCell: (params) => {
+        const parsedLog = parseLogMessage(params.row);
+        return (
+          <Box sx={{
+            backgroundColor: theme.palette[getRuleLevelColor(parsedLog.rule.level)].main,
+            color: theme.palette[getRuleLevelColor(parsedLog.rule.level)].contrastText,
+            borderRadius: '4px',
+            padding: '3px 8px',
+            fontSize: '0.75rem',
+            display: 'inline-block'
+          }}>
+            {`${parsedLog.rule.level} - ${getRuleLevelLabel(parsedLog.rule.level)}`}
+          </Box>
+        );
+      }
+    },
+    {
+      field: 'srcIp',
+      headerName: 'Source IP',
+      filterable: true,
+      flex: 1,
+      renderCell: (params) => {
+        const parsedLog = parseLogMessage(params.row);
+        return parsedLog.network.srcIp;
+      }
+    },
+    {
+      field: 'description',
+      headerName: 'Description',
+      filterable: true,
+      flex: 2,
+      renderCell: (params) => {
+        const parsedLog = parseLogMessage(params.row);
+        return parsedLog.rule.description;
+      }
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      flex: 0.7,
+      sortable: false,
+      renderCell: (params) => (
+        <Box 
+          component="span" 
+          sx={{ 
+            textDecoration: 'underline', 
+            color: theme.palette.primary.main,
+            cursor: 'pointer'
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleClickOpen(params);
+          }}
+        >
+          View Details
+        </Box>
+      )
+    }
+  ];
 
   if (loading && !logs.length) {
     return (
@@ -149,20 +324,24 @@ const LogDetails = () => {
         </Grid>
         
         <Grid item xs={12} md={3}>
-          <FormControl variant="outlined" fullWidth>
-            <InputLabel id="rule-level-label">Rule Level</InputLabel>
+          <FormControl fullWidth>
+            <InputLabel id="refresh-interval-label">Auto Refresh</InputLabel>
             <Select
-              labelId="rule-level-label"
-              value={ruleLevel}
-              onChange={handleRuleLevelChange}
-              label="Rule Level"
+              labelId="refresh-interval-label"
+              value={refreshInterval}
+              onChange={(e) => setRefreshInterval(e.target.value)}
+              label="Auto Refresh"
             >
-              <MenuItem value="all">All Levels</MenuItem>
-              <MenuItem value="low">Low (1-3)</MenuItem>
-              <MenuItem value="medium">Medium (4-7)</MenuItem>
-              <MenuItem value="high">High (8-11)</MenuItem>
-              <MenuItem value="critical">Critical (12-16)</MenuItem>
-              <MenuItem value="severe">Severe (17+)</MenuItem>
+              <MenuItem value="paused">
+                <Box display="flex" alignItems="center">
+                  <PauseIcon fontSize="small" sx={{ mr: 1 }} />
+                  Update Paused
+                </Box>
+              </MenuItem>
+              <MenuItem value="10s">Every 10 seconds</MenuItem>
+              <MenuItem value="20s">Every 20 seconds</MenuItem>
+              <MenuItem value="1m">Every 1 minute</MenuItem>
+              <MenuItem value="5m">Every 5 minutes</MenuItem>
             </Select>
           </FormControl>
         </Grid>
@@ -185,61 +364,43 @@ const LogDetails = () => {
         </Grid>
       </Grid>
 
-      <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Timestamp</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Agent Name</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Rule Level</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Source IP</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Description</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {logs.map((log, index) => {
-              const parsedLog = parseLogMessage(log);
-              return (
-                <TableRow key={index} hover>
-                  <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
-                  <TableCell>{parsedLog.agent.name}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={`${parsedLog.rule.level} - ${getRuleLevelLabel(parsedLog.rule.level)}`}
-                      color={getRuleLevelColor(parsedLog.rule.level)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>{parsedLog.network.srcIp}</TableCell>
-                  <TableCell>{parsedLog.rule.description}</TableCell>
-                  <TableCell>
-                    <Link
-                      component="button"
-                      variant="body2"
-                      onClick={() => handleClickOpen(log)}
-                      sx={{ textAlign: 'left', cursor: 'pointer' }}
-                    >
-                      View Details
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      {totalPages > 1 && (
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-          <Pagination 
-            count={totalPages} 
-            page={page} 
-            onChange={handlePageChange} 
-            color="primary" 
-          />
-        </Box>
-      )}
+      <Paper sx={{ height: 'calc(100vh - 300px)', width: '100%' }}>
+        <DataGrid
+          rows={logs}
+          columns={columns}
+          pagination
+          paginationMode="server"
+          rowCount={totalRows}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          rowsPerPageOptions={[25, 50, 100]}
+          disableSelectionOnClick
+          loading={loading}
+          filterMode="server"
+          disableColumnFilter={false}
+          onFilterModelChange={(newFilterModel) => {
+            // Integrate DataGrid filters with your existing search mechanism
+            // Extract filter values and add them to your API call
+            const filterValue = newFilterModel.items[0]?.value || '';
+            if (filterValue !== searchTerm) {
+              setSearchTerm(filterValue);
+            }
+          }}
+          onRowClick={(params, event) => {
+            // Only open dialog if not clicking on the action link
+            if (!event.target.closest('.MuiDataGrid-cell:last-child')) {
+              handleClickOpen(params);
+            }
+          }}
+          sx={{
+            '& .MuiDataGrid-cell': {
+              cursor: 'pointer'
+            }
+          }}
+        />
+      </Paper>
 
       <Dialog
         open={Boolean(selectedLog)}
