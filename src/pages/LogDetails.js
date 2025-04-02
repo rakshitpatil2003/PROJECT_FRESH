@@ -1,25 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { debounce } from 'lodash';
-import {
-  Box,
-  Typography,
-  Paper,
-  Alert,
-  TextField,
-  InputAdornment,
-  CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  IconButton,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Grid,
-  ToggleButton,
-  ToggleButtonGroup,
-  Tooltip
+import {Box,Typography,Paper,Alert,TextField,InputAdornment,CircularProgress,Dialog,DialogTitle,DialogContent,IconButton,FormControl,InputLabel,Select,MenuItem,Grid
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -28,6 +9,7 @@ import { DataGrid } from '@mui/x-data-grid';
 import { API_URL } from '../config';
 import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
 import { useTheme } from '@mui/material/styles';
+import { Chip } from '@mui/material';
 
 const LogDetails = () => {
   const [logs, setLogs] = useState([]);
@@ -233,16 +215,18 @@ const LogDetails = () => {
       renderCell: (params) => {
         const parsedLog = parseLogMessage(params.row);
         return (
-          <Box sx={{
-            backgroundColor: theme.palette[getRuleLevelColor(parsedLog.rule.level)].main,
-            color: theme.palette[getRuleLevelColor(parsedLog.rule.level)].contrastText,
-            borderRadius: '4px',
-            padding: '3px 8px',
-            fontSize: '0.75rem',
-            display: 'inline-block'
-          }}>
-            {`${parsedLog.rule.level} - ${getRuleLevelLabel(parsedLog.rule.level)}`}
-          </Box>
+          <Chip 
+            label={`${parsedLog.rule.level} - ${getRuleLevelLabel(parsedLog.rule.level)}`}
+            color={getRuleLevelColor(parsedLog.rule.level)}
+            size="small"
+            sx={{ 
+              // Match previous density
+              height: '24px',
+              // Optional: If you need to match exact previous colors
+              backgroundColor: theme.palette[getRuleLevelColor(parsedLog.rule.level)].main,
+              color: theme.palette[getRuleLevelColor(parsedLog.rule.level)].contrastText
+            }}
+          />
         );
       }
     },
