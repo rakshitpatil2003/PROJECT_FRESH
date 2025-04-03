@@ -1406,7 +1406,7 @@ router.get('/top-agents', async (req, res) => {
       },
       {
         // Limit to top 5
-        $limit: 5
+        $limit: 7
       },
       {
         // Project to the expected format

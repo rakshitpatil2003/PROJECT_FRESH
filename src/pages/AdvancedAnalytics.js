@@ -21,7 +21,8 @@ const AdvancedAnalytics = () => {
     topDestIPs: null,
     levelDistribution: null,
     networkConnections: null,
-    ruleDescriptions: null
+    ruleDescriptions: null,
+    topAgents: null
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -137,7 +138,7 @@ const AdvancedAnalytics = () => {
       if (!token) {
         throw new Error('Authentication token not found');
       }
-  
+
       const response = await fetch(
         `${API_URL}/api/logs/charts/protocolDistribution?timeRange=${timeRange}&logType=${logType}`,
         {
@@ -147,48 +148,80 @@ const AdvancedAnalytics = () => {
           }
         }
       );
-  
+
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
-  
+
       let data = await response.json();
-      
+
       // Enhanced logging to debug the issue
       console.log("Raw protocol data:", data);
-      
+
       // Better handling of null/undefined/empty values
       data = data.map(item => ({
-        name: (!item.name || item.name === 'N/A' || item.name === '') 
-          ? 'Unknown' 
+        name: (!item.name || item.name === 'N/A' || item.name === '')
+          ? 'Unknown'
           : item.name.trim(),  // Trim to handle whitespace issues
         value: item.value || 0  // Ensure we have a numeric value
       }));
-      
+
       // Filter out items with zero values if needed
       data = data.filter(item => item.value > 0);
-      
+
       // Group small protocols into "Other" category if needed
       if (data.length > 8) {
         const sortedData = [...data].sort((a, b) => b.value - a.value);
         const topItems = sortedData.slice(0, 7);
         const otherItems = sortedData.slice(7);
         const otherValue = otherItems.reduce((sum, item) => sum + item.value, 0);
-  
+
         data = [
           ...topItems,
           { name: 'Other', value: otherValue }
         ];
       }
-      
+
       console.log("Processed protocol data:", data);
-      
+
       setChartData(prevData => ({
         ...prevData,
         protocolDistribution: data
       }));
     } catch (error) {
       console.error('Error fetching protocol distribution data:', error);
+    }
+  }, [timeRange, logType]);
+
+  const fetchTopAgents = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/logs/top-agents?timeRange=${timeRange}&logType=${logType}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      setChartData(prevData => ({
+        ...prevData,
+        topAgents: data
+      }));
+    } catch (error) {
+      console.error('Error fetching top agents data:', error);
     }
   }, [timeRange, logType]);
 
@@ -201,6 +234,8 @@ const AdvancedAnalytics = () => {
 
     // Fetch protocol distribution separately with our custom logic
     await fetchProtocolDistribution();
+    // Fetch top agents
+    await fetchTopAgents();
 
     // Fetch other charts in parallel
     const chartTypes = [
@@ -214,7 +249,7 @@ const AdvancedAnalytics = () => {
     await Promise.all(chartTypes.map(chartType => fetchChartData(chartType)));
 
     setLoading(false);
-  }, [fetchSummaryData, fetchChartData, fetchProtocolDistribution]);
+  }, [fetchSummaryData, fetchChartData, fetchProtocolDistribution, fetchTopAgents]);
   // Add this function to the component
 
 
@@ -304,6 +339,66 @@ const AdvancedAnalytics = () => {
       ]
     };
   }, [chartData.logLevelsOverTime]);
+
+  const topAgentsOptions = useMemo(() => {
+    if (!chartData.topAgents) return null;
+
+    return {
+      title: {
+        text: 'Top 7 Agents',
+        left: 'center',
+        textStyle: { color: textColor }
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+      },
+      backgroundColor: 'transparent',
+      textStyle: { color: textColor },
+      xAxis: {
+        type: 'category',
+        data: chartData.topAgents.map(item => item.name || 'Unknown'),
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: {
+          color: textColor,
+          rotate: 30,
+          formatter: value => value.length > 15 ? value.substring(0, 12) + '...' : value
+        },
+        splitLine: { lineStyle: { color: gridLineColor } }
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: { color: textColor },
+        splitLine: { lineStyle: { color: gridLineColor } }
+      },
+      series: [
+        {
+          name: 'Log Count',
+          type: 'bar',
+          data: chartData.topAgents.map(item => ({
+            value: item.count,
+            itemStyle: {
+              color: '#7A99FF'  // A distinct color for agents
+            }
+          })),
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          }
+        }
+      ]
+    };
+  }, [chartData.topAgents, textColor, gridLineColor]);
 
   const protocolPieOptions = useMemo(() => {
     if (!chartData.protocolDistribution) return null;
@@ -572,13 +667,13 @@ const AdvancedAnalytics = () => {
 
   const ruleDescriptionOptions = useMemo(() => {
     if (!chartData.ruleDescriptions) return null;
-    
+
     // Define a color palette for various rules
     const colorPalette = [
-      '#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#e91e63', 
+      '#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#e91e63',
       '#3f51b5', '#009688', '#cddc39', '#ff5722', '#607d8b'
     ];
-    
+
     return {
       title: {
         text: 'Top Rule Descriptions',
@@ -850,19 +945,16 @@ const AdvancedAnalytics = () => {
           </Grid>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
-              {ruleDescriptionOptions ? (
+              {topAgentsOptions ? (
                 <>
                   <ReactECharts
-                    option={ruleDescriptionOptions}
+                    option={topAgentsOptions}
                     style={{ height: '100%', width: '100%' }}
                     opts={{ renderer: 'canvas' }}
-                    onEvents={{
-                      'click': handleRuleVizToggle
-                    }}
                   />
                   <IconButton
                     sx={{ position: 'absolute', top: 5, right: 5 }}
-                    onClick={() => handleFullscreen('ruleDescriptions')}
+                    onClick={() => handleFullscreen('topAgents')}
                   >
                     <FullscreenIcon />
                   </IconButton>
@@ -1025,7 +1117,7 @@ const AdvancedAnalytics = () => {
               )}
             </Paper>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12}>
             <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
               {ruleDescriptionOptions ? (
                 <>
@@ -1068,13 +1160,13 @@ const AdvancedAnalytics = () => {
             <FullscreenExitIcon />
           </IconButton>
           <DialogContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}>
-          {fullscreenChart === 'levelTime' && levelTimeOptions && (
-            <ReactECharts
-              option={levelTimeOptions}
-              style={{ height: '90vh', width: '95vw' }}
-              opts={{ renderer: 'canvas' }}
-            />
-          )}
+            {fullscreenChart === 'levelTime' && levelTimeOptions && (
+              <ReactECharts
+                option={levelTimeOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            )}
             {fullscreenChart === 'protocolDistribution' && protocolPieOptions && (
               <ReactECharts
                 option={protocolPieOptions}
@@ -1092,6 +1184,13 @@ const AdvancedAnalytics = () => {
             {fullscreenChart === 'levelDistribution' && levelDistributionOptions && (
               <ReactECharts
                 option={levelDistributionOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            )}
+            {fullscreenChart === 'topAgents' && topAgentsOptions && (
+              <ReactECharts
+                option={topAgentsOptions}
                 style={{ height: '90vh', width: '95vw' }}
                 opts={{ renderer: 'canvas' }}
               />
