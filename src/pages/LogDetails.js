@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { debounce } from 'lodash';
-import {Box,Typography,Paper,Alert,TextField,InputAdornment,CircularProgress,Dialog,DialogTitle,DialogContent,IconButton,FormControl,InputLabel,Select,MenuItem,Grid
+import {
+  Box, Typography, Paper, Alert, TextField, InputAdornment, CircularProgress, Dialog, DialogTitle, DialogContent, IconButton, FormControl, InputLabel, Select, MenuItem, Grid
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -114,13 +115,6 @@ const LogDetails = () => {
 
   // Set up auto-refresh mechanism
   useEffect(() => {
-    // Clear existing timer
-    if (refreshTimerRef.current) {
-      clearInterval(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-
-    // Set new timer if not paused
     if (refreshInterval !== 'paused') {
       let milliseconds;
       switch (refreshInterval) {
@@ -133,12 +127,12 @@ const LogDetails = () => {
 
       if (milliseconds) {
         refreshTimerRef.current = setInterval(() => {
+          // Always fetch the current page with current filters
           fetchLogs(page, pageSize, searchTerm, logType);
         }, milliseconds);
       }
     }
 
-    // Cleanup
     return () => {
       if (refreshTimerRef.current) {
         clearInterval(refreshTimerRef.current);
@@ -174,10 +168,38 @@ const LogDetails = () => {
   };
 
   const handleClickOpen = (params) => {
-    const log = logs.find(log => log.id === params.id || (params.row && params.row.id));
-    if (log) {
+    try {
+      // Safety check for params
+      if (!params) {
+        console.error('No params provided to handleClickOpen');
+        return;
+      }
+
+      // Get the ID either directly from params or from params.row
+      const logId = params.id || (params.row && params.row.id);
+
+      if (logId === undefined || logId === null) {
+        console.error('Could not determine log ID from params', params);
+        return;
+      }
+
+      const log = logs.find(log => log.id === logId);
+
+      if (!log) {
+        console.error(`Log with ID ${logId} not found`);
+        return;
+      }
+
       const parsedLog = parseLogMessage(log);
+
+      if (!parsedLog) {
+        console.error('Failed to parse log', log);
+        return;
+      }
+
       setSelectedLog(parsedLog);
+    } catch (error) {
+      console.error('Error in handleClickOpen:', error);
     }
   };
 
@@ -197,14 +219,29 @@ const LogDetails = () => {
         return formatTimestamp(parsedLog.timestamp);
       }
     },
+    // In your columns definition for agent column
     {
       field: 'agent',
       headerName: 'Agent Name',
       flex: 1,
       filterable: true,
+      valueGetter: (params) => {
+        try {
+          const parsedLog = parseLogMessage(params.row);
+          return parsedLog?.agent?.name || 'Unknown';
+        } catch (error) {
+          console.error('Error parsing agent name:', error);
+          return 'Unknown';
+        }
+      },
       renderCell: (params) => {
-        const parsedLog = parseLogMessage(params.row);
-        return parsedLog.agent.name;
+        try {
+          const parsedLog = parseLogMessage(params.row);
+          return parsedLog?.agent?.name || 'Unknown';
+        } catch (error) {
+          console.error('Error rendering agent name:', error);
+          return 'Unknown';
+        }
       }
     },
     {
@@ -212,22 +249,40 @@ const LogDetails = () => {
       headerName: 'Rule Level',
       flex: 1,
       filterable: true,
+      valueGetter: (params) => {
+        try {
+          if (!params || !params.row) return 'Unknown';
+          const parsedLog = parseLogMessage(params.row);
+          if (!parsedLog || !parsedLog.rule) return 'Unknown';
+          return `${parsedLog.rule.level || 0} - ${getRuleLevelLabel(parsedLog.rule.level || 0)}`;
+        } catch (error) {
+          console.error('Error getting rule level value:', error);
+          return 'Unknown';
+        }
+      },
       renderCell: (params) => {
-        const parsedLog = parseLogMessage(params.row);
-        return (
-          <Chip 
-            label={`${parsedLog.rule.level} - ${getRuleLevelLabel(parsedLog.rule.level)}`}
-            color={getRuleLevelColor(parsedLog.rule.level)}
-            size="small"
-            sx={{ 
-              // Match previous density
-              height: '24px',
-              // Optional: If you need to match exact previous colors
-              backgroundColor: theme.palette[getRuleLevelColor(parsedLog.rule.level)].main,
-              color: theme.palette[getRuleLevelColor(parsedLog.rule.level)].contrastText
-            }}
-          />
-        );
+        try {
+          if (!params || !params.row) return 'Unknown';
+          const parsedLog = parseLogMessage(params.row);
+          if (!parsedLog || !parsedLog.rule) return 'Unknown';
+          const level = parsedLog.rule.level || 0;
+
+          return (
+            <Chip
+              label={`${level} - ${getRuleLevelLabel(level)}`}
+              color={getRuleLevelColor(level)}
+              size="small"
+              sx={{
+                height: '24px',
+                backgroundColor: theme.palette[getRuleLevelColor(level)].main,
+                color: theme.palette[getRuleLevelColor(level)].contrastText
+              }}
+            />
+          );
+        } catch (error) {
+          console.error('Error rendering rule level:', error);
+          return 'Unknown';
+        }
       }
     },
     {
@@ -256,10 +311,10 @@ const LogDetails = () => {
       flex: 0.7,
       sortable: false,
       renderCell: (params) => (
-        <Box 
-          component="span" 
-          sx={{ 
-            textDecoration: 'underline', 
+        <Box
+          component="span"
+          sx={{
+            textDecoration: 'underline',
             color: theme.palette.primary.main,
             cursor: 'pointer'
           }}
@@ -306,7 +361,7 @@ const LogDetails = () => {
             </Select>
           </FormControl>
         </Grid>
-        
+
         <Grid item xs={12} md={3}>
           <FormControl fullWidth>
             <InputLabel id="refresh-interval-label">Auto Refresh</InputLabel>
@@ -329,7 +384,7 @@ const LogDetails = () => {
             </Select>
           </FormControl>
         </Grid>
-        
+
         <Grid item xs={12} md={6}>
           <TextField
             fullWidth
@@ -364,12 +419,18 @@ const LogDetails = () => {
           loading={loading}
           filterMode="server"
           disableColumnFilter={false}
+          // In your onFilterModelChange handler
           onFilterModelChange={(newFilterModel) => {
-            // Integrate DataGrid filters with your existing search mechanism
-            // Extract filter values and add them to your API call
-            const filterValue = newFilterModel.items[0]?.value || '';
-            if (filterValue !== searchTerm) {
-              setSearchTerm(filterValue);
+            // Check if newFilterModel and items exist before accessing
+            if (newFilterModel && newFilterModel.items && newFilterModel.items.length > 0) {
+              const filterItem = newFilterModel.items[0];
+              // Only update if we have a valid filter
+              if (filterItem && filterItem.value) {
+                setSearchTerm(filterItem.value);
+              }
+            } else if (searchTerm) {
+              // Clear search when filters are reset
+              setSearchTerm('');
             }
           }}
           onRowClick={(params, event) => {
@@ -403,7 +464,11 @@ const LogDetails = () => {
           </IconButton>
         </DialogTitle>
         <DialogContent>
-          <StructuredLogView data={selectedLog} />
+          {selectedLog ? (
+            <StructuredLogView data={selectedLog} />
+          ) : (
+            <Typography>No log details available</Typography>
+          )}
         </DialogContent>
       </Dialog>
     </Box>
