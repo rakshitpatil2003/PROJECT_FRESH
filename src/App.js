@@ -29,6 +29,9 @@ import NewsTicker from './components/NewsTicker';
 import UserDetails from './pages/UserDetails';
 import FIM from './pages/FIM';
 import SOARPlaybook from './pages/SOARPlaybook';
+import Malware from './pages/Malware';
+import Configuration from './pages/Configuration';
+
 
 const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
   const token = localStorage.getItem('token');
@@ -213,6 +216,22 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <MajorLogs />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/malware"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Malware />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/configuration"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <Configuration />
               </ProtectedLayout>
             }
           />

@@ -12,9 +12,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import { StructuredLogView, parseLogMessage } from '../utils/normalizeLogs';
+import { API_URL } from '../config';
 
 const FIM = () => {
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
   
   // State variables
   const [logs, setLogs] = useState([]);
