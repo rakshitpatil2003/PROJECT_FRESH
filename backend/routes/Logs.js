@@ -1091,6 +1091,38 @@ router.get('/malware', async (req, res) => {
   }
 });
 
+router.get('/configuration', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 0;
+    const pageSize = parseInt(req.query.pageSize) || 10;
+    const skip = page * pageSize;
+
+    // Query for logs with "sca" in the groups array - similar to malware route
+    const regexPattern = new RegExp(`"groups":\\s*\\[[^\\]]*"sca"[^\\]]*\\]`, 'i');
+    const query = { "rawLog.message": { $regex: regexPattern } };
+
+    // Get total count and logs with pagination
+    const [logs, total] = await Promise.all([
+      Log.find(query)
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .lean(),
+      Log.countDocuments(query)
+    ]);
+
+    return res.json({
+      logs,
+      total,
+      page,
+      pageSize
+    });
+  } catch (error) {
+    console.error('Error fetching configuration logs:', error);
+    return res.status(500).json({ error: 'Failed to fetch configuration logs' });
+  }
+});
+
 // Add this endpoint to your existing Logs.js routes
 router.get('/mitre', async (req, res) => {
   try {
