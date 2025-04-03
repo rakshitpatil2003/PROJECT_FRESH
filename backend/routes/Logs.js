@@ -1406,7 +1406,7 @@ router.get('/top-agents', async (req, res) => {
       },
       {
         // Limit to top 5
-        $limit: 5
+        $limit: 7
       },
       {
         // Project to the expected format
@@ -1528,7 +1528,6 @@ router.get('/alert-trends', async (req, res) => {
     res.status(500).json({ message: 'Error fetching alert trends', error: error.message });
   }
 });
-
 
 router.get('/test', async (req, res) => {
   try {

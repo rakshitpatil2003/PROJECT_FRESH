@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box,Typography,Table,TableBody,TableCell,TableContainer,TableHead,TableRow,Paper,Alert,TextField,InputAdornment,CircularProgress,Link,Dialog,DialogTitle,DialogContent,IconButton,Chip,Grid,Tab,Tabs,TablePagination,Skeleton
+  Box, Typography, Paper, CircularProgress, Link, Dialog, DialogTitle, DialogContent, IconButton, Chip, Grid, Tab, Tabs, Skeleton
 } from '@mui/material';
-import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
-import WarningIcon from '@mui/icons-material/Warning';
 import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import { StructuredLogView } from '../utils/normalizeLogs';
@@ -26,6 +24,8 @@ import {
   LegendComponent
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { DataGrid } from '@mui/x-data-grid';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
 
 // Register ECharts components
 echarts.use([
@@ -61,8 +61,10 @@ const MajorLogs = () => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const theme = useTheme();
+  const [fullscreenChart, setFullscreenChart] = useState(null);
+  const [fullscreenTitle, setFullscreenTitle] = useState('');
 
   const fetchMajorLogs = useCallback(async (search) => {
     try {
@@ -120,6 +122,70 @@ const MajorLogs = () => {
     return 'Normal';
   };
 
+  const openFullscreenChart = (option, title) => {
+    setFullscreenChart(option);
+    setFullscreenTitle(title);
+  };
+
+  const columns = [
+    {
+      field: 'timestamp',
+      headerName: 'Timestamp',
+      flex: 1.5,
+      renderCell: (params) => formatTimestamp(params.value)
+    },
+    {
+      field: 'agentName',
+      headerName: 'Agent Name',
+      flex: 1
+    },
+    {
+      field: 'ruleLevel',
+      headerName: 'Rule Level',
+      flex: 0.7,
+      renderCell: (params) => (
+        <Typography sx={{ color: getRuleLevelColor(params.value), fontWeight: 'bold' }}>
+          {params.value}
+        </Typography>
+      )
+    },
+    {
+      field: 'severity',
+      headerName: 'Severity',
+      flex: 1,
+      renderCell: (params) => (
+        <Chip
+          label={getRuleLevelSeverity(params.row.ruleLevel)}
+          sx={{
+            backgroundColor: getRuleLevelColor(params.row.ruleLevel),
+            color: 'white',
+            fontWeight: 'bold'
+          }}
+          size="small"
+        />
+      )
+    },
+    {
+      field: 'description',
+      headerName: 'Description',
+      flex: 2
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      flex: 0.8,
+      sortable: false,
+      renderCell: (params) => (
+        <Link
+          component="button"
+          onClick={() => setSelectedLog(params.row.fullLog)}
+        >
+          View Details
+        </Link>
+      )
+    }
+  ];
+
   // Memoized data processing for visualizations
   const visualizationData = useMemo(() => {
     if (!logs.length) return {};
@@ -155,29 +221,42 @@ const MajorLogs = () => {
     }, {});
 
     // Enhanced MITRE Techniques extraction
-const mitreTechniques = logs.reduce((acc, log) => {
-  // Try multiple approaches to get MITRE technique data
-  let mitre = log.rule?.mitre || {};
-  if (!mitre.technique && log.rawLog?.message?.rule?.mitre) {
-    mitre = log.rawLog.message.rule.mitre;
-  }
-  
-  let techniques = [];
-  // Handle both array and string cases
-  if (Array.isArray(mitre.technique)) {
-    techniques = mitre.technique;
-  } else if (mitre.technique) {
-    techniques = [mitre.technique];
-  }
-  
-  techniques.forEach(tech => {
-    if (tech) {
-      const cleanTech = tech.split('(')[0].trim();
-      acc[cleanTech] = (acc[cleanTech] || 0) + 1;
-    }
-  });
-  return acc;
-}, {});
+    const mitreTechniques = logs.reduce((acc, log) => {
+      // First try to get techniques from parsed rule.mitre
+      let techniques = [];
+
+      // Check all possible paths where technique data might be stored
+      if (log.rule?.mitre?.technique) {
+        techniques = Array.isArray(log.rule.mitre.technique)
+          ? log.rule.mitre.technique
+          : [log.rule.mitre.technique];
+      } else if (log.rawLog?.message?.rule?.mitre?.technique) {
+        techniques = Array.isArray(log.rawLog.message.rule.mitre.technique)
+          ? log.rawLog.message.rule.mitre.technique
+          : [log.rawLog.message.rule.mitre.technique];
+      } else if (typeof log.rawLog?.message === 'string') {
+        try {
+          const parsedMessage = JSON.parse(log.rawLog.message);
+          if (parsedMessage?.rule?.mitre?.technique) {
+            techniques = Array.isArray(parsedMessage.rule.mitre.technique)
+              ? parsedMessage.rule.mitre.technique
+              : [parsedMessage.rule.mitre.technique];
+          }
+        } catch (e) {
+          // Silently fail if parsing fails
+        }
+      }
+
+      // Process found techniques
+      techniques.forEach(tech => {
+        if (tech) {
+          // Extract just the technique name without ID
+          const cleanTech = tech.split('(')[0].trim();
+          acc[cleanTech] = (acc[cleanTech] || 0) + 1;
+        }
+      });
+      return acc;
+    }, {});
 
 
     // Severity Distribution
@@ -188,55 +267,116 @@ const mitreTechniques = logs.reduce((acc, log) => {
     }, {});
 
     // Enhanced MITRE Tactics extraction
-const mitreTactics = logs.reduce((acc, log) => {
-  // Try multiple approaches to get MITRE tactic data
-  let mitre = log.rule?.mitre || {};
-  if (!mitre.tactic && log.rawLog?.message?.rule?.mitre) {
-    mitre = log.rawLog.message.rule.mitre;
-  }
-  
-  let tactics = [];
-  // Handle both array and string cases
-  if (Array.isArray(mitre.tactic)) {
-    tactics = mitre.tactic;
-  } else if (mitre.tactic) {
-    tactics = [mitre.tactic];
-  }
-  
-  tactics.forEach(tactic => {
-    if (tactic) {
-      const cleanTactic = tactic.split('(')[0].trim();
-      acc[cleanTactic] = (acc[cleanTactic] || 0) + 1;
-    }
-  });
-  return acc;
-}, {});
+    const mitreTactics = logs.reduce((acc, log) => {
+      // First try to get tactics from parsed rule.mitre
+      let tactics = [];
 
+      // Check all possible paths where tactic data might be stored
+      if (log.rule?.mitre?.tactic) {
+        tactics = Array.isArray(log.rule.mitre.tactic)
+          ? log.rule.mitre.tactic
+          : [log.rule.mitre.tactic];
+      } else if (log.rawLog?.message?.rule?.mitre?.tactic) {
+        tactics = Array.isArray(log.rawLog.message.rule.mitre.tactic)
+          ? log.rawLog.message.rule.mitre.tactic
+          : [log.rawLog.message.rule.mitre.tactic];
+      } else if (typeof log.rawLog?.message === 'string') {
+        try {
+          const parsedMessage = JSON.parse(log.rawLog.message);
+          if (parsedMessage?.rule?.mitre?.tactic) {
+            tactics = Array.isArray(parsedMessage.rule.mitre.tactic)
+              ? parsedMessage.rule.mitre.tactic
+              : [parsedMessage.rule.mitre.tactic];
+          }
+        } catch (e) {
+          // Silently fail if parsing fails
+        }
+      }
 
+      // Process found tactics
+      tactics.forEach(tactic => {
+        if (tactic) {
+          // Extract just the tactic name without ID
+          const cleanTactic = tactic.split('(')[0].trim();
+          acc[cleanTactic] = (acc[cleanTactic] || 0) + 1;
+        }
+      });
+      return acc;
+    }, {});
+
+    // Enhanced MITRE IDs extraction
+    const mitreIds = logs.reduce((acc, log) => {
+      // First try to get IDs from parsed rule.mitre
+      let ids = [];
+
+      // Check all possible paths where ID data might be stored
+      if (log.rule?.mitre?.id) {
+        ids = Array.isArray(log.rule.mitre.id)
+          ? log.rule.mitre.id
+          : [log.rule.mitre.id];
+      } else if (log.rawLog?.message?.rule?.mitre?.id) {
+        ids = Array.isArray(log.rawLog.message.rule.mitre.id)
+          ? log.rawLog.message.rule.mitre.id
+          : [log.rawLog.message.rule.mitre.id];
+      } else if (typeof log.rawLog?.message === 'string') {
+        try {
+          const parsedMessage = JSON.parse(log.rawLog.message);
+          if (parsedMessage?.rule?.mitre?.id) {
+            ids = Array.isArray(parsedMessage.rule.mitre.id)
+              ? parsedMessage.rule.mitre.id
+              : [parsedMessage.rule.mitre.id];
+          }
+        } catch (e) {
+          // Silently fail if parsing fails
+        }
+      }
+
+      // Process found IDs
+      ids.forEach(id => {
+        if (id) {
+          // Make sure we have a clean ID format
+          const cleanId = id.trim();
+          acc[cleanId] = (acc[cleanId] || 0) + 1;
+        }
+      });
+      return acc;
+    }, {});
 
     // Enhanced Rule Groups extraction
-const ruleGroups = logs.reduce((acc, log) => {
-  // Try multiple approaches to get rule groups data
-  let groups = log.rule?.groups || [];
-  if ((!groups || groups.length === 0) && log.rawLog?.message?.rule?.groups) {
-    groups = log.rawLog.message.rule.groups;
-  }
-  
-  let groupArray = [];
-  // Handle both array and string cases
-  if (Array.isArray(groups)) {
-    groupArray = groups;
-  } else if (groups) {
-    groupArray = [groups];
-  }
-  
-  groupArray.forEach(group => {
-    if (group) {
-      acc[group] = (acc[group] || 0) + 1;
-    }
-  });
-  return acc;
-}, {});
+    const ruleGroups = logs.reduce((acc, log) => {
+      // First try to get groups from parsed rule
+      let groups = [];
+
+      // Check all possible paths where group data might be stored
+      if (log.rule?.groups) {
+        groups = Array.isArray(log.rule.groups)
+          ? log.rule.groups
+          : [log.rule.groups];
+      } else if (log.rawLog?.message?.rule?.groups) {
+        groups = Array.isArray(log.rawLog.message.rule.groups)
+          ? log.rawLog.message.rule.groups
+          : [log.rawLog.message.rule.groups];
+      } else if (typeof log.rawLog?.message === 'string') {
+        try {
+          const parsedMessage = JSON.parse(log.rawLog.message);
+          if (parsedMessage?.rule?.groups) {
+            groups = Array.isArray(parsedMessage.rule.groups)
+              ? parsedMessage.rule.groups
+              : [parsedMessage.rule.groups];
+          }
+        } catch (e) {
+          // Silently fail if parsing fails
+        }
+      }
+
+      // Process found groups
+      groups.forEach(group => {
+        if (group) {
+          acc[group] = (acc[group] || 0) + 1;
+        }
+      });
+      return acc;
+    }, {});
 
     return {
       timelineData: orderedTimelineData, // Now ordered oldest to newest
@@ -244,6 +384,7 @@ const ruleGroups = logs.reduce((acc, log) => {
       ruleLevelDistribution,
       mitreTechniques,
       mitreTactics,
+      mitreIds,
       ruleGroups,
       severityDistribution,
       totalLogs: logs.length
@@ -355,157 +496,19 @@ const ruleGroups = logs.reduce((acc, log) => {
   });
 
   // MITRE Tactics chart option
-const getMitreTacticsChartOption = () => {
-  const tacticsData = Object.entries(visualizationData.mitreTactics || {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([name, value], index) => ({
-      name,
-      value,
-      itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
-    }));
-
-  return {
-    title: {
-      text: 'MITRE ATT&CK Tactics',
-      left: 'center',
-      textStyle: {
-        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
-      }
-    },
-    tooltip: { trigger: 'item' },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      avoidLabelOverlap: true,
-      itemStyle: { borderRadius: 10 },
-      data: tacticsData,
-      emphasis: {
-        itemStyle: {
-          shadowBlur: 10,
-          shadowOffsetX: 0,
-          shadowColor: 'rgba(0, 0, 0, 0.5)'
-        }
-      },
-      label: {
-        formatter: '{b}: {c} ({d}%)'
-      }
-    }],
-    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
-  };
-};
-
-// MITRE Techniques chart option
-const getMitreTechniquesChartOption = () => {
-  // Use horizontal bar chart for techniques as they can have longer names
-  const sortedTechniques = Object.entries(visualizationData.mitreTechniques || {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-
-  const categories = sortedTechniques.map(([name]) => name);
-  const values = sortedTechniques.map(([_, value]) => value);
-
-  return {
-    title: {
-      text: 'MITRE ATT&CK Techniques',
-      left: 'center',
-      textStyle: {
-        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
-      }
-    },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: {
-        type: 'shadow'
-      }
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'value',
-      axisLabel: {
-        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
-      }
-    },
-    yAxis: {
-      type: 'category',
-      data: categories,
-      axisLabel: {
-        color: theme.palette.mode === 'dark' ? '#fff' : '#000',
-        interval: 0
-      }
-    },
-    series: [{
-      name: 'Occurrences',
-      type: 'bar',
-      data: values,
-      itemStyle: {
-        color: (params) => COLOR_PALETTE[params.dataIndex % COLOR_PALETTE.length]
-      },
-      label: {
-        show: true,
-        position: 'right',
-        formatter: '{c}'
-      }
-    }],
-    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
-  };
-};
-
-// Rule Groups chart option
-const getRuleGroupsChartOption = () => {
-  const groupsData = Object.entries(visualizationData.ruleGroups || {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([name, value], index) => ({
-      name,
-      value,
-      itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
-    }));
-
-  return {
-    title: {
-      text: 'Rule Groups Distribution',
-      left: 'center',
-      textStyle: {
-        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
-      }
-    },
-    tooltip: { trigger: 'item' },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      avoidLabelOverlap: true,
-      itemStyle: { borderRadius: 10 },
-      data: groupsData,
-      emphasis: {
-        itemStyle: {
-          shadowBlur: 10,
-          shadowOffsetX: 0,
-          shadowColor: 'rgba(0, 0, 0, 0.5)'
-        }
-      },
-      label: {
-        formatter: '{b}: {c} ({d}%)'
-      }
-    }],
-    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
-  };
-};
-
-  const getMitreChartOption = (data, title) => {
-    const entries = Object.entries(data)
-      .filter(([_, count]) => count > 0)
+  const getMitreTacticsChartOption = () => {
+    const tacticsData = Object.entries(visualizationData.mitreTactics || {})
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
+      .slice(0, 10)
+      .map(([name, value], index) => ({
+        name,
+        value,
+        itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
+      }));
 
     return {
       title: {
-        text: title,
+        text: 'MITRE ATT&CK Tactics',
         left: 'center',
         textStyle: {
           color: theme.palette.mode === 'dark' ? '#fff' : '#000'
@@ -517,11 +520,176 @@ const getRuleGroupsChartOption = () => {
         radius: ['40%', '70%'],
         avoidLabelOverlap: true,
         itemStyle: { borderRadius: 10 },
-        data: entries.map(([name, value], index) => ({
-          name,
-          value,
-          itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
-        })),
+        data: tacticsData,
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)'
+          }
+        },
+        label: {
+          formatter: '{b}: {c} ({d}%)'
+        }
+      }],
+      backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+    };
+  };
+
+  // MITRE Techniques chart option
+  const getMitreTechniquesChartOption = () => {
+    // Use horizontal bar chart for techniques as they can have longer names
+    const sortedTechniques = Object.entries(visualizationData.mitreTechniques || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const categories = sortedTechniques.map(([name]) => name);
+    const values = sortedTechniques.map(([_, value]) => value);
+
+    return {
+      title: {
+        text: 'MITRE ATT&CK Techniques',
+        left: 'center',
+        textStyle: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'shadow'
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      yAxis: {
+        type: 'category',
+        data: categories,
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+          interval: 0
+        }
+      },
+      series: [{
+        name: 'Occurrences',
+        type: 'bar',
+        data: values,
+        itemStyle: {
+          color: (params) => COLOR_PALETTE[params.dataIndex % COLOR_PALETTE.length]
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c}'
+        }
+      }],
+      backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+    };
+  };
+
+  // MITRE IDs chart option
+  const getMitreIdsChartOption = () => {
+    // Use horizontal bar chart for IDs
+    const sortedIds = Object.entries(visualizationData.mitreIds || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const categories = sortedIds.map(([name]) => name);
+    const values = sortedIds.map(([_, value]) => value);
+
+    return {
+      title: {
+        text: 'MITRE ATT&CK IDs',
+        left: 'center',
+        textStyle: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'shadow'
+        },
+        formatter: function (params) {
+          const dataIndex = params[0].dataIndex;
+          const id = categories[dataIndex];
+          const value = values[dataIndex];
+          return `<strong>${id}</strong>: ${value} occurrences`;
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      yAxis: {
+        type: 'category',
+        data: categories,
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+          interval: 0
+        }
+      },
+      series: [{
+        name: 'Occurrences',
+        type: 'bar',
+        data: values,
+        itemStyle: {
+          color: (params) => COLOR_PALETTE[params.dataIndex % COLOR_PALETTE.length]
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c}'
+        }
+      }],
+      backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+    };
+  };
+
+  // Rule Groups chart option
+  const getRuleGroupsChartOption = () => {
+    const groupsData = Object.entries(visualizationData.ruleGroups || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, value], index) => ({
+        name,
+        value,
+        itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
+      }));
+
+    return {
+      title: {
+        text: 'Rule Groups Distribution',
+        left: 'center',
+        textStyle: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      tooltip: { trigger: 'item' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: true,
+        itemStyle: { borderRadius: 10 },
+        data: groupsData,
         emphasis: {
           itemStyle: {
             shadowBlur: 10,
@@ -673,15 +841,24 @@ const getRuleGroupsChartOption = () => {
 
       {activeTab === 0 && (
         <Grid container spacing={3}>
-          {/* Timeline Chart - now shows oldest on left, newest on right */}
+          {/* Timeline Chart */}
           <Grid item xs={12} md={6}>
             {loading ? (
               <Skeleton variant="rectangular" height={300} />
             ) : (
-              <ReactECharts
-                option={getTimelineChartOption(visualizationData.timelineData || {})}
-                style={{ height: 300 }}
-              />
+              <Box position="relative">
+                <ReactECharts
+                  option={getTimelineChartOption(visualizationData.timelineData || {})}
+                  style={{ height: 300 }}
+                />
+                <IconButton
+                  onClick={() => openFullscreenChart(getTimelineChartOption(visualizationData.timelineData || {}), 'Timeline Chart')}
+                  sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                  size="small"
+                >
+                  <FullscreenIcon />
+                </IconButton>
+              </Box>
             )}
           </Grid>
 
@@ -690,10 +867,19 @@ const getRuleGroupsChartOption = () => {
             {loading ? (
               <Skeleton variant="rectangular" height={300} />
             ) : (
-              <ReactECharts
-                option={getHorizontalBarChartOption(visualizationData.ruleLevelDistribution || {}, 'Rule Level Distribution')}
-                style={{ height: 300 }}
-              />
+              <Box position="relative">
+                <ReactECharts
+                  option={getHorizontalBarChartOption(visualizationData.ruleLevelDistribution || {}, 'Rule Level Distribution')}
+                  style={{ height: 300 }}
+                />
+                <IconButton
+                  onClick={() => openFullscreenChart(getHorizontalBarChartOption(visualizationData.ruleLevelDistribution || {}, 'Rule Level Distribution'), 'Rule Level Distribution')}
+                  sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                  size="small"
+                >
+                  <FullscreenIcon />
+                </IconButton>
+              </Box>
             )}
           </Grid>
 
@@ -702,10 +888,19 @@ const getRuleGroupsChartOption = () => {
             {loading ? (
               <Skeleton variant="rectangular" height={300} />
             ) : (
-              <ReactECharts
-                option={getBarChartOption(visualizationData.agentDistribution || {}, 'Agent Distribution')}
-                style={{ height: 300 }}
-              />
+              <Box position="relative">
+                <ReactECharts
+                  option={getBarChartOption(visualizationData.agentDistribution || {}, 'Agent Distribution')}
+                  style={{ height: 300 }}
+                />
+                <IconButton
+                  onClick={() => openFullscreenChart(getBarChartOption(visualizationData.agentDistribution || {}, 'Agent Distribution'), 'Agent Distribution')}
+                  sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                  size="small"
+                >
+                  <FullscreenIcon />
+                </IconButton>
+              </Box>
             )}
           </Grid>
 
@@ -714,10 +909,19 @@ const getRuleGroupsChartOption = () => {
             {loading ? (
               <Skeleton variant="rectangular" height={300} />
             ) : (
-              <ReactECharts
-                option={getPieChartOption(visualizationData.severityDistribution || {}, 'Severity Distribution')}
-                style={{ height: 300 }}
-              />
+              <Box position="relative">
+                <ReactECharts
+                  option={getPieChartOption(visualizationData.severityDistribution || {}, 'Severity Distribution')}
+                  style={{ height: 300 }}
+                />
+                <IconButton
+                  onClick={() => openFullscreenChart(getPieChartOption(visualizationData.severityDistribution || {}, 'Severity Distribution'), 'Severity Distribution')}
+                  sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                  size="small"
+                >
+                  <FullscreenIcon />
+                </IconButton>
+              </Box>
             )}
           </Grid>
 
@@ -726,11 +930,21 @@ const getRuleGroupsChartOption = () => {
             {loading ? (
               <Skeleton variant="rectangular" height={300} />
             ) : (
-              <ReactECharts
+              <Box position="relative">
+                <ReactECharts
                   option={getMitreTacticsChartOption()}
-                  style={{ height: '100%', width: '100%' }}
+                  style={{ height: 350 }}
+                  opts={{ renderer: 'canvas' }}
                   theme={theme.palette.mode === 'dark' ? 'dark' : ''}
-              />
+                />
+                <IconButton
+                  onClick={() => openFullscreenChart(getMitreTacticsChartOption(), 'MITRE ATT&CK Tactics')}
+                  sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                  size="small"
+                >
+                  <FullscreenIcon />
+                </IconButton>
+              </Box>
             )}
           </Grid>
 
@@ -739,27 +953,65 @@ const getRuleGroupsChartOption = () => {
             {loading ? (
               <Skeleton variant="rectangular" height={300} />
             ) : (
-              <ReactECharts
-                option={getMitreTechniquesChartOption()}
-                style={{ height: '100%', width: '100%' }}
-                theme={theme.palette.mode === 'dark' ? 'dark' : ''}
-              />
+              <Box position="relative">
+                <ReactECharts
+                  option={getMitreTechniquesChartOption()}
+                  style={{ height: 350 }}
+                  opts={{ renderer: 'canvas' }}
+                  theme={theme.palette.mode === 'dark' ? 'dark' : ''}
+                />
+                <IconButton
+                  onClick={() => openFullscreenChart(getMitreTechniquesChartOption(), 'MITRE ATT&CK Techniques')}
+                  sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                  size="small"
+                >
+                  <FullscreenIcon />
+                </IconButton>
+              </Box>
             )}
           </Grid>
-
-
-
-
+          {/* MITRE IDs */}
+          <Grid item xs={12} md={6}>
+            {loading ? (
+              <Skeleton variant="rectangular" height={300} />
+            ) : (
+              <Box position="relative">
+                <ReactECharts
+                  option={getMitreIdsChartOption()}
+                  style={{ height: 350 }}
+                  opts={{ renderer: 'canvas' }}
+                  theme={theme.palette.mode === 'dark' ? 'dark' : ''}
+                />
+                <IconButton
+                  onClick={() => openFullscreenChart(getMitreIdsChartOption(), 'MITRE ATT&CK IDs')}
+                  sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                  size="small"
+                >
+                  <FullscreenIcon />
+                </IconButton>
+              </Box>
+            )}
+          </Grid>
           {/* Rule Groups */}
           <Grid item xs={12} md={6}>
             {loading ? (
               <Skeleton variant="rectangular" height={300} />
             ) : (
-              <ReactECharts
-                option={getRuleGroupsChartOption()}
-                style={{ height: '100%', width: '100%' }}
-                theme={theme.palette.mode === 'dark' ? 'dark' : ''}
-              />
+              <Box position="relative">
+                <ReactECharts
+                  option={getRuleGroupsChartOption()}
+                  style={{ height: 350 }}
+                  opts={{ renderer: 'canvas' }}
+                  theme={theme.palette.mode === 'dark' ? 'dark' : ''}
+                />
+                <IconButton
+                  onClick={() => openFullscreenChart(getRuleGroupsChartOption(), 'Rule Groups Distribution')}
+                  sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                  size="small"
+                >
+                  <FullscreenIcon />
+                </IconButton>
+              </Box>
             )}
           </Grid>
         </Grid>
@@ -768,99 +1020,58 @@ const getRuleGroupsChartOption = () => {
       {/* Rest of the component remains the same as in the previous implementation */}
       {/* (Include the Events Tab and Log Details Dialog) */}
       {activeTab === 1 && (
-        <Box>
-          <TextField
-            fullWidth
-            margin="normal"
-            variant="outlined"
-            placeholder="Search by agent name, description, rule level..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ mb: 3 }}
-          />
-
-          <Alert
-            severity={logs.length > 0 ? "warning" : "info"}
-            sx={{ mb: 3 }}
-            icon={logs.length > 0 ? <WarningIcon /> : undefined}
-          >
-            {logs.length > 0
-              ? `Found ${logs.length} major security logs that require attention`
-              : 'No major logs found for the specified criteria'}
-          </Alert>
-
-          <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 300px)' }}>
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Timestamp</TableCell>
-                  <TableCell>Agent Name</TableCell>
-                  <TableCell>Rule Level</TableCell>
-                  <TableCell>Severity</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {logs
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((log) => {
-                    const parsedLog = parseLogMessage(log);
-                    return (
-                      <TableRow key={parsedLog.timestamp}>
-                        <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
-                        <TableCell>{parsedLog.agent.name}</TableCell>
-                        <TableCell>
-                          <Typography sx={{ color: getRuleLevelColor(parsedLog.rule.level), fontWeight: 'bold' }}>
-                            {parsedLog.rule.level}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={getRuleLevelSeverity(parsedLog.rule.level)}
-                            sx={{
-                              backgroundColor: getRuleLevelColor(parsedLog.rule.level),
-                              color: 'white',
-                              fontWeight: 'bold'
-                            }}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{parsedLog.rule.description}</TableCell>
-                        <TableCell>
-                          <Link
-                            component="button"
-                            onClick={() => setSelectedLog(parsedLog)}
-                          >
-                            View Details
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            rowsPerPageOptions={[10, 25, 50]}
-            component="div"
-            count={logs.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(e, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-          />
-        </Box>
+        <Paper elevation={2} sx={{ mb: 3 }}>
+          <Box sx={{
+            height: 650,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}>
+            {/* DataGrid code here */}
+            <DataGrid
+              rows={logs.map((log, index) => {
+                const parsedLog = parseLogMessage(log);
+                return {
+                  id: index,
+                  timestamp: parsedLog.timestamp,
+                  agentName: parsedLog.agent.name,
+                  ruleLevel: parsedLog.rule.level,
+                  description: parsedLog.rule.description,
+                  fullLog: parsedLog
+                };
+              })}
+              columns={columns}
+              pageSize={rowsPerPage}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+              onPageSizeChange={(newPageSize) => setRowsPerPage(newPageSize)}
+              pagination
+              disableSelectionOnClick
+              loading={loading}
+              density="standard"
+              initialState={{
+                pagination: {
+                  pageSize: 50,
+                },
+              }}
+              sx={{
+                '& .MuiDataGrid-cell:hover': {
+                  color: 'primary.main',
+                },
+                '& .MuiDataGrid-main': {
+                  // Ensures grid content scrolls but headers remain fixed
+                  overflow: 'auto !important'
+                },
+                // Make sure footer with pagination stays at bottom
+                '& .MuiDataGrid-footerContainer': {
+                  borderTop: '1px solid rgba(224, 224, 224, 1)',
+                },
+                flex: 1, // Take up remaining space in container
+                boxSizing: 'border-box',
+              }}
+            />
+          </Box>
+        </Paper>
       )}
 
       {/* Log Details Dialog */}
@@ -887,6 +1098,37 @@ const getRuleGroupsChartOption = () => {
         </DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
           <StructuredLogView data={selectedLog} />
+        </DialogContent>
+      </Dialog>
+      {/* Fullscreen Chart Dialog */}
+      <Dialog
+        open={Boolean(fullscreenChart)}
+        onClose={() => setFullscreenChart(null)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="h6">{fullscreenTitle}</Typography>
+          <IconButton
+            aria-label="close"
+            onClick={() => setFullscreenChart(null)}
+            size="small"
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ height: '80vh', pt: 2 }}>
+          {fullscreenChart && (
+            <ReactECharts
+              option={fullscreenChart}
+              style={{ height: '100%', width: '100%' }}
+              theme={theme.palette.mode === 'dark' ? 'dark' : ''}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </Box>

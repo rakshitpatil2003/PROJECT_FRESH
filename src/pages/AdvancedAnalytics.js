@@ -1,22 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box,
-  Container,
-  Grid,
-  Paper,
-  Typography,
-  CircularProgress,
-  Alert,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Skeleton,
-  Tabs,
-  Tab
+  Box, Container, Grid, Paper, Typography, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Skeleton, Tabs, Tab
 } from '@mui/material';
 import ReactECharts from 'echarts-for-react';
 import { API_URL } from '../config';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import IconButton from '@mui/material/IconButton';
+import Dialog from '@mui/material/Dialog';
+import DialogContent from '@mui/material/DialogContent';
+import { useTheme } from '@mui/material/styles';
 
 const AdvancedAnalytics = () => {
   // State management
@@ -25,9 +18,11 @@ const AdvancedAnalytics = () => {
     logLevelsOverTime: null,
     protocolDistribution: null,
     topSourceIPs: null,
+    topDestIPs: null,
     levelDistribution: null,
     networkConnections: null,
-    ruleDescriptions: null
+    ruleDescriptions: null,
+    topAgents: null
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -35,6 +30,9 @@ const AdvancedAnalytics = () => {
   const [protocolFilter, setProtocolFilter] = useState('all');
   const [logType, setLogType] = useState('all');
   const [activeTab, setActiveTab] = useState(0);
+  const [ruleVisType, setRuleVisType] = useState('treemap');
+  const [fullscreenChart, setFullscreenChart] = useState(null);
+  const theme = useTheme();
 
   // Handle changes
   const handleLogTypeChange = (event) => {
@@ -51,6 +49,16 @@ const AdvancedAnalytics = () => {
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
+  };
+  const handleRuleVizToggle = () => {
+    setRuleVisType(prevType => prevType === 'treemap' ? 'sunburst' : 'treemap');
+  };
+  const handleFullscreen = (chartType) => {
+    setFullscreenChart(chartType);
+  };
+  // Add fullscreen close handler
+  const handleCloseFullscreen = () => {
+    setFullscreenChart(null);
   };
 
   // Fetch summary data (optimized to use server-side aggregation)
@@ -93,8 +101,8 @@ const AdvancedAnalytics = () => {
       }
 
       // Using protocol filter only for relevant charts
-      const protocolParam = ['protocolDistribution', 'networkConnections'].includes(chartType) 
-        ? `&protocol=${protocolFilter}` 
+      const protocolParam = ['protocolDistribution', 'networkConnections'].includes(chartType)
+        ? `&protocol=${protocolFilter}`
         : '';
 
       const response = await fetch(
@@ -112,7 +120,7 @@ const AdvancedAnalytics = () => {
       }
 
       const data = await response.json();
-      
+
       setChartData(prevData => ({
         ...prevData,
         [chartType]: data
@@ -124,45 +132,152 @@ const AdvancedAnalytics = () => {
     }
   }, [timeRange, logType, protocolFilter]);
 
+  const fetchProtocolDistribution = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/logs/charts/protocolDistribution?timeRange=${timeRange}&logType=${logType}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      let data = await response.json();
+
+      // Enhanced logging to debug the issue
+      console.log("Raw protocol data:", data);
+
+      // Better handling of null/undefined/empty values
+      data = data.map(item => ({
+        name: (!item.name || item.name === 'N/A' || item.name === '')
+          ? 'Unknown'
+          : item.name.trim(),  // Trim to handle whitespace issues
+        value: item.value || 0  // Ensure we have a numeric value
+      }));
+
+      // Filter out items with zero values if needed
+      data = data.filter(item => item.value > 0);
+
+      // Group small protocols into "Other" category if needed
+      if (data.length > 8) {
+        const sortedData = [...data].sort((a, b) => b.value - a.value);
+        const topItems = sortedData.slice(0, 7);
+        const otherItems = sortedData.slice(7);
+        const otherValue = otherItems.reduce((sum, item) => sum + item.value, 0);
+
+        data = [
+          ...topItems,
+          { name: 'Other', value: otherValue }
+        ];
+      }
+
+      console.log("Processed protocol data:", data);
+
+      setChartData(prevData => ({
+        ...prevData,
+        protocolDistribution: data
+      }));
+    } catch (error) {
+      console.error('Error fetching protocol distribution data:', error);
+    }
+  }, [timeRange, logType]);
+
+  const fetchTopAgents = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/logs/top-agents?timeRange=${timeRange}&logType=${logType}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      setChartData(prevData => ({
+        ...prevData,
+        topAgents: data
+      }));
+    } catch (error) {
+      console.error('Error fetching top agents data:', error);
+    }
+  }, [timeRange, logType]);
+
   // Fetch all charts data 
   const fetchAllChartData = useCallback(async () => {
     setLoading(true);
-    
+
     // Fetch summary first for immediate display
     await fetchSummaryData();
-    
-    // Fetch each chart in parallel
+
+    // Fetch protocol distribution separately with our custom logic
+    await fetchProtocolDistribution();
+    // Fetch top agents
+    await fetchTopAgents();
+
+    // Fetch other charts in parallel
     const chartTypes = [
       'logLevelsOverTime',
-      'protocolDistribution',
       'topSourceIPs',
       'levelDistribution',
       'networkConnections',
       'ruleDescriptions'
     ];
-    
+
     await Promise.all(chartTypes.map(chartType => fetchChartData(chartType)));
-    
+
     setLoading(false);
-  }, [fetchSummaryData, fetchChartData]);
+  }, [fetchSummaryData, fetchChartData, fetchProtocolDistribution, fetchTopAgents]);
+  // Add this function to the component
+
 
   // Initial data loading
   useEffect(() => {
     fetchAllChartData();
-    
+
     // Refresh data every 60 seconds (increased from 30 for better performance)
     const interval = setInterval(fetchAllChartData, 60000);
     return () => clearInterval(interval);
   }, [fetchAllChartData]);
+
+  const isDarkMode = theme.palette.mode === 'dark';
+  const textColor = isDarkMode ? '#ffffff' : '#333333';
+  const backgroundColor = isDarkMode ? '#424242' : '#ffffff';
+  const gridLineColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
 
   // Chart options generators - Using memoization for performance
   const levelTimeOptions = useMemo(() => {
     if (!chartData.logLevelsOverTime) return null;
 
     return {
+      backgroundColor: 'transparent',
+      textStyle: { color: textColor },
       title: {
         text: 'Log Levels Over Time',
-        left: 'center'
+        left: 'center',
+        textStyle: { color: textColor }
       },
       tooltip: {
         trigger: 'axis',
@@ -170,7 +285,8 @@ const AdvancedAnalytics = () => {
       },
       legend: {
         data: ['Notice (1-7)', 'Warning (8-11)', 'Critical (12-16)'],
-        bottom: 10
+        bottom: 10,
+        textStyle: { color: textColor }
       },
       grid: {
         left: '3%',
@@ -181,10 +297,16 @@ const AdvancedAnalytics = () => {
       xAxis: {
         type: 'category',
         boundaryGap: false,
-        data: chartData.logLevelsOverTime.timeLabels || []
+        data: chartData.logLevelsOverTime.timeLabels || [],
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: { color: textColor },
+        splitLine: { lineStyle: { color: gridLineColor } }
       },
       yAxis: {
-        type: 'value'
+        type: 'value',
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: { color: textColor },
+        splitLine: { lineStyle: { color: gridLineColor } }
       },
       series: [
         {
@@ -218,13 +340,76 @@ const AdvancedAnalytics = () => {
     };
   }, [chartData.logLevelsOverTime]);
 
+  const topAgentsOptions = useMemo(() => {
+    if (!chartData.topAgents) return null;
+
+    return {
+      title: {
+        text: 'Top 7 Agents',
+        left: 'center',
+        textStyle: { color: textColor }
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+      },
+      backgroundColor: 'transparent',
+      textStyle: { color: textColor },
+      xAxis: {
+        type: 'category',
+        data: chartData.topAgents.map(item => item.name || 'Unknown'),
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: {
+          color: textColor,
+          rotate: 30,
+          formatter: value => value.length > 15 ? value.substring(0, 12) + '...' : value
+        },
+        splitLine: { lineStyle: { color: gridLineColor } }
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: { color: textColor },
+        splitLine: { lineStyle: { color: gridLineColor } }
+      },
+      series: [
+        {
+          name: 'Log Count',
+          type: 'bar',
+          data: chartData.topAgents.map(item => ({
+            value: item.count,
+            itemStyle: {
+              color: '#7A99FF'  // A distinct color for agents
+            }
+          })),
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          }
+        }
+      ]
+    };
+  }, [chartData.topAgents, textColor, gridLineColor]);
+
   const protocolPieOptions = useMemo(() => {
     if (!chartData.protocolDistribution) return null;
 
     return {
+      backgroundColor: 'transparent',
+      textStyle: { color: textColor },
       title: {
         text: 'Protocol Distribution',
-        left: 'center'
+        left: 'center',
+        textStyle: { color: textColor }
       },
       tooltip: {
         trigger: 'item',
@@ -235,7 +420,8 @@ const AdvancedAnalytics = () => {
         orient: 'vertical',
         right: 10,
         top: 20,
-        bottom: 20
+        bottom: 20,
+        textStyle: { color: textColor }
       },
       series: [
         {
@@ -256,7 +442,8 @@ const AdvancedAnalytics = () => {
             label: {
               show: true,
               fontSize: 16,
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              color: textColor
             }
           },
           labelLine: {
@@ -270,15 +457,17 @@ const AdvancedAnalytics = () => {
 
   const topSourceIPsOptions = useMemo(() => {
     if (!chartData.topSourceIPs) return null;
-    
-    // Get max value for coloring
-    const maxValue = Math.max(...(chartData.topSourceIPs || []).map(item => item.value));
+
+    const maxValue = Math.max(...chartData.topSourceIPs.map(item => item.value));
 
     return {
       title: {
         text: 'Top Source IPs',
-        left: 'center'
+        left: 'center',
+        textStyle: { color: textColor }
       },
+      backgroundColor: 'transparent',
+      textStyle: { color: textColor },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' }
@@ -291,42 +480,44 @@ const AdvancedAnalytics = () => {
       },
       xAxis: {
         type: 'value',
-        boundaryGap: [0, 0.01]
+        boundaryGap: [0, 0.01],
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: { color: textColor },
+        splitLine: { lineStyle: { color: gridLineColor } }
       },
       yAxis: {
         type: 'category',
-        data: (chartData.topSourceIPs || []).map(item => item.name),
+        data: chartData.topSourceIPs.map(item => item.name),
+        axisLine: { lineStyle: { color: gridLineColor } },
         axisLabel: {
-          formatter: function (value) {
-            return value.length > 15 ? value.substring(0, 12) + '...' : value;
-          }
-        }
+          color: textColor,
+          formatter: value => value.length > 15 ? value.substring(0, 12) + '...' : value
+        },
+        splitLine: { lineStyle: { color: gridLineColor } }
       },
-      series: [
-        {
-          name: 'Count',
-          type: 'bar',
-          data: (chartData.topSourceIPs || []).map(item => ({
-            value: item.value,
-            itemStyle: {
-              color: function() {
-                const ratio = item.value / maxValue;
-                return {
-                  type: 'linear',
-                  x: 0, y: 0, x2: 1, y2: 0,
-                  colorStops: [{
-                    offset: 0, color: '#2196f3'
-                  }, {
-                    offset: 1, color: ratio > 0.7 ? '#f44336' : '#2196f3'
-                  }]
-                };
-              }()
-            }
-          }))
-        }
-      ]
+      series: [{
+        name: 'Count',
+        type: 'bar',
+        data: chartData.topSourceIPs.map(item => ({
+          value: item.value,
+          itemStyle: {
+            color: (() => {
+              const ratio = item.value / maxValue;
+              return {
+                type: 'linear',
+                x: 0, y: 0, x2: 1, y2: 0,
+                colorStops: [
+                  { offset: 0, color: '#2196f3' },
+                  { offset: 1, color: ratio > 0.7 ? '#f44336' : '#2196f3' }
+                ]
+              };
+            })()
+          }
+        }))
+      }]
     };
-  }, [chartData.topSourceIPs]);
+  }, [chartData.topSourceIPs, theme.palette.mode]);
+
 
   const levelDistributionOptions = useMemo(() => {
     if (!chartData.levelDistribution) return null;
@@ -334,7 +525,8 @@ const AdvancedAnalytics = () => {
     return {
       title: {
         text: 'Log Level Distribution',
-        left: 'center'
+        left: 'center',
+        textStyle: { color: textColor }
       },
       tooltip: {
         trigger: 'axis',
@@ -346,12 +538,20 @@ const AdvancedAnalytics = () => {
         bottom: '3%',
         containLabel: true
       },
+      backgroundColor: 'transparent',
+      textStyle: { color: textColor },
       xAxis: {
         type: 'category',
-        data: (chartData.levelDistribution || []).map(item => item.name)
+        data: (chartData.levelDistribution || []).map(item => item.name),
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: { color: textColor },
+        splitLine: { lineStyle: { color: gridLineColor } }
       },
       yAxis: {
-        type: 'value'
+        type: 'value',
+        axisLine: { lineStyle: { color: gridLineColor } },
+        axisLabel: { color: textColor },
+        splitLine: { lineStyle: { color: gridLineColor } }
       },
       series: [
         {
@@ -360,7 +560,7 @@ const AdvancedAnalytics = () => {
           data: (chartData.levelDistribution || []).map(item => ({
             value: item.value,
             itemStyle: {
-              color: function() {
+              color: function () {
                 const level = parseInt(item.name) || 0;
                 if (level >= 12) return '#f44336'; // Critical
                 if (level >= 8) return '#ffc107';  // Warning
@@ -381,11 +581,43 @@ const AdvancedAnalytics = () => {
   }, [chartData.levelDistribution]);
 
   // Replacing Sankey with Force-Directed Graph
+  // Replace the networkConnectionsOptions useMemo function with this:
   const networkConnectionsOptions = useMemo(() => {
     if (!chartData.networkConnections) return null;
 
-    // Parse data into force graph format
+    // Process data to avoid cycles
     const { nodes, links } = chartData.networkConnections;
+
+    // Create combined links to avoid cycles (srcIP + destIP as key)
+    const processedLinks = [];
+    const linkMap = {};
+
+    links.forEach(link => {
+      const forwardKey = `${link.source}-${link.target}`;
+      const reverseKey = `${link.target}-${link.source}`;
+
+      // If we have both forward and reverse, combine them
+      if (linkMap[reverseKey]) {
+        // Update existing link instead of creating cycle
+        const existingLink = linkMap[reverseKey];
+        existingLink.value += link.value;
+        existingLink.lineStyle = {
+          color: '#ffa500', // Orange for bidirectional
+          opacity: 0.8
+        };
+      } else {
+        // Create new link
+        const newLink = {
+          ...link,
+          lineStyle: {
+            color: link.source.includes('src') ? '#2196f3' : '#91cc75',
+            opacity: 0.8
+          }
+        };
+        linkMap[forwardKey] = newLink;
+        processedLinks.push(newLink);
+      }
+    });
 
     return {
       title: {
@@ -393,49 +625,42 @@ const AdvancedAnalytics = () => {
         left: 'center'
       },
       tooltip: {
-        formatter: function(params) {
-          if (params.dataType === 'node') {
-            return `IP: ${params.data.name}<br/>Type: ${params.data.category}<br/>Connections: ${params.data.value}`;
-          } else {
-            return `Source: ${params.data.source}<br/>Target: ${params.data.target}<br/>Count: ${params.data.value}`;
-          }
-        }
-      },
-      legend: {
-        data: ['Source', 'Target'],
-        bottom: 5
+        trigger: 'item',
+        formatter: '{b} → {c}'
       },
       series: [{
-        type: 'graph',
-        layout: 'force',
-        animation: false,
-        draggable: true,
+        type: 'sankey',
         data: nodes,
-        links: links,
-        roam: true,
-        label: {
-          show: true,
-          position: 'right',
-          formatter: '{b}'
+        links: processedLinks,
+        emphasis: {
+          focus: 'adjacency'
         },
-        force: {
-          repulsion: 100,
-          gravity: 0.1,
-          edgeLength: 50,
-          layoutAnimation: false
-        },
+        levels: [
+          {
+            depth: 0,
+            itemStyle: {
+              color: '#2196f3' // Source IPs
+            },
+            lineStyle: {
+              color: 'gradient',
+              curveness: 0.5
+            }
+          },
+          {
+            depth: 1,
+            itemStyle: {
+              color: '#91cc75' // Destination IPs
+            }
+          }
+        ],
         lineStyle: {
           color: 'source',
-          curveness: 0.3,
-          width: function(params) {
-            // Scale line width by value
-            return Math.max(1, Math.min(5, params.data.value / 10));
-          }
+          curveness: 0.5
         },
-        categories: [
-          { name: 'Source', itemStyle: { color: '#5470c6' } },
-          { name: 'Target', itemStyle: { color: '#91cc75' } }
-        ],
+        label: {
+          formatter: '{b}'
+        },
+        animation: true
       }]
     };
   }, [chartData.networkConnections]);
@@ -443,39 +668,55 @@ const AdvancedAnalytics = () => {
   const ruleDescriptionOptions = useMemo(() => {
     if (!chartData.ruleDescriptions) return null;
 
+    // Define a color palette for various rules
+    const colorPalette = [
+      '#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#e91e63',
+      '#3f51b5', '#009688', '#cddc39', '#ff5722', '#607d8b'
+    ];
+
     return {
       title: {
         text: 'Top Rule Descriptions',
-        left: 'center'
+        left: 'center',
+        textStyle: { color: textColor },
+        subtext: `Click to switch view (${ruleVisType === 'treemap' ? 'Treemap' : 'Sunburst'})`,
+        subtextStyle: { color: textColor }
       },
       tooltip: {
-        trigger: 'item',
-        formatter: '{b}: {c}'
+        formatter: function (info) {
+          return [info.data.name, 'Count: ' + info.data.value].join('<br/>');
+        }
       },
+      backgroundColor: 'transparent',
+      textStyle: { color: textColor },
       series: [
         {
-          type: 'treemap',
-          data: (chartData.ruleDescriptions || []).map(item => ({
+          type: ruleVisType,
+          data: (chartData.ruleDescriptions || []).map((item, index) => ({
             name: item.name.length > 30 ? item.name.substring(0, 27) + '...' : item.name,
             value: item.value,
-            tooltip: {
-              formatter: function() {
-                return item.name + ': ' + item.value;
-              }
+            itemStyle: {
+              // Assign colors from the palette based on the index
+              color: colorPalette[index % colorPalette.length]
             }
           })),
           label: {
             show: true,
-            formatter: '{b}'
+            formatter: '{b}',
+            color: textColor
           },
           breadcrumb: { show: false },
-          itemStyle: {
-            gapWidth: 1
-          }
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          },
+          animationDurationUpdate: 1000
         }
       ]
     };
-  }, [chartData.ruleDescriptions]);
+  }, [chartData.ruleDescriptions, ruleVisType]);
 
   // Get distinct protocols for filter - simplified
   const distinctProtocols = useMemo(() => {
@@ -524,7 +765,7 @@ const AdvancedAnalytics = () => {
                 <MenuItem value="other">Suricata/Sysmon Logs</MenuItem>
               </Select>
             </FormControl>
-            
+
             <FormControl size="small" sx={{ minWidth: 120 }}>
               <InputLabel>Time Range</InputLabel>
               <Select
@@ -680,13 +921,21 @@ const AdvancedAnalytics = () => {
       {activeTab === 0 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <Paper sx={{ p: 2, height: '400px' }}>
+            <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
               {levelTimeOptions ? (
-                <ReactECharts
-                  option={levelTimeOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
+                <>
+                  <ReactECharts
+                    option={levelTimeOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('levelTime')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
               ) : (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress size={30} />
@@ -695,13 +944,21 @@ const AdvancedAnalytics = () => {
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 2, height: '400px' }}>
-              {ruleDescriptionOptions ? (
-                <ReactECharts
-                  option={ruleDescriptionOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
+            <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
+              {topAgentsOptions ? (
+                <>
+                  <ReactECharts
+                    option={topAgentsOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('topAgents')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
               ) : (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress size={30} />
@@ -709,14 +966,23 @@ const AdvancedAnalytics = () => {
               )}
             </Paper>
           </Grid>
+
           <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 2, height: '400px' }}>
+            <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
               {levelDistributionOptions ? (
-                <ReactECharts
-                  option={levelDistributionOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
+                <>
+                  <ReactECharts
+                    option={levelDistributionOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('levelDistribution')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
               ) : (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress size={30} />
@@ -731,13 +997,21 @@ const AdvancedAnalytics = () => {
       {activeTab === 1 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <Paper sx={{ p: 2, height: '500px' }}>
+            <Paper sx={{ p: 2, height: '500px', position: 'relative' }}>
               {networkConnectionsOptions ? (
-                <ReactECharts
-                  option={networkConnectionsOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
+                <>
+                  <ReactECharts
+                    option={networkConnectionsOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('networkConnections')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
               ) : (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress size={30} />
@@ -746,28 +1020,44 @@ const AdvancedAnalytics = () => {
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 2, height: '400px' }}>
-              {protocolPieOptions ? (
-                <ReactECharts
-                  option={protocolPieOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
-              ) : (
-                <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                  <CircularProgress size={30} />
-                </Box>
-              )}
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 2, height: '400px' }}>
+            <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
               {topSourceIPsOptions ? (
-                <ReactECharts
-                  option={topSourceIPsOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
+                <>
+                  <ReactECharts
+                    option={topSourceIPsOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('topSourceIPs')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
+              ) : (
+                <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+                  <CircularProgress size={30} />
+                </Box>
+              )}
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
+              {protocolPieOptions ? (
+                <>
+                  <ReactECharts
+                    option={protocolPieOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('protocolDistribution')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
               ) : (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress size={30} />
@@ -782,13 +1072,21 @@ const AdvancedAnalytics = () => {
       {activeTab === 2 && (
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 2, height: '400px' }}>
+            <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
               {levelDistributionOptions ? (
-                <ReactECharts
-                  option={levelDistributionOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
+                <>
+                  <ReactECharts
+                    option={levelDistributionOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('levelDistribution')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
               ) : (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress size={30} />
@@ -797,13 +1095,21 @@ const AdvancedAnalytics = () => {
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 2, height: '400px' }}>
+            <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
               {topSourceIPsOptions ? (
-                <ReactECharts
-                  option={topSourceIPsOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
+                <>
+                  <ReactECharts
+                    option={topSourceIPsOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('topSourceIPs')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
               ) : (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress size={30} />
@@ -812,13 +1118,24 @@ const AdvancedAnalytics = () => {
             </Paper>
           </Grid>
           <Grid item xs={12}>
-            <Paper sx={{ p: 2, height: '400px' }}>
+            <Paper sx={{ p: 2, height: '400px', position: 'relative' }}>
               {ruleDescriptionOptions ? (
-                <ReactECharts
-                  option={ruleDescriptionOptions}
-                  style={{ height: '100%', width: '100%' }}
-                  opts={{ renderer: 'canvas' }}
-                />
+                <>
+                  <ReactECharts
+                    option={ruleDescriptionOptions}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                    onEvents={{
+                      'click': handleRuleVizToggle
+                    }}
+                  />
+                  <IconButton
+                    sx={{ position: 'absolute', top: 5, right: 5 }}
+                    onClick={() => handleFullscreen('ruleDescriptions')}
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </>
               ) : (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress size={30} />
@@ -826,7 +1143,77 @@ const AdvancedAnalytics = () => {
               )}
             </Paper>
           </Grid>
+
         </Grid>
+      )}
+      {fullscreenChart && (
+        <Dialog
+          fullScreen
+          open={Boolean(fullscreenChart)}
+          onClose={handleCloseFullscreen}
+          sx={{ '& .MuiDialog-paper': { bgcolor: theme.palette.background.default } }}
+        >
+          <IconButton
+            sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1 }}
+            onClick={handleCloseFullscreen}
+          >
+            <FullscreenExitIcon />
+          </IconButton>
+          <DialogContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}>
+            {fullscreenChart === 'levelTime' && levelTimeOptions && (
+              <ReactECharts
+                option={levelTimeOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            )}
+            {fullscreenChart === 'protocolDistribution' && protocolPieOptions && (
+              <ReactECharts
+                option={protocolPieOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            )}
+            {fullscreenChart === 'topSourceIPs' && topSourceIPsOptions && (
+              <ReactECharts
+                option={topSourceIPsOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            )}
+            {fullscreenChart === 'levelDistribution' && levelDistributionOptions && (
+              <ReactECharts
+                option={levelDistributionOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            )}
+            {fullscreenChart === 'topAgents' && topAgentsOptions && (
+              <ReactECharts
+                option={topAgentsOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            )}
+            {fullscreenChart === 'networkConnections' && networkConnectionsOptions && (
+              <ReactECharts
+                option={networkConnectionsOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+              />
+            )}
+            {fullscreenChart === 'ruleDescriptions' && ruleDescriptionOptions && (
+              <ReactECharts
+                option={ruleDescriptionOptions}
+                style={{ height: '90vh', width: '95vw' }}
+                opts={{ renderer: 'canvas' }}
+                onEvents={{
+                  'click': handleRuleVizToggle
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </Container>
   );
