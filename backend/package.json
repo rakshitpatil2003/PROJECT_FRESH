@@ -26,6 +26,7 @@
     "lodash": "^4.17.21",
     "maxmind": "^4.3.18",
     "mongoose": "^8.9.3",
+    "react-lottie": "^1.2.10",
     "react-window": "^1.8.11"
   },
   "devDependencies": {

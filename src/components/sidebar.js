@@ -41,6 +41,7 @@ import logoImage from '../assets/images/vg-logo.png';
 import axios from 'axios';
 import CircularProgress from '@mui/material/CircularProgress';
 import SecurityIcon from '@mui/icons-material/Security'; 
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 const drawerWidth = 240;
 
@@ -108,6 +109,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
     { text: 'SOAR Playbook', icon: <SecurityIcon/>, path: '/soar-playbook'},
     { text: 'Malware Detection', icon: <SecurityIcon/>, path: '/malware'},
     { text: 'Configuration Detection', icon: <SecurityIcon/>, path: '/configuration'},
+    { text: 'Sentinel AI', icon: <SmartToyIcon/>, path: '/sentinel-ai'},
   ];
 
   const securityPolicyItems = [

@@ -31,6 +31,7 @@ import FIM from './pages/FIM';
 import SOARPlaybook from './pages/SOARPlaybook';
 import Malware from './pages/Malware';
 import Configuration from './pages/Configuration';
+import SentinelAI from './pages/SentinelAI';
 
 
 const ProtectedLayout = ({ children, toggleTheme, isDarkMode }) => {
@@ -232,6 +233,14 @@ const App = () => {
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <Configuration />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/sentinel-ai"
+            element={
+              <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
+                <SentinelAI />
               </ProtectedLayout>
             }
           />

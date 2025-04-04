@@ -1123,6 +1123,56 @@ router.get('/configuration', async (req, res) => {
   }
 });
 
+// Add this endpoint to your Logs.js file
+router.get('/sentinel-ai', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 0;
+    const pageSize = parseInt(req.query.pageSize) || 10;
+    const skip = page * pageSize;
+    
+    // Query for logs with chatgpt_response in YARA
+    const query = { 
+      "rawLog.message": { 
+        $regex: /"data":\s*{[^}]*"YARA":\s*{[^}]*"chatgpt_response":\s*"[^"]+"/ 
+      } 
+    };
+    
+    // Get total count and logs with pagination
+    const [logs, total] = await Promise.all([
+      Log.find(query)
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .lean(),
+      Log.countDocuments(query)
+    ]);
+    
+    // Process logs to extract chatgpt_response
+    const processedLogs = logs.map(log => {
+      const message = log.rawLog?.message || '';
+      const chatgptMatch = message.match(/"chatgpt_response":\s*"([^"]+)"/);
+      const chatgptResponse = chatgptMatch ? chatgptMatch[1] : 'No response found';
+      
+      return {
+        ...log,
+        extracted: {
+          chatgptResponse
+        }
+      };
+    });
+    
+    return res.json({
+      logs: processedLogs,
+      total,
+      page,
+      pageSize
+    });
+  } catch (error) {
+    console.error('Error fetching Sentinel AI logs:', error);
+    return res.status(500).json({ error: 'Failed to fetch Sentinel AI logs' });
+  }
+});
+
 // Add this endpoint to your existing Logs.js routes
 router.get('/mitre', async (req, res) => {
   try {
