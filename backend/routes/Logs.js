@@ -1,16 +1,405 @@
 // backend/routes/Logs.js
 const express = require('express');
 const router = express.Router();
-const Log = require('../models/Log');  // This is correct
-const axios = require('axios');
 const auth = require('../routes/auth');
+const {
+  getModelsForTimeRange,
+  queryMultipleCollections,
+  aggregateMultipleCollections,
+  LogCurrent,
+  LogRecent,
+  LogArchive
+} = require('./LogsHelper');
 
-// Cache for metrics to avoid frequent recalculations
-let metricsCache = {
-  data: null,
-  lastUpdated: null,
-  TTL: 10000 // 10 seconds
+// Updated Redis client implementation for your Logs.js
+
+const { createClient } = require('redis');
+const util = require('util');
+
+let redisClient;
+let getAsync;
+let setAsync;
+
+// Initialize Redis client with better error handling
+const initRedisClient = async () => {
+  try {
+    // Create Redis client
+    redisClient = createClient({
+      url: 'redis://192.168.1.165:6379',
+      password: 'yourpassword',
+      socket: {
+        reconnectStrategy: (retries) => {
+          console.log(`Redis reconnect attempt: ${retries}`);
+          return Math.min(retries * 100, 3000);
+        }
+      }
+    });
+
+    // Set up event handlers
+    redisClient.on('error', (err) => {
+      console.error('Redis client error:', err);
+    });
+
+    redisClient.on('connect', () => {
+      console.log('Redis client connected');
+    });
+
+    redisClient.on('ready', () => {
+      console.log('Redis client ready');
+    });
+
+    redisClient.on('reconnecting', () => {
+      console.log('Redis client reconnecting');
+    });
+
+    redisClient.on('end', () => {
+      console.log('Redis client connection closed');
+    });
+
+    // Connect to Redis
+    await redisClient.connect();
+
+    // Get and Set methods
+    getAsync = redisClient.get.bind(redisClient);
+    setAsync = redisClient.set.bind(redisClient);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to initialize Redis:', error);
+    return false;
+  }
 };
+
+// Initialize Redis when the module loads
+let redisEnabled = false;
+initRedisClient()
+  .then(success => {
+    redisEnabled = success;
+    console.log(`Redis caching ${redisEnabled ? 'enabled' : 'disabled'}`);
+  })
+  .catch(err => {
+    console.error('Error initializing Redis:', err);
+    redisEnabled = false;
+  });
+
+// Modified withCache function with fallback
+const withCache = async (key, ttl, fetchFn) => {
+  // If Redis isn't connected, just execute the function directly
+  if (!redisEnabled || !redisClient || !redisClient.isOpen) {
+    console.log('Redis not available, skipping cache for:', key);
+    return fetchFn();
+  }
+
+  try {
+    // Try to get from cache
+    const cachedData = await getAsync(key);
+    if (cachedData) {
+      console.log(`Cache hit for: ${key}`);
+      return JSON.parse(cachedData);
+    }
+    
+    console.log(`Cache miss for: ${key}`);
+    // If not in cache, fetch and store
+    const data = await fetchFn();
+    await setAsync(key, JSON.stringify(data), { EX: ttl });
+    return data;
+  } catch (error) {
+    console.error(`Cache error for key ${key}:`, error);
+    // Fallback to direct fetch on cache error
+    return fetchFn();
+  }
+};
+
+// Helper function to calculate time filter based on timeRange parameter
+function getTimeFilter(timeRange) {
+  const now = new Date();
+
+  switch (timeRange) {
+    case '1h':
+      return new Date(now - 1 * 60 * 60 * 1000);
+    case '3h':
+      return new Date(now - 3 * 60 * 60 * 1000);
+    case '12h':
+      return new Date(now - 12 * 60 * 60 * 1000);
+    case '7d':
+      return new Date(now - 7 * 24 * 60 * 60 * 1000);
+    case '24h':
+    default:
+      return new Date(now - 24 * 60 * 60 * 1000);
+  }
+}
+
+function getNestedValue(obj, path) {
+  const parts = path.split('.');
+  let current = obj;
+
+  for (const part of parts) {
+    if (current === null || current === undefined || typeof current !== 'object') {
+      return null;
+    }
+    current = current[part];
+  }
+
+  return current;
+}
+
+async function queryTimeBasedCollections(query, options = {}) {
+  const {
+    timeRange,
+    page = 1,
+    limit = 1000,
+    sort = { timestamp: -1 },
+    projection = null
+  } = options;
+  
+  const collections = Array.isArray(timeRange)
+    ? timeRange // Allow passing collections directly
+    : [getLogModelForQuery(timeRange)].flat(); // Convert to array if not already
+  
+  // Calculate pagination
+  const skip = (page - 1) * limit;
+  
+  // Execute query with count across all relevant collections
+  const [countResults, dataResults] = await Promise.all([
+    // Get total count across all collections
+    Promise.all(collections.map(model => model.countDocuments(query))),
+    
+    // Get paginated data from primary collection first, then others if needed
+    (async () => {
+      let results = [];
+      let remaining = limit;
+      
+      for (const model of collections) {
+        if (remaining <= 0) break;
+        
+        const modelResults = await model
+          .find(query, projection)
+          .sort(sort)
+          .skip(results.length === 0 ? skip : 0)
+          .limit(remaining)
+          .lean();
+        
+        results = results.concat(modelResults);
+        remaining = limit - results.length;
+      }
+      
+      return results;
+    })()
+  ]);
+  
+  // Sum up counts from all collections
+  const totalCount = countResults.reduce((sum, count) => sum + count, 0);
+  
+  return {
+    data: dataResults,
+    pagination: {
+      total: totalCount,
+      page,
+      pages: Math.ceil(totalCount / limit)
+    }
+  };
+}
+
+// Metrics endpoint with Redis caching and fallback
+router.get('/metrics', async (req, res) => {
+  try {
+    const cacheKey = 'metrics';
+    const cacheTime = 60; // Cache for 60 seconds
+    
+    const metrics = await withCache(cacheKey, cacheTime, async () => {
+      // Your existing metrics code here
+      const collections = [LogCurrent, LogRecent, LogArchive];
+      const results = await Promise.all(collections.map(async (Collection) => {
+        const counts = await Collection.aggregate([
+          // Your existing aggregation pipeline
+          {
+            $addFields: {
+              numericLevel: { $toInt: "$rule.level" }
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: 1 },
+              major: { $sum: { $cond: [{ $gte: ["$numericLevel", 12] }, 1, 0] } }
+            }
+          }
+        ]);
+        return counts[0] || { total: 0, major: 0 };
+      }));
+      
+      // Combine results
+      const combinedResults = {
+        totalLogs: results.reduce((sum, r) => sum + r.total, 0),
+        majorLogs: results.reduce((sum, r) => sum + r.major, 0)
+      };
+      combinedResults.normalLogs = combinedResults.totalLogs - combinedResults.majorLogs;
+      
+      return combinedResults;
+    });
+    
+    res.json(metrics);
+  } catch (error) {
+    console.error('Error fetching metrics:', error);
+    res.status(500).json({ message: 'Error fetching metrics' });
+  }
+});
+
+router.get('/recent', async (req, res) => {
+  try {
+    console.log('Fetching recent logs...');
+    const cacheKey = 'recent_logs';
+    const cacheTime = 30; // Cache for 30 seconds
+    
+    const recentLogs = await withCache(cacheKey, cacheTime, async () => {
+      const logs = await LogCurrent.find({}, {
+        timestamp: 1,
+        'agent.name': 1,
+        'rule.level': 1,
+        'rule.description': 1,
+        rawLog: 1
+      })
+        .sort({ timestamp: -1 })
+        .limit(10)
+        .lean();
+        
+      console.log('Recent logs count:', logs.length);
+      return logs;
+    });
+    
+    res.json(recentLogs);
+  } catch (error) {
+    console.error('Error fetching recent logs:', error);
+    res.status(500).json({ message: 'Error fetching recent logs', error: error.message });
+  }
+});
+
+router.get('/', async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 100,
+      search = '',
+      logType = 'all',
+      ruleLevel = 'all',
+      startDate,
+      endDate,
+      cursor
+    } = req.query;
+
+    // Determine which time range to use
+    let timeFilter = {};
+    let models = [LogCurrent]; // Default to current logs
+
+    // Create time range filter if provided
+    if (startDate || endDate) {
+      timeFilter = {};
+      if (startDate) timeFilter.$gte = new Date(startDate);
+      if (endDate) timeFilter.$lte = new Date(endDate);
+      
+      // Determine appropriate models based on date range
+      if (startDate) {
+        const startDateObj = new Date(startDate);
+        const now = new Date();
+        const daysDiff = Math.floor((now - startDateObj) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff >= 21) {
+          models = [LogCurrent, LogRecent, LogArchive];
+        } else if (daysDiff >= 7) {
+          models = [LogCurrent, LogRecent];
+        }
+      }
+    } else {
+      // Default to last 7 days if no date range
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      timeFilter = { $gte: sevenDaysAgo };
+    }
+
+    // Build query with log type filtering
+    let searchQuery = { timestamp: timeFilter };
+
+    // Apply rule level filter
+    if (ruleLevel !== 'all') {
+      if (ruleLevel === 'major') {
+        searchQuery['rule.level'] = { $gte: '12' };
+      } else if (!isNaN(parseInt(ruleLevel))) {
+        searchQuery['rule.level'] = ruleLevel;
+      }
+    }
+
+    // Apply log type filter
+    if (logType === 'firewall') {
+      searchQuery['rawLog.message'] = { $regex: 'Firewall', $options: 'i' };
+    } else if (logType === 'other') {
+      searchQuery['rawLog.message'] = { $not: { $regex: 'Firewall', $options: 'i' } };
+    }
+
+    // Apply cursor-based pagination if cursor is provided
+    if (cursor) {
+      try {
+        const decodedCursor = JSON.parse(Buffer.from(cursor, 'base64').toString());
+        searchQuery._id = { $lt: decodedCursor._id };
+      } catch (error) {
+        console.error('Invalid cursor:', error);
+      }
+    }
+
+    // Apply search term filter
+    if (search) {
+      const searchConditions = [
+        { 'agent.name': { $regex: search, $options: 'i' } },
+        { 'rule.level': search }, // Exact match for rule level
+        { 'rule.description': { $regex: search, $options: 'i' } },
+        { 'network.srcIp': { $regex: search, $options: 'i' } },
+        { 'network.destIp': { $regex: search, $options: 'i' } },
+        { 'rawLog.message': { $regex: search, $options: 'i' } }
+      ];
+
+      if (Object.keys(searchQuery).length > 0) {
+        searchQuery = {
+          $and: [
+            searchQuery,
+            { $or: searchConditions }
+          ]
+        };
+      } else {
+        searchQuery.$or = searchConditions;
+      }
+    }
+
+    // Query multiple collections as needed
+    const { data: logs, total: totalRows } = await queryMultipleCollections(searchQuery, {
+      models,
+      limit: parseInt(limit),
+      skip: (parseInt(page) - 1) * parseInt(limit),
+      sort: { timestamp: -1 }
+    });
+
+    // Add cursor for next page if data exists
+    let nextCursor = null;
+    if (logs.length === parseInt(limit)) {
+      const lastItem = logs[logs.length - 1];
+      nextCursor = Buffer.from(JSON.stringify({ _id: lastItem._id })).toString('base64');
+    }
+
+    res.json({
+      logs,
+      pagination: {
+        total: totalRows,
+        page: parseInt(page),
+        pages: Math.ceil(totalRows / parseInt(limit)),
+        nextCursor
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    res.status(500).json({ message: 'Error fetching logs', error: error.message });
+  }
+});
+
+// In your Logs.js router file
+
 
 
 
@@ -18,81 +407,85 @@ router.get('/summary', auth, async (req, res) => {
   try {
     const { timeRange, logType } = req.query;
 
-    // Calculate time filter
-    const timeFilter = getTimeFilter(timeRange);
-
-    // Base query
-    let query = { timestamp: { $gte: timeFilter } };
+    // Get appropriate models and time filter
+    const { models, startDate } = getModelsForTimeRange(timeRange);
+    
+    // Base query with time filter
+    let query = { timestamp: { $gte: startDate } };
 
     // Add log type filter if specified
     if (logType && logType !== 'all') {
       query.logType = logType;
     }
 
-    // Get aggregated counts directly from MongoDB
-    const [levelCounts] = await Log.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: null,
-          notice: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $gte: [{ $toInt: "$rule.level" }, 1] },
-                    { $lte: [{ $toInt: "$rule.level" }, 7] }
-                  ]
-                },
-                1,
-                0
-              ]
-            }
-          },
-          warning: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $gte: [{ $toInt: "$rule.level" }, 8] },
-                    { $lte: [{ $toInt: "$rule.level" }, 11] }
-                  ]
-                },
-                1,
-                0
-              ]
-            }
-          },
-          critical: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $gte: [{ $toInt: "$rule.level" }, 12] },
-                    { $lte: [{ $toInt: "$rule.level" }, 16] }
-                  ]
-                },
-                1,
-                0
-              ]
-            }
-          },
-          total: { $sum: 1 }
+    // Run aggregate on each model and combine results
+    const results = await Promise.all(models.map(model => 
+      model.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            notice: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $gte: [{ $toInt: "$rule.level" }, 1] },
+                      { $lte: [{ $toInt: "$rule.level" }, 7] }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            },
+            warning: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $gte: [{ $toInt: "$rule.level" }, 8] },
+                      { $lte: [{ $toInt: "$rule.level" }, 11] }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            },
+            critical: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $gte: [{ $toInt: "$rule.level" }, 12] },
+                      { $lte: [{ $toInt: "$rule.level" }, 16] }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            },
+            total: { $sum: 1 }
+          }
         }
+      ])
+    ));
+
+    // Combine results from all models
+    const combinedResult = results.reduce((acc, modelResults) => {
+      if (modelResults && modelResults.length > 0) {
+        const result = modelResults[0];
+        acc.notice += result.notice || 0;
+        acc.warning += result.warning || 0;
+        acc.critical += result.critical || 0;
+        acc.total += result.total || 0;
       }
-    ]);
+      return acc;
+    }, { notice: 0, warning: 0, critical: 0, total: 0 });
 
-    // Handle case with no logs
-    if (!levelCounts) {
-      return res.json({
-        notice: 0,
-        warning: 0,
-        critical: 0,
-        total: 0
-      });
-    }
-
-    res.json(levelCounts);
+    res.json(combinedResult);
   } catch (error) {
     console.error('Error in /summary endpoint:', error);
     res.status(500).json({ message: error.message });
@@ -105,11 +498,11 @@ router.get('/charts/:chartType', auth, async (req, res) => {
     const { chartType } = req.params;
     const { timeRange, logType, protocol } = req.query;
 
-    // Calculate time filter
-    const timeFilter = getTimeFilter(timeRange);
-
-    // Base query
-    let query = { timestamp: { $gte: timeFilter } };
+    // Get appropriate models and time filter
+    const { models, startDate } = getModelsForTimeRange(timeRange);
+    
+    // Base query with time filter
+    let query = { timestamp: { $gte: startDate } };
 
     // Add log type filter if specified
     if (logType && logType !== 'all') {
@@ -124,22 +517,22 @@ router.get('/charts/:chartType', auth, async (req, res) => {
     // Handle different chart types
     switch (chartType) {
       case 'logLevelsOverTime':
-        return await getLogLevelsOverTime(query, res);
+        return await getLogLevelsOverTime(models, query, res);
 
       case 'protocolDistribution':
-        return await getProtocolDistribution(query, res);
+        return await getProtocolDistribution(models, query, res);
 
       case 'topSourceIPs':
-        return await getTopSourceIPs(query, res);
+        return await getTopSourceIPs(models, query, res);
 
       case 'levelDistribution':
-        return await getLevelDistribution(query, res);
+        return await getLevelDistribution(models, query, res);
 
       case 'networkConnections':
-        return await getNetworkConnections(query, res);
+        return await getNetworkConnections(models, query, res);
 
       case 'ruleDescriptions':
-        return await getRuleDescriptions(query, res);
+        return await getRuleDescriptions(models, query, res);
 
       default:
         return res.status(400).json({ message: 'Invalid chart type' });
@@ -152,7 +545,7 @@ router.get('/charts/:chartType', auth, async (req, res) => {
 
 router.get('/debug/structure', auth, async (req, res) => {
   try {
-    const sampleLog = await Log.findOne().lean();
+    const sampleLog = await LogCurrent.findOne().lean();
 
     if (!sampleLog) {
       return res.json({ message: "No logs found in database" });
@@ -194,27 +587,10 @@ router.get('/debug/structure', auth, async (req, res) => {
   }
 });
 
-// Helper function to calculate time filter based on timeRange parameter
-function getTimeFilter(timeRange) {
-  const now = new Date();
 
-  switch (timeRange) {
-    case '1h':
-      return new Date(now - 1 * 60 * 60 * 1000);
-    case '3h':
-      return new Date(now - 3 * 60 * 60 * 1000);
-    case '12h':
-      return new Date(now - 12 * 60 * 60 * 1000);
-    case '7d':
-      return new Date(now - 7 * 24 * 60 * 60 * 1000);
-    case '24h':
-    default:
-      return new Date(now - 24 * 60 * 60 * 1000);
-  }
-}
 
 // Implementation for each chart type handler
-async function getLogLevelsOverTime(query, res) {
+async function getLogLevelsOverTime(models, query, res) {
   // Get timestamp granularity based on time range
   const timeRange = query.timestamp.$gte;
   const now = new Date();
@@ -241,7 +617,8 @@ async function getLogLevelsOverTime(query, res) {
     format = "%m/%d";
   }
 
-  const result = await Log.aggregate([
+  // Pipeline for the aggregation
+  const pipeline = [
     { $match: query },
     {
       $project: {
@@ -282,13 +659,30 @@ async function getLogLevelsOverTime(query, res) {
       }
     },
     { $sort: { _id: 1 } }
-  ]);
+  ];
 
-  // Format the data for the chart
-  const timeLabels = result.map(item => item._id);
-  const notice = result.map(item => item.notice);
-  const warning = result.map(item => item.warning);
-  const critical = result.map(item => item.critical);
+  // Run aggregation across all relevant collections
+  const results = await aggregateMultipleCollections(pipeline, { models });
+
+  // Combine results into intervals
+  const intervalData = {};
+  
+  results.forEach(result => {
+    const interval = result._id;
+    if (!intervalData[interval]) {
+      intervalData[interval] = { notice: 0, warning: 0, critical: 0 };
+    }
+    intervalData[interval].notice += result.notice || 0;
+    intervalData[interval].warning += result.warning || 0;
+    intervalData[interval].critical += result.critical || 0;
+  });
+
+  // Convert to arrays for the chart
+  const sortedIntervals = Object.keys(intervalData).sort();
+  const timeLabels = sortedIntervals;
+  const notice = sortedIntervals.map(interval => intervalData[interval].notice);
+  const warning = sortedIntervals.map(interval => intervalData[interval].warning);
+  const critical = sortedIntervals.map(interval => intervalData[interval].critical);
 
   return res.json({
     timeLabels,
@@ -298,9 +692,9 @@ async function getLogLevelsOverTime(query, res) {
   });
 }
 
-async function getProtocolDistribution(query, res) {
+async function getProtocolDistribution(models, query, res) {
   try {
-    const result = await Log.aggregate([
+    const pipeline = [
       { $match: query },
       {
         $project: {
@@ -358,22 +752,38 @@ async function getProtocolDistribution(query, res) {
           value: "$count"
         }
       }
-    ]);
+    ];
 
-    if (result.length === 0) {
+    // Run aggregation across collections
+    const results = await aggregateMultipleCollections(pipeline, { models });
+
+    // Combine and sort results
+    const protocolCounts = {};
+    results.forEach(result => {
+      const protocol = result.name;
+      if (!protocolCounts[protocol]) protocolCounts[protocol] = 0;
+      protocolCounts[protocol] += result.value;
+    });
+
+    const finalResults = Object.entries(protocolCounts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    if (finalResults.length === 0) {
       return res.json([{ name: "No Protocol Data", value: 1 }]);
     }
 
-    return res.json(result);
+    return res.json(finalResults);
   } catch (error) {
     console.error("Error in protocol distribution:", error);
     return res.status(500).json({ message: "Error fetching protocol distribution", error: error.message });
   }
 }
 
-async function getTopSourceIPs(query, res) {
+async function getTopSourceIPs(models, query, res) {
   try {
-    const result = await Log.aggregate([
+    const pipeline = [
       { $match: query },
       {
         $project: {
@@ -426,21 +836,37 @@ async function getTopSourceIPs(query, res) {
           value: "$count"
         }
       }
-    ]);
+    ];
 
-    if (result.length === 0) {
+    // Run aggregation across collections
+    const results = await aggregateMultipleCollections(pipeline, { models });
+
+    // Combine and sort results
+    const ipCounts = {};
+    results.forEach(result => {
+      const ip = result.name;
+      if (!ipCounts[ip]) ipCounts[ip] = 0;
+      ipCounts[ip] += result.value;
+    });
+
+    const finalResults = Object.entries(ipCounts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    if (finalResults.length === 0) {
       return res.json([{ name: "No Source IP Data", value: 1 }]);
     }
 
-    return res.json(result);
+    return res.json(finalResults);
   } catch (error) {
     console.error("Error in top source IPs:", error);
     return res.status(500).json({ message: "Error fetching top source IPs", error: error.message });
   }
 }
 
-async function getLevelDistribution(query, res) {
-  const result = await Log.aggregate([
+async function getLevelDistribution(models, query, res) {
+  const pipeline = [
     { $match: query },
     {
       $group: {
@@ -456,61 +882,39 @@ async function getLevelDistribution(query, res) {
         value: "$count"
       }
     }
-  ]);
+  ];
+
+  // Run aggregation across collections
+  const results = await aggregateMultipleCollections(pipeline, { models });
+
+  // Combine results for the same level
+  const levelCounts = {};
+  results.forEach(result => {
+    const level = result.name;
+    if (!levelCounts[level]) levelCounts[level] = 0;
+    levelCounts[level] += result.value;
+  });
+
+  const finalResults = Object.entries(levelCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => parseInt(a.name) - parseInt(b.name));
 
   // Handle empty results
-  if (result.length === 0) {
+  if (finalResults.length === 0) {
     return res.json([{ name: "No Data", value: 0 }]);
   }
 
-  return res.json(result);
+  return res.json(finalResults);
 }
 
-function getNestedValue(obj, path) {
-  const parts = path.split('.');
-  let current = obj;
-
-  for (const part of parts) {
-    if (current === null || current === undefined || typeof current !== 'object') {
-      return null;
-    }
-    current = current[part];
-  }
-
-  return current;
-}
-
-async function getNetworkConnections(query, res) {
+async function getNetworkConnections(models, query, res) {
   try {
     // Define all possible field paths
     const sourceIPPaths = ["network.srcIp", "sourceIP", "source.ip", "fields.src_ip", "rawData.data.src_ip"];
     const destIPPaths = ["network.destIp", "destinationIP", "destination.ip", "fields.dst_ip", "rawData.data.dest_ip"];
 
-    // Create projection objects for all possible paths
-    const sourceIPProjection = {};
-    sourceIPPaths.forEach(path => {
-      const parts = path.split('.');
-      let current = sourceIPProjection;
-      for (let i = 0; i < parts.length - 1; i++) {
-        if (!current[parts[i]]) current[parts[i]] = {};
-        current = current[parts[i]];
-      }
-      current[parts[parts.length - 1]] = 1;
-    });
-
-    const destIPProjection = {};
-    destIPPaths.forEach(path => {
-      const parts = path.split('.');
-      let current = destIPProjection;
-      for (let i = 0; i < parts.length - 1; i++) {
-        if (!current[parts[i]]) current[parts[i]] = {};
-        current = current[parts[i]];
-      }
-      current[parts[parts.length - 1]] = 1;
-    });
-
-    // Get sample documents to check field paths
-    const sampleDocs = await Log.find(query).limit(10).lean();
+    // Get sample documents to check field paths (from first model only for efficiency)
+    const sampleDocs = await models[0].find(query).limit(10).lean();
 
     // Determine which fields actually exist in the documents
     let sourceIPField = null;
@@ -544,32 +948,81 @@ async function getNetworkConnections(query, res) {
 
     console.log(`Using source IP field: ${sourceIPField}, destination IP field: ${destinationIPField}`);
 
-    // Get top source IPs
-    const sourceProjection = { source: `$${sourceIPField}` };
-    const topSources = await Log.aggregate([
+    // Pipeline for top sources 
+    const sourcePipeline = [
       { $match: query },
-      { $project: sourceProjection },
-      { $group: { _id: "$source", count: { $sum: 1 } } },
+      { 
+        $project: {
+          source: { $ifNull: [`$${sourceIPField}`, "Unknown"] }
+        }
+      },
+      { 
+        $group: { 
+          _id: "$source", 
+          count: { $sum: 1 } 
+        } 
+      },
       { $match: { _id: { $ne: null, $ne: "" } } },
       { $sort: { count: -1 } },
       { $limit: 10 }
-    ]);
+    ];
 
-    // Get top destination IPs
-    const destProjection = { destination: `$${destinationIPField}` };
-    const topDestinations = await Log.aggregate([
+    // Pipeline for top destinations
+    const destPipeline = [
       { $match: query },
-      { $project: destProjection },
-      { $group: { _id: "$destination", count: { $sum: 1 } } },
+      { 
+        $project: {
+          destination: { $ifNull: [`$${destinationIPField}`, "Unknown"] }
+        }
+      },
+      { 
+        $group: { 
+          _id: "$destination", 
+          count: { $sum: 1 } 
+        } 
+      },
       { $match: { _id: { $ne: null, $ne: "" } } },
       { $sort: { count: -1 } },
       { $limit: 10 }
+    ];
+
+    // Execute pipelines across all models
+    const [topSourcesResults, topDestsResults] = await Promise.all([
+      aggregateMultipleCollections(sourcePipeline, { models }),
+      aggregateMultipleCollections(destPipeline, { models })
     ]);
 
-    // Get source-destination connections
+    // Combine and aggregate top sources
+    const sourceCounts = {};
+    topSourcesResults.forEach(result => {
+      const source = result._id || "Unknown";
+      if (!sourceCounts[source]) sourceCounts[source] = 0;
+      sourceCounts[source] += result.count;
+    });
+
+    const topSources = Object.entries(sourceCounts)
+      .map(([source, count]) => ({ _id: source, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Combine and aggregate top destinations
+    const destCounts = {};
+    topDestsResults.forEach(result => {
+      const dest = result._id || "Unknown";
+      if (!destCounts[dest]) destCounts[dest] = 0;
+      destCounts[dest] += result.count;
+    });
+
+    const topDestinations = Object.entries(destCounts)
+      .map(([dest, count]) => ({ _id: dest, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Extract source and destination IPs for connection query
     const sourceIDs = topSources.map(s => s._id).filter(Boolean);
     const destIDs = topDestinations.map(d => d._id).filter(Boolean);
 
+    // Pipeline for source-destination connections
     let connectionsMatchQuery = { ...query };
 
     // Only add path conditions if we have data
@@ -581,14 +1034,14 @@ async function getNetworkConnections(query, res) {
       connectionsMatchQuery[destinationIPField] = { $in: destIDs };
     }
 
-    const connectionProjection = {
-      source: `$${sourceIPField}`,
-      target: `$${destinationIPField}`
-    };
-
-    const connections = await Log.aggregate([
+    const connectionsPipeline = [
       { $match: connectionsMatchQuery },
-      { $project: connectionProjection },
+      { 
+        $project: {
+          source: { $ifNull: [`$${sourceIPField}`, "Unknown"] },
+          target: { $ifNull: [`$${destinationIPField}`, "Unknown"] }
+        }
+      },
       {
         $group: {
           _id: { source: "$source", target: "$target" },
@@ -598,9 +1051,30 @@ async function getNetworkConnections(query, res) {
       { $match: { "_id.source": { $ne: null }, "_id.target": { $ne: null } } },
       { $sort: { count: -1 } },
       { $limit: 50 }
-    ]);
+    ];
 
-    // Format for force-directed graph
+    // Execute connections pipeline
+    const connectionsResults = await aggregateMultipleCollections(connectionsPipeline, { models });
+
+    // Process connections
+    const connectionCounts = {};
+    connectionsResults.forEach(result => {
+      const key = `${result._id.source}-${result._id.target}`;
+      if (!connectionCounts[key]) {
+        connectionCounts[key] = {
+          source: result._id.source,
+          target: result._id.target,
+          count: 0
+        };
+      }
+      connectionCounts[key].count += result.count;
+    });
+
+    const connections = Object.values(connectionCounts)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 50);
+
+    // Create node map
     const nodeMap = new Map();
 
     // Add source nodes
@@ -635,10 +1109,10 @@ async function getNetworkConnections(query, res) {
 
     // Create links
     const links = connections
-      .filter(conn => conn._id.source && conn._id.target)
+      .filter(conn => conn.source && conn.target)
       .map(conn => ({
-        source: conn._id.source,
-        target: conn._id.target,
+        source: conn.source,
+        target: conn.target,
         value: conn.count
       }));
 
@@ -677,8 +1151,8 @@ async function getNetworkConnections(query, res) {
   }
 }
 
-async function getRuleDescriptions(query, res) {
-  const result = await Log.aggregate([
+async function getRuleDescriptions(models, query, res) {
+  const pipeline = [
     { $match: query },
     {
       $group: {
@@ -695,228 +1169,104 @@ async function getRuleDescriptions(query, res) {
         value: "$count"
       }
     }
-  ]);
+  ];
+
+  // Run aggregation across collections
+  const results = await aggregateMultipleCollections(pipeline, { models });
+
+  // Combine results
+  const ruleCounts = {};
+  results.forEach(result => {
+    const rule = result.name;
+    if (!ruleCounts[rule]) ruleCounts[rule] = 0;
+    ruleCounts[rule] += result.value;
+  });
+
+  const finalResults = Object.entries(ruleCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 15);
 
   // Handle empty results
-  if (result.length === 0) {
+  if (finalResults.length === 0) {
     return res.json([{ name: "No Rules Found", value: 1 }]);
   }
 
-  return res.json(result);
+  return res.json(finalResults);
 }
 
-module.exports = router;
 
-// Optimized metrics endpoint with caching
-router.get('/metrics', async (req, res) => {
-  try {
-    console.log('Fetching metrics...');
-
-    const [metrics] = await Log.aggregate([
-      {
-        $addFields: {
-          numericLevel: {
-            $convert: {
-              input: "$rule.level",
-              to: "int",
-              onError: 0,
-              onNull: 0
-            }
-          }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            agentName: '$agent.name',
-            ruleLevel: '$rule.level',
-            ruleDescription: '$rule.description',
-            timestamp: {
-              $dateToString: {
-                format: '%Y-%m-%d %H:%M:%S',
-                date: '$timestamp'
-              }
-            }
-          },
-          uniqueId: { $first: '$_id' }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalLogs: { $sum: 1 },
-          majorLogs: {
-            $sum: {
-              $cond: [
-                { $gte: [{ $toInt: "$_id.ruleLevel" }, 12] },
-                1,
-                0
-              ]
-            }
-          }
-        }
-      }
-    ]);
-
-    const result = {
-      totalLogs: metrics?.totalLogs || 0,
-      majorLogs: metrics?.majorLogs || 0,
-      normalLogs: (metrics?.totalLogs || 0) - (metrics?.majorLogs || 0)
-    };
-
-    console.log('Metrics calculated:', result);
-    res.json(result);
-  } catch (error) {
-    console.error('Error fetching metrics:', error);
-    res.status(500).json({ message: 'Error fetching metrics', error: error.message });
-  }
-});
-
-// Optimized recent logs endpoint with projection
-router.get('/recent', async (req, res) => {
-  try {
-    console.log('Fetching recent logs...');
-    const recentLogs = await Log.find({}, {
-      timestamp: 1,
-      'agent.name': 1,
-      'rule.level': 1,
-      'rule.description': 1,
-      rawLog: 1
-    })
-      .sort({ timestamp: -1 })
-      .limit(10)
-      .lean();
-    console.log('Recent logs count:', recentLogs.length);
-
-    res.json(recentLogs);
-  } catch (error) {
-    console.error('Error fetching recent logs:', error);
-    res.status(500).json({ message: 'Error fetching recent logs', error: error.message });
-  }
-});
-
-// Optimized major logs endpoint with index usage
-
+// Major logs endpoint
+// Update the route handler in Logs.js
+// In your backend/routes/Logs.js file, update the /major endpoint
+// In your backend/routes/Logs.js file
 router.get('/major', async (req, res) => {
   try {
     const { search = '' } = req.query;
-    console.log('Fetching unique major logs with search:', search);
-
-    // Build the base query for major logs with explicit type conversion
-    let query = {
-      $and: [
-        {
+    console.log('Fetching major logs with search:', search);
+    
+    // Create a cache key that includes the search parameter
+    const cacheKey = `major_logs_${search}`;
+    const cacheTime = 60; // Cache for 60 seconds
+    
+    const majorLogs = await withCache(cacheKey, cacheTime, async () => {
+      // Build the base query for major logs
+      const query = {
+        $expr: { 
+          $gte: [
+            { $convert: { input: "$rule.level", to: "int", onError: 0, onNull: 0 } },
+            12
+          ] 
+        }
+      };
+      
+      // Add search criteria if provided
+      if (search) {
+        query.$and = [{
           $or: [
-            // Handle numeric levels
-            { 'rule.level': { $gte: 12 } },
-            // Handle string levels
-            {
-              $expr: {
-                $gte: [
-                  { $toInt: '$rule.level' },
-                  12
-                ]
-              }
-            }
+            { 'agent.name': { $regex: search, $options: 'i' } },
+            { 'rule.description': { $regex: search, $options: 'i' } },
+            { 'network.srcIp': { $regex: search, $options: 'i' } },
+            { 'network.destIp': { $regex: search, $options: 'i' } }
           ]
-        }
-      ]
-    };
-
-    // Add search criteria if provided
-    if (search) {
-      query.$and.push({
-        $or: [
-          { 'agent.name': { $regex: search, $options: 'i' } },
-          { 'rule.description': { $regex: search, $options: 'i' } },
-          { 'network.srcIp': { $regex: search, $options: 'i' } },
-          { 'network.destIp': { $regex: search, $options: 'i' } }
-        ]
+        }];
+      }
+      
+      // Query both current and recent collections
+      const [currentLogs, recentLogs] = await Promise.all([
+        LogCurrent.find(query).sort({ timestamp: -1 }).lean(),
+        LogRecent.find(query).sort({ timestamp: -1 }).lean()
+      ]);
+      
+      // Combine and sort results
+      const combinedLogs = [...currentLogs, ...recentLogs]
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(0, 1000);
+      
+      console.log(`Found ${combinedLogs.length} major logs across collections`);
+      
+      // Add explicit validation that these are actually major logs
+      const validatedLogs = combinedLogs.filter(log => {
+        const level = parseInt(log.rule?.level);
+        return !isNaN(level) && level >= 12;
       });
-    }
-
-    // Use aggregation to get unique logs
-    const majorLogs = await Log.aggregate([
-      { $match: query },
-      // Add a stage to ensure proper level comparison
-      {
-        $addFields: {
-          numericLevel: {
-            $convert: {
-              input: '$rule.level',
-              to: 'int',
-              onError: 0,
-              onNull: 0
-            }
-          }
-        }
-      },
-      // Only keep logs with level >= 12 after conversion
-      {
-        $match: {
-          numericLevel: { $gte: 12 }
-        }
-      },
-      // Group by the fields that determine uniqueness
-      {
-        $group: {
-          _id: {
-            agentName: '$agent.name',
-            ruleLevel: '$numericLevel', // Use converted level
-            ruleDescription: '$rule.description',
-            timestamp: {
-              $dateToString: {
-                format: '%Y-%m-%d %H:%M:%S',
-                date: '$timestamp'
-              }
-            }
-          },
-          // Keep the first occurrence's full data
-          originalId: { $first: '$_id' },
-          timestamp: { $first: '$timestamp' },
-          agent: { $first: '$agent' },
-          rule: { $first: '$rule' },
-          network: { $first: '$network' },
-          rawLog: { $first: '$rawLog' },
-          uniqueIdentifier: { $first: '$uniqueIdentifier' },
-          numericLevel: { $first: '$numericLevel' } // Keep the numeric level
-        }
-      },
-      // Sort by level (descending) and then timestamp (descending)
-      {
-        $sort: {
-          numericLevel: -1,
-          timestamp: -1
-        }
-      },
-      { $limit: 1000 }
-    ]);
-
-    console.log(`Found ${majorLogs.length} unique major logs`);
-
-    // Add additional validation before sending response
-    const validatedLogs = majorLogs.filter(log => {
-      const level = parseInt(log.rule.level);
-      return !isNaN(level) && level >= 12;
+      
+      console.log(`Validated ${validatedLogs.length} logs with level >= 12`);
+      
+      return validatedLogs;
     });
-
-    console.log(`Validated ${validatedLogs.length} logs with level >= 12`);
-
-    res.json(validatedLogs);
+    
+    res.json(majorLogs);
   } catch (error) {
     console.error('Error fetching major logs:', error);
-    res.status(500).json({
-      message: 'Error fetching major logs',
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    res.status(500).json({ 
+      message: 'Error fetching major logs', 
+      error: error.message 
     });
   }
 });
 
-// backend/routes/Logs.js - Update the session endpoint
-
-// Update the session endpoint in routes/Logs.js
-
+// Session endpoint
 router.get('/session', async (req, res) => {
   try {
     const { search = '' } = req.query;
@@ -950,10 +1300,14 @@ router.get('/session', async (req, res) => {
       };
     }
 
-    // Execute query with proper sorting
-    const sessionLogs = await Log.find(searchQuery)
-      .sort({ timestamp: -1 })
-      .lean();
+    // Query across multiple collections
+    const models = [LogCurrent, LogRecent]; // Use both current and recent logs
+    
+    const { data: sessionLogs } = await queryMultipleCollections(searchQuery, {
+      models,
+      sort: { timestamp: -1 },
+      limit: 1000
+    });
 
     console.log(`Found ${sessionLogs.length} compliance-related logs`);
 
@@ -967,6 +1321,7 @@ router.get('/session', async (req, res) => {
   }
 });
 
+// FIM endpoint
 router.get('/fim', async (req, res) => {
   try {
     const { search = '', page = 1, limit = 10, event = '', path = '', startTime = '' } = req.query;
@@ -1021,15 +1376,18 @@ router.get('/fim', async (req, res) => {
       searchQuery.timestamp = { $gte: new Date(startTime) };
     }
 
-    // Count total logs for pagination
-    const totalLogs = await Log.countDocuments(searchQuery);
-
-    // Fetch the logs
-    const fimLogs = await Log.find(searchQuery)
-      .sort({ timestamp: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit))
-      .lean();
+    // Choose models based on time filter
+    const models = startTime ? 
+      getModelsForTimeRange(startTime).models :
+      [LogCurrent, LogRecent]; // Look in both current and recent by default for FIM
+    
+    // Query across multiple collections
+    const { data: fimLogs, total: totalLogs } = await queryMultipleCollections(searchQuery, {
+      models,
+      sort: { timestamp: -1 },
+      skip: (page - 1) * limit,
+      limit: Number(limit)
+    });
 
     console.log(`Found ${fimLogs.length} FIM-related logs`);
 
@@ -1048,132 +1406,103 @@ router.get('/fim', async (req, res) => {
   }
 });
 
+// Malware Logs endpoint
 router.get('/malware', async (req, res) => {
   try {
     const { page = 0, pageSize = 10, filters = 'virustotal,yara,rootcheck' } = req.query;
-
-    const pageNum = parseInt(page);
-    const limit = parseInt(pageSize);
-    const skip = pageNum * limit;
-
+    
     // Parse the filters
     const filterTypes = filters.split(',').filter(Boolean);
-
-    if (filterTypes.length === 0) {
-      return res.status(400).json({ error: 'At least one filter type must be selected' });
-    }
-
-    // Build the regex pattern for matching any of the requested filter types
-    const filterPattern = filterTypes.map(type => type.trim()).join('|');
-    const regexPattern = new RegExp(`"groups":\\s*\\[[^\\]]*"(${filterPattern})"[^\\]]*\\]`, 'i');
-    // Query for logs with any of the requested security groups
+    const regexPattern = new RegExp(`"groups":\\s*\\[[^\\]]*"(${filterTypes.join('|')})"[^\\]]*\\]`, 'i');
     const query = { "rawLog.message": { $regex: regexPattern } };
-
-    // Execute the query with pagination
-    const [logs, total] = await Promise.all([
-      Log.find(query)
-        .sort({ timestamp: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Log.countDocuments(query)
-    ]);
-
-    return res.json({
-      logs,
-      total,
-      page: pageNum,
-      pageSize: limit
+    
+    // Query across multiple collections
+    const models = [LogCurrent, LogRecent]; // Check both current and recent collections
+    
+    const { data: logs, total } = await queryMultipleCollections(query, {
+      models,
+      sort: { timestamp: -1 },
+      skip: parseInt(page) * parseInt(pageSize),
+      limit: parseInt(pageSize)
     });
+    
+    return res.json({ logs, total, page: parseInt(page), pageSize: parseInt(pageSize) });
   } catch (error) {
     console.error('Error fetching malware logs:', error);
     return res.status(500).json({ error: 'Failed to fetch malware logs' });
   }
 });
 
+// Configuration Logs endpoint
 router.get('/configuration', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 0;
     const pageSize = parseInt(req.query.pageSize) || 10;
-    const skip = page * pageSize;
-
-    // Query for logs with "sca" in the groups array - similar to malware route
+    
+    // Query for logs with "sca" in the groups array
     const regexPattern = new RegExp(`"groups":\\s*\\[[^\\]]*"sca"[^\\]]*\\]`, 'i');
     const query = { "rawLog.message": { $regex: regexPattern } };
-
-    // Get total count and logs with pagination
-    const [logs, total] = await Promise.all([
-      Log.find(query)
-        .sort({ timestamp: -1 })
-        .skip(skip)
-        .limit(pageSize)
-        .lean(),
-      Log.countDocuments(query)
-    ]);
-
-    return res.json({
-      logs,
-      total,
-      page,
-      pageSize
+    
+    // Query across multiple collections
+    const models = [LogCurrent, LogRecent];
+    
+    const { data: logs, total } = await queryMultipleCollections(query, {
+      models,
+      sort: { timestamp: -1 },
+      skip: page * pageSize,
+      limit: pageSize
     });
+    
+    return res.json({ logs, total, page, pageSize });
   } catch (error) {
     console.error('Error fetching configuration logs:', error);
     return res.status(500).json({ error: 'Failed to fetch configuration logs' });
   }
 });
 
-// Add this endpoint to your Logs.js file
+// Sentinel AI endpoint
 router.get('/sentinel-ai', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 0;
     const pageSize = parseInt(req.query.pageSize) || 10;
-    const skip = page * pageSize;
     
     // Query for logs with chatgpt_response in YARA
     const query = { 
       "rawLog.message": { 
-        $regex: /"data":\s*{[^}]*"YARA":\s*{[^}]*"chatgpt_response":\s*"[^"]+"/ 
+        $regex: /"data":\s*{[^}]*"YARA":\s*{[^}]*"AI_response":\s*"[^"]+"/ 
       } 
     };
     
-    // Get total count and logs with pagination
-    const [logs, total] = await Promise.all([
-      Log.find(query)
-        .sort({ timestamp: -1 })
-        .skip(skip)
-        .limit(pageSize)
-        .lean(),
-      Log.countDocuments(query)
-    ]);
+    // Query across multiple collections
+    const models = [LogCurrent, LogRecent];
+    
+    const { data: logs, total } = await queryMultipleCollections(query, {
+      models,
+      sort: { timestamp: -1 },
+      skip: page * pageSize,
+      limit: pageSize
+    });
     
     // Process logs to extract chatgpt_response
     const processedLogs = logs.map(log => {
       const message = log.rawLog?.message || '';
       const chatgptMatch = message.match(/"chatgpt_response":\s*"([^"]+)"/);
-      const chatgptResponse = chatgptMatch ? chatgptMatch[1] : 'No response found';
-      
       return {
         ...log,
         extracted: {
-          chatgptResponse
+          chatgptResponse: chatgptMatch ? chatgptMatch[1] : 'No response found'
         }
       };
     });
     
-    return res.json({
-      logs: processedLogs,
-      total,
-      page,
-      pageSize
-    });
+    return res.json({ logs: processedLogs, total, page, pageSize });
   } catch (error) {
     console.error('Error fetching Sentinel AI logs:', error);
     return res.status(500).json({ error: 'Failed to fetch Sentinel AI logs' });
   }
 });
 
-// Add this endpoint to your existing Logs.js routes
+// MITRE endpoint
 router.get('/mitre', async (req, res) => {
   try {
     const {
@@ -1193,102 +1522,80 @@ router.get('/mitre', async (req, res) => {
         { "rawLog.message.rule.mitre.id": { $exists: true, $ne: [] } },
         { "rawLog.message.rule.mitre.tactic": { $exists: true, $ne: [] } },
         { "rawLog.message.rule.mitre.technique": { $exists: true, $ne: [] } },
-
-        // Technique ID searches
         { "rule.mitre.id": { $exists: true, $ne: [] } },
         { "rule.mitre.tactic": { $exists: true, $ne: [] } },
         { "rule.mitre.technique": { $exists: true, $ne: [] } },
-
-        // Comprehensive text search across raw message
-        {
-          "rawLog.message": {
-            $regex: /mitre|technique|tactic/i
-          }
-        }
+        { "rawLog.message": { $regex: /mitre|technique|tactic/i } }
       ]
     };
 
-    // Additional filtering based on search term
-    if (search) {
-      searchQuery.$and = [
-        searchQuery,
-        {
+    // Additional filtering
+    if (search || tactic || technique || id || startTime) {
+      const andConditions = [];
+      
+      if (searchQuery.$or) {
+        andConditions.push(searchQuery);
+      }
+      
+      if (search) {
+        andConditions.push({
           $or: [
-            // Agent and rule-based searches
             { "agent.name": { $regex: search, $options: 'i' } },
             { "rule.description": { $regex: search, $options: 'i' } },
-
-            // Raw message searches
             { "rawLog.message": { $regex: search, $options: 'i' } },
-
-            // Specific Mitre field searches
             { "rule.mitre.id": { $regex: search, $options: 'i' } },
             { "rule.mitre.tactic": { $regex: search, $options: 'i' } },
-            { "rule.mitre.technique": { $regex: search, $options: 'i' } },
-
-            // Comprehensive MITRE-related keyword search
-            {
-              "rawLog.message": {
-                $regex: new RegExp(
-                  search.split(/\s+/).map(term =>
-                    `(${term}|${term.toLowerCase()}|${term.toUpperCase()})`
-                  ).join('|'),
-                  'i'
-                )
-              }
-            }
+            { "rule.mitre.technique": { $regex: search, $options: 'i' } }
           ]
-        }
-      ];
+        });
+      }
+      
+      if (tactic) {
+        andConditions.push({
+          $or: [
+            { "rule.mitre.tactic": { $regex: tactic, $options: 'i' } },
+            { "rawLog.message.rule.mitre.tactic": { $regex: tactic, $options: 'i' } }
+          ]
+        });
+      }
+      
+      if (technique) {
+        andConditions.push({
+          $or: [
+            { "rule.mitre.technique": { $regex: technique, $options: 'i' } },
+            { "rawLog.message.rule.mitre.technique": { $regex: technique, $options: 'i' } }
+          ]
+        });
+      }
+      
+      if (id) {
+        andConditions.push({
+          $or: [
+            { "rule.mitre.id": { $regex: id, $options: 'i' } },
+            { "rawLog.message.rule.mitre.id": { $regex: id, $options: 'i' } }
+          ]
+        });
+      }
+      
+      if (startTime) {
+        andConditions.push({ timestamp: { $gte: new Date(startTime) } });
+      }
+      
+      searchQuery = { $and: andConditions };
     }
 
-    if (startTime) {
-      searchQuery.timestamp = { $gte: new Date(startTime) };
-      // If your timestamp field is in a different location, adjust accordingly
-      // For example, if it's nested in rawLog:
-      // searchQuery["rawLog.timestamp"] = { $gte: new Date(startTime) };
-    }
-
-    // Specific Mitre filtering
-    if (tactic) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({
-        $or: [
-          { "rule.mitre.tactic": { $regex: tactic, $options: 'i' } },
-          { "rawLog.message.rule.mitre.tactic": { $regex: tactic, $options: 'i' } }
-        ]
-      });
-    }
-
-    if (technique) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({
-        $or: [
-          { "rule.mitre.technique": { $regex: technique, $options: 'i' } },
-          { "rawLog.message.rule.mitre.technique": { $regex: technique, $options: 'i' } }
-        ]
-      });
-    }
-
-    if (id) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({
-        $or: [
-          { "rule.mitre.id": { $regex: id, $options: 'i' } },
-          { "rawLog.message.rule.mitre.id": { $regex: id, $options: 'i' } }
-        ]
-      });
-    }
-
-    // Count total documents for pagination
-    const totalLogs = await Log.countDocuments(searchQuery);
-
-    // Execute query with pagination and sorting
-    const mitreAttackLogs = await Log.find(searchQuery)
-      .sort({ timestamp: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit))
-      .lean();
+    // Choose models based on time filter
+    const models = startTime ? 
+      getModelsForTimeRange(startTime).models :
+      [LogCurrent, LogRecent]; // Look in both current and recent by default for MITRE
+    
+    // Query across multiple collections
+    const { data: mitreAttackLogs, total: totalLogs } = await queryMultipleCollections(searchQuery, {
+      models,
+      sort: { timestamp: -1 },
+      skip: (page - 1) * limit,
+      limit: Number(limit)
+    });
 
     res.json({
       logs: mitreAttackLogs,
@@ -1305,72 +1612,55 @@ router.get('/mitre', async (req, res) => {
   }
 });
 
-
-
-
-
 // Endpoint to fetch vulnerability logs
 router.get('/vulnerability', async (req, res) => {
   try {
     const { search = '', page = 1, limit = 10, severity = '', package = '', cve = '', startTime = '' } = req.query;
-
+    
     let searchQuery = {
       $or: [
         { "rule.groups": "vulnerability-detector" },
         { "data.vulnerability": { $exists: true } },
-        { "rawLog.message": { $regex: /cvss|cvs|assigner/i } }
+        { "rawLog.message": { $regex: /cvss|cve|assigner/i } }
       ]
     };
-
-    if (search) {
-      searchQuery.$and = [
-        searchQuery,
-        {
-          $or: [
-            { "agent.name": { $regex: search, $options: 'i' } },
-            { "rule.description": { $regex: search, $options: 'i' } },
-            { "data.vulnerability.cve": { $regex: search, $options: 'i' } },
-            { "data.vulnerability.package.name": { $regex: search, $options: 'i' } },
-            { "data.vulnerability.severity": { $regex: search, $options: 'i' } },
-            { "rawLog.message": { $regex: search, $options: 'i' } }
-          ]
-        }
-      ];
-    }
-
-    if (startTime) {
-      searchQuery.timestamp = { $gte: new Date(startTime) };
-    }
-
-    if (severity) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({ "data.vulnerability.severity": { $regex: severity, $options: 'i' } });
-    }
-
-    if (package) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({ "data.vulnerability.package.name": { $regex: package, $options: 'i' } });
-    }
-
-    if (cve) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({ "data.vulnerability.cve": { $regex: cve, $options: 'i' } });
-    }
-
-    const totalLogs = await Log.countDocuments(searchQuery);
-    const vulnerabilityLogs = await Log.find(searchQuery)
-      .sort({ timestamp: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit))
-      .lean();
-
-    console.log('Fetched logs:', vulnerabilityLogs); // Add this line to debug
-
+    
+    // Add filters if provided
+    const andConditions = [];
+    if (Object.keys(searchQuery).length > 0) andConditions.push(searchQuery);
+    
+    if (search) andConditions.push({
+      $or: [
+        { "agent.name": { $regex: search, $options: 'i' } },
+        { "rule.description": { $regex: search, $options: 'i' } },
+        { "data.vulnerability.cve": { $regex: search, $options: 'i' } },
+        { "data.vulnerability.package.name": { $regex: search, $options: 'i' } },
+        { "rawLog.message": { $regex: search, $options: 'i' } }
+      ]
+    });
+    
+    if (startTime) andConditions.push({ timestamp: { $gte: new Date(startTime) } });
+    if (severity) andConditions.push({ "data.vulnerability.severity": { $regex: severity, $options: 'i' } });
+    if (package) andConditions.push({ "data.vulnerability.package.name": { $regex: package, $options: 'i' } });
+    if (cve) andConditions.push({ "data.vulnerability.cve": { $regex: cve, $options: 'i' } });
+    
+    const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
+    
+    // Choose appropriate collections
+    const models = startTime ? getModelsForTimeRange(startTime).models : [LogCurrent, LogRecent];
+    
+    const { data: logs, total: totalLogs } = await queryMultipleCollections(finalQuery, {
+      models,
+      sort: { timestamp: -1 },
+      skip: (parseInt(page) - 1) * parseInt(limit),
+      limit: parseInt(limit)
+    });
+    
     res.json({
-      logs: vulnerabilityLogs,
+      logs,
       totalLogs,
-      page: Number(page),
-      totalPages: Math.ceil(totalLogs / limit)
+      page: parseInt(page),
+      totalPages: Math.ceil(totalLogs / parseInt(limit))
     });
   } catch (error) {
     console.error('Error in /vulnerability endpoint:', error);
@@ -1378,139 +1668,97 @@ router.get('/vulnerability', async (req, res) => {
   }
 });
 
-
-// Add this to your logs.js file
+// Threats endpoint
 router.get('/threats', async (req, res) => {
   try {
     const { search = '', page = 1, limit = 10, action = '', srcCountry = '', dstCountry = '', startTime = '' } = req.query;
-
+    
     let searchQuery = {
       $or: [
         { "data.action": { $exists: true } },
         { "rawLog.message": { $regex: /action/i } }
       ]
     };
-
-    if (search) {
-      searchQuery.$and = [
-        searchQuery,
-        {
-          $or: [
-            { "agent.name": { $regex: search, $options: 'i' } },
-            { "data.action": { $regex: search, $options: 'i' } },
-            { "data.srccountry": { $regex: search, $options: 'i' } },
-            { "data.dstcountry": { $regex: search, $options: 'i' } },
-            { "data.msg": { $regex: search, $options: 'i' } },
-            { "rawLog.message": { $regex: search, $options: 'i' } }
-          ]
-        }
-      ];
-    }
-
-    if (startTime) {
-      searchQuery.timestamp = { $gte: new Date(startTime) };
-    }
-
-    if (action) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({ "data.action": { $regex: action, $options: 'i' } });
-    }
-
-    if (srcCountry) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({ "data.srccountry": { $regex: srcCountry, $options: 'i' } });
-    }
-
-    if (dstCountry) {
-      searchQuery.$and = searchQuery.$and || [];
-      searchQuery.$and.push({ "data.dstcountry": { $regex: dstCountry, $options: 'i' } });
-    }
-
-    const totalLogs = await Log.countDocuments(searchQuery);
-    const logQuery = Log.find(searchQuery).sort({ timestamp: -1 });
-    if (Number(limit) === 0) {
-      // Fetch all logs (may need to be careful with large datasets)
-      const threatLogs = await logQuery.lean();
-      res.json({
-        logs: threatLogs,
-        total: totalLogs,
-        page: 1,
-        totalPages: 1
-      });
-    } else {
-      // Paginate as usual
-      const threatLogs = await logQuery
-        .skip((page - 1) * limit)
-        .limit(Number(limit))
-        .lean();
-
-      res.json({
-        logs: threatLogs,
-        total: totalLogs,
-        page: Number(page),
-        totalPages: Math.ceil(totalLogs / limit)
-      });
-    }
+    
+    // Add filters if provided
+    const andConditions = [];
+    if (Object.keys(searchQuery).length > 0) andConditions.push(searchQuery);
+    
+    if (search) andConditions.push({
+      $or: [
+        { "agent.name": { $regex: search, $options: 'i' } },
+        { "data.action": { $regex: search, $options: 'i' } },
+        { "data.srccountry": { $regex: search, $options: 'i' } },
+        { "data.dstcountry": { $regex: search, $options: 'i' } },
+        { "rawLog.message": { $regex: search, $options: 'i' } }
+      ]
+    });
+    
+    if (startTime) andConditions.push({ timestamp: { $gte: new Date(startTime) } });
+    if (action) andConditions.push({ "data.action": { $regex: action, $options: 'i' } });
+    if (srcCountry) andConditions.push({ "data.srccountry": { $regex: srcCountry, $options: 'i' } });
+    if (dstCountry) andConditions.push({ "data.dstcountry": { $regex: dstCountry, $options: 'i' } });
+    
+    const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
+    
+    // Choose appropriate collections
+    const models = startTime ? getModelsForTimeRange(startTime).models : [LogCurrent, LogRecent];
+    
+    const { data: logs, total } = await queryMultipleCollections(finalQuery, {
+      models,
+      sort: { timestamp: -1 },
+      skip: parseInt(limit) === 0 ? 0 : (parseInt(page) - 1) * parseInt(limit),
+      limit: parseInt(limit) === 0 ? 10000 : parseInt(limit)
+    });
+    
+    res.json({
+      logs,
+      total,
+      page: parseInt(page),
+      totalPages: parseInt(limit) === 0 ? 1 : Math.ceil(total / parseInt(limit))
+    });
   } catch (error) {
     console.error('Error in /threats endpoint:', error);
     res.status(500).json({ message: 'Error fetching threat logs', error: error.message });
   }
 });
 
-
-
+// Auth metrics endpoint
 router.get('/auth-metrics', async (req, res) => {
   try {
     console.log('Fetching authentication metrics...');
-
-    const authMetrics = await Log.aggregate([
+    
+    const pipeline = [
       {
-        // First match only logs that have data.action field
-        $match: {
-          "data.action": { $exists: true }
-        }
+        $match: { "data.action": { $exists: true } }
       },
       {
-        // Count success and failure authentications
         $group: {
           _id: {
-            // If action is "pass", it's a success, otherwise a failure
-            success: {
-              $cond: [
-                { $eq: [{ $toLower: "$data.action" }, "pass"] },
-                true,
-                false
-              ]
-            }
+            success: { $cond: [{ $eq: [{ $toLower: "$data.action" }, "pass"] }, true, false] }
           },
           count: { $sum: 1 }
         }
       },
       {
-        // Reshape the results
         $project: {
           _id: 0,
           type: { $cond: ["$_id.success", "success", "failure"] },
           count: 1
         }
       }
-    ]);
-
-    // Convert to the expected format
-    const result = {
-      success: 0,
-      failure: 0
-    };
-
+    ];
+    
+    // Run on current logs only for better performance
+    const authMetrics = await LogCurrent.aggregate(pipeline);
+    
+    // Format results
+    const result = { success: 0, failure: 0 };
     authMetrics.forEach(metric => {
-      if (metric.type === 'success') {
-        result.success = metric.count;
-      } else {
-        result.failure = metric.count;
-      }
+      if (metric.type === 'success') result.success = metric.count;
+      else result.failure = metric.count;
     });
-
-    console.log('Auth metrics calculated:', result);
+    
     res.json(result);
   } catch (error) {
     console.error('Error fetching auth metrics:', error);
@@ -1521,35 +1769,29 @@ router.get('/auth-metrics', async (req, res) => {
 // Top agents endpoint
 router.get('/top-agents', async (req, res) => {
   try {
-    console.log('Fetching top agents...');
-
-    const topAgents = await Log.aggregate([
+    // Use multiple collection queries
+    const models = [LogCurrent, LogRecent];
+    
+    const pipeline = [
       {
-        // Group by agent name and count logs
         $group: {
           _id: "$agent.name",
           count: { $sum: 1 }
         }
       },
+      { $sort: { count: -1 } },
+      { $limit: 7 },
       {
-        // Sort by count in descending order
-        $sort: { count: -1 }
-      },
-      {
-        // Limit to top 5
-        $limit: 7
-      },
-      {
-        // Project to the expected format
         $project: {
           _id: 0,
           name: "$_id",
           count: 1
         }
       }
-    ]);
-
-    console.log('Top agents calculated:', topAgents);
+    ];
+    
+    const topAgents = await aggregateMultipleCollections(pipeline, { models });
+    
     res.json(topAgents);
   } catch (error) {
     console.error('Error fetching top agents:', error);
@@ -1560,93 +1802,34 @@ router.get('/top-agents', async (req, res) => {
 // Alert trends endpoint
 router.get('/alert-trends', async (req, res) => {
   try {
-    console.log('Fetching alert trends...');
-
     // Get data for the last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const alertTrends = await Log.aggregate([
+    
+    const alertTrends = await LogCurrent.aggregate([
       {
-        // Match logs from the last 7 days and make sure rule.level exists
         $match: {
           timestamp: { $gte: sevenDaysAgo },
           "rule.level": { $exists: true }
         }
       },
       {
-        // Add a field for the date and numeric level
         $addFields: {
           date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
-          numericLevel: {
-            $convert: {
-              input: "$rule.level",
-              to: "int",
-              onError: 0,
-              onNull: 0
-            }
-          }
+          numericLevel: { $toInt: "$rule.level" }
         }
       },
       {
-        // Group by date and categorize by level
         $group: {
           _id: "$date",
-          critical: {
-            $sum: {
-              $cond: [{ $gte: ["$numericLevel", 15] }, 1, 0]
-            }
-          },
-          high: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $gte: ["$numericLevel", 12] },
-                    { $lt: ["$numericLevel", 15] }
-                  ]
-                },
-                1,
-                0
-              ]
-            }
-          },
-          medium: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $gte: ["$numericLevel", 8] },
-                    { $lt: ["$numericLevel", 12] }
-                  ]
-                },
-                1,
-                0
-              ]
-            }
-          },
-          low: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $gte: ["$numericLevel", 1] },
-                    { $lt: ["$numericLevel", 8] }
-                  ]
-                },
-                1,
-                0
-              ]
-            }
-          }
+          critical: { $sum: { $cond: [{ $gte: ["$numericLevel", 15] }, 1, 0] } },
+          high: { $sum: { $cond: [{ $and: [{ $gte: ["$numericLevel", 12] }, { $lt: ["$numericLevel", 15] }] }, 1, 0] } },
+          medium: { $sum: { $cond: [{ $and: [{ $gte: ["$numericLevel", 8] }, { $lt: ["$numericLevel", 12] }] }, 1, 0] } },
+          low: { $sum: { $cond: [{ $and: [{ $gte: ["$numericLevel", 1] }, { $lt: ["$numericLevel", 8] }] }, 1, 0] } }
         }
       },
+      { $sort: { _id: 1 } },
       {
-        // Sort by date
-        $sort: { _id: 1 }
-      },
-      {
-        // Project to the expected format
         $project: {
           _id: 0,
           date: "$_id",
@@ -1657,8 +1840,7 @@ router.get('/alert-trends', async (req, res) => {
         }
       }
     ]);
-
-    console.log('Alert trends calculated:', alertTrends);
+    
     res.json(alertTrends);
   } catch (error) {
     console.error('Error fetching alert trends:', error);
@@ -1666,14 +1848,17 @@ router.get('/alert-trends', async (req, res) => {
   }
 });
 
+// Test endpoint
 router.get('/test', async (req, res) => {
   try {
-    const log = new Log({
+    const log = new LogCurrent({
       timestamp: new Date(),
       agent: { name: 'test-agent' },
       rule: { level: '10', description: 'test log' },
-      rawLog: { message: 'test log message' }
+      rawLog: { message: 'test log message' },
+      uniqueIdentifier: `test_${Date.now()}`
     });
+    
     await log.save();
     res.json({ message: 'Log saved successfully', log });
   } catch (error) {
@@ -1682,102 +1867,35 @@ router.get('/test', async (req, res) => {
   }
 });
 
-// Optimized logs endpoint with efficient pagination and filtering
-
-router.get('/', async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 1000,
-      search = '',
-      logType = 'all',
-      ruleLevel = 'all'
-    } = req.query;
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    // Build query with log type filtering
-    let searchQuery = {};
-
-    // Apply log type filter
-    if (logType === 'fortigate') {
-      searchQuery['rawLog.message'] = { $regex: 'FortiGate', $options: 'i' };
-    } else if (logType === 'other') {
-      searchQuery['rawLog.message'] = { $not: { $regex: 'FortiGate', $options: 'i' } };
+    const { id } = req.params;
+    
+    // Check if this is a special route like 'major', 'recent', etc.
+    const specialRoutes = ['major', 'recent', 'metrics', 'summary', 'charts', 'fim', 'session'];
+    if (specialRoutes.includes(id)) {
+      return next(); // Skip to the next matching route handler
     }
-
-    // Apply rule level filter
-    if (ruleLevel !== 'all') {
-      let ruleLevelRange;
-
-      switch (ruleLevel) {
-        case 'low':
-          ruleLevelRange = { $gte: 1, $lte: 3 };
-          break;
-        case 'medium':
-          ruleLevelRange = { $gte: 4, $lte: 7 };
-          break;
-        case 'high':
-          ruleLevelRange = { $gte: 8, $lte: 11 };
-          break;
-        case 'critical':
-          ruleLevelRange = { $gte: 12, $lte: 16 };
-          break;
-        case 'severe':
-          ruleLevelRange = { $gte: 17 };
-          break;
-      }
-
-      if (ruleLevelRange) {
-        searchQuery['rule.level'] = ruleLevelRange;
-      }
+    
+    // Normal ID lookup logic
+    let log = await LogCurrent.findOne({ id: id }).lean();
+    
+    if (!log) {
+      log = await LogRecent.findOne({ id: id }).lean();
     }
-
-    // Apply search term filter
-    if (search) {
-      const searchConditions = [
-        { 'agent.name': { $regex: search, $options: 'i' } },
-        { 'rule.level': search },  // Exact match for rule level
-        { 'rule.description': { $regex: search, $options: 'i' } },
-        { 'network.srcIp': { $regex: search, $options: 'i' } },
-        { 'network.destIp': { $regex: search, $options: 'i' } },
-        { 'rawLog.message': { $regex: search, $options: 'i' } }
-      ];
-
-      // If we already have a log type filter, use $and to combine both filters
-      if (Object.keys(searchQuery).length > 0) {
-        searchQuery = {
-          $and: [
-            searchQuery,
-            { $or: searchConditions }
-          ]
-        };
-      } else {
-        searchQuery.$or = searchConditions;
-      }
+    
+    if (!log) {
+      log = await LogArchive.findOne({ id: id }).lean();
     }
-
-    // Fetch logs with proper index usage
-    const [total, logs] = await Promise.all([
-      Log.countDocuments(searchQuery),
-      Log.find(searchQuery)
-        .sort({ timestamp: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean()
-    ]);
-
-    res.json({
-      logs,
-      pagination: {
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit))
-      }
-    });
+    
+    if (!log) {
+      return res.status(404).json({ message: 'Log not found' });
+    }
+    
+    res.json(log);
   } catch (error) {
-    console.error('Error fetching logs:', error);
-    res.status(500).json({ message: 'Error fetching logs', error: error.message });
+    console.error('Error fetching log by ID:', error);
+    res.status(500).json({ message: 'Error fetching log', error: error.message });
   }
 });
 

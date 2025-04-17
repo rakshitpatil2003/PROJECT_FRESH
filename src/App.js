@@ -19,7 +19,7 @@ import HIPAADashboard from './components/HipaaDashboard';
 import MitreAttack from './components/MitreAttack';
 import VulnerabilityDetection from './components/VulnerabilityDetection';
 import ThreatHunting from './components/ThreatHunting';
-import FIMUpgradeModal from './components/FIMUpgradeModal';
+//import FIMUpgradeModal from './components/FIMUpgradeModal';
 import jwtDecode from 'jwt-decode';
 import GDPRDashboard from './components/GDPRDashboard';
 import NISTDashboard from './components/NISTDashboard';
@@ -248,26 +248,7 @@ const App = () => {
             path="/fim"
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
-                {(() => {
-                  const token = localStorage.getItem('token');
-                  const user = token ? jwtDecode(token).userInfo : null;
-
-                  if (user && user.plan === 'Platinum') {
-                    return <FIM />;
-                  } else {
-                    return (
-                      <Box sx={{ position: 'relative', height: '100%' }}>
-                        <FIMUpgradeModal
-                          onClose={() => {
-                            // Add any specific close logic if needed
-                          }}
-                        />
-                        <Box sx={{ filter: 'blur(5px)', pointerEvents: 'none' }}>                          <FIM />
-                        </Box>
-                      </Box>
-                    );
-                  }
-                })()}
+                <FIM />
               </ProtectedLayout>
             }
           />

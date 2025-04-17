@@ -795,10 +795,33 @@ const MajorLogs = () => {
   };
 
   useEffect(() => {
+    // Debug logging
+    console.log("Fetching logs with search term:", searchTerm);
+    
+    const fetchDebug = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(
+          `${API_URL}/api/logs/major`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            }
+          }
+        );
+        console.log("API Response for major logs:", response.data);
+        console.log("First log level:", response.data[0]?.rule?.level);
+      } catch (error) {
+        console.error("API Error:", error.response?.data || error.message);
+      }
+    };
+    
+    fetchDebug();
+    
     const debounceTimer = setTimeout(() => {
       fetchMajorLogs(searchTerm);
     }, 500);
-
+  
     return () => clearTimeout(debounceTimer);
   }, [searchTerm, fetchMajorLogs]);
 

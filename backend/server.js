@@ -1,11 +1,13 @@
 // backend/server.js
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
+const compression = require('compression');
 const { fetchLogsFromGraylog } = require('./controllers/graylogController');
 const cleanupOldLogs = require('./utils/cleanupLogs');
 const removeDuplicateLogs = require('./utils/dedupLogs');
-const normalizeLogLevels = require('./utils/normalizeLogLevels');
-
+const ensureIndexes = require('./utils/ensureIndexes');
+const maintainTimeBasedCollections = require('./utils/maintainCollections');
+const initDatabase = require('./utils/initDatabase');
 
 if (cluster.isMaster) {
   console.log(`Master ${process.pid} is running`);
@@ -19,38 +21,68 @@ if (cluster.isMaster) {
     try {
       require('dotenv').config();
       const connectDB = require('./config/db');
-      
+
+      // Connect to MongoDB
       await connectDB();
       console.log('Master process connected to MongoDB');
 
-      console.log('Running log level normalization...');
-      await normalizeLogLevels();
-      console.log('Log level normalization completed');
-      
+      // Initialize database with admin user and collections
+      try {
+        await initDatabase();
+        console.log('Database initialization completed.');
+      } catch (error) {
+        console.error('Database initialization error:', error);
+      }
+
+      // Run index initialization
+      console.log('Running database schema initialization...');
+      await ensureIndexes();
+      console.log('Database schema initialized');
+
       // Schedule log fetching every 10 seconds
       setInterval(fetchLogsFromGraylog, 10000);
       console.log('Log fetching scheduled in master process');
-  
-      // Run initial cleanup
-      await cleanupOldLogs();
-      console.log('Initial cleanup completed');
-  
+
       // Run initial deduplication
-      await removeDuplicateLogs();
-      console.log('Initial deduplication completed');
-  
-      // Schedule cleanup tasks
-      setInterval(async () => {
-        console.log('Running scheduled cleanups...');
-        
-        // Clean old logs first
-        await cleanupOldLogs();
-        
-        // Then remove duplicates
+      try {
+        console.log('Running initial deduplication...');
         await removeDuplicateLogs();
-        
-      }, 60000); // Run every minute
-      
+        console.log('Initial deduplication completed');
+      } catch (error) {
+        console.error('Error running deduplication:', error);
+      }
+
+      // Schedule periodic deduplication (e.g., every hour)
+      setInterval(async () => {
+        try {
+          console.log('Running scheduled deduplication...');
+          await removeDuplicateLogs();
+        } catch (error) {
+          console.error('Error in scheduled deduplication:', error);
+        }
+      }, 60000); // Every 1 minute
+
+      // Run initial maintenance
+      try {
+        await maintainTimeBasedCollections();
+        console.log('Initial maintenance completed');
+      } catch (error) {
+        console.error('Error running maintenance:', error.message);
+      }
+
+      // Schedule maintenance to run daily at 2 AM
+      setInterval(async () => {
+        try {
+          const now = new Date();
+          if (now.getHours() === 2 && now.getMinutes() === 0) {
+            console.log('Running scheduled collection maintenance...');
+            await maintainTimeBasedCollections();
+          }
+        } catch (error) {
+          console.error('Error running scheduled maintenance:', error);
+        }
+      }, 60000); // Check every minute
+
     } catch (error) {
       console.error('Failed to initialize master process:', error);
       process.exit(1);
@@ -87,7 +119,7 @@ if (cluster.isMaster) {
   // Handle graceful shutdown
   process.on('SIGTERM', async () => {
     console.log('Master received SIGTERM. Shutting down gracefully...');
-    
+
     // Stop accepting new connections
     for (const worker of workers) {
       worker.send('shutdown');
@@ -109,7 +141,6 @@ if (cluster.isMaster) {
   const logsRoutes = require('./routes/Logs');
   const authRoutes = require('./routes/auth');
   const newsticker = require('./routes/news');
-  const soarRoutes = require('./routes/soarRoutes');
 
   const app = express();
 
@@ -138,17 +169,19 @@ if (cluster.isMaster) {
           'https://192.168.1.70:3443',
           'http://115.245.81.14:3000',
           'http://115.245.81.14:5000',
-          'https://115.245.81.14:3443'
+          'https://115.245.81.14:3443',
+          'https://192.168.1.165:6379'
         ],
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Accept','Cache-Control', 'X-Requested-With', 'Origin'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'X-Requested-With', 'Origin'],
         exposedHeaders: ['Authorization']
       };
 
       // Middleware
       app.use(cors(corsOptions));
       app.use(express.json());
+      app.use(compression());
 
       app.options('*', cors(corsOptions));
 
@@ -178,20 +211,19 @@ if (cluster.isMaster) {
         res.header('Access-Control-Allow-Credentials', true);
         res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         next();
-    });
+      });
 
       // Routes
       app.use('/api/auth', authRoutes);
       app.use('/api/logs', logsRoutes);
       app.use('/api/news', newsticker);
-      app.use('/api/soar', soarRoutes);
 
       // Test endpoint
       app.get('/api/test', (req, res) => {
-        res.json({ 
+        res.json({
           message: 'API is working',
           worker: process.pid,
-          server: '192.168.1.67',
+          server: '192.168.1.64',
           mongodb: '192.168.1.71'
         });
       });

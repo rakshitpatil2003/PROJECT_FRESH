@@ -356,8 +356,8 @@ const LogDetails = () => {
               label="Log Type"
             >
               <MenuItem value="all">All Logs</MenuItem>
-              <MenuItem value="fortigate">Fortigate Logs</MenuItem>
-              <MenuItem value="other">Suricata/Sysmon Logs</MenuItem>
+              <MenuItem value="firewall">Firewall Logs</MenuItem>
+              <MenuItem value="other">IDS/IPS Logs</MenuItem>
             </Select>
           </FormControl>
         </Grid>

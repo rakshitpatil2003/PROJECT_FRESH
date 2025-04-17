@@ -11,6 +11,7 @@ import { StructuredLogView } from '../utils/normalizeLogs';
 import { API_URL } from '../config';
 import Lottie from 'react-lottie';
 import animationData from '../assets/siri-animation.json'; // You'll need to download this file
+import FeatureAccess from '../components/FeatureAccess';
 
 const SentinelAI = () => {
   const [logs, setLogs] = useState([]);
@@ -193,211 +194,211 @@ const SentinelAI = () => {
     }
   ];
 
-  if (loading && !logs.length) {
-    return (
-      <Box
-        p={4}
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        justifyContent="center"
-        minHeight="70vh"
-      >
-        <Box sx={{ width: '200px', height: '200px' }}>
-          <Lottie options={defaultOptions} />
-        </Box>
-        <Typography variant="body1" sx={{ mt: 2 }}>
-          Loading Sentinel AI logs...
-        </Typography>
-      </Box>
-    );
-  }
-
   return (
-    <Box sx={{ p: 3 }}>
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Typography variant="h5" gutterBottom>
-          Sentinel AI Logs
-        </Typography>
-        <Typography variant="body2" color="textSecondary" paragraph>
-          Displaying logs with ChatGPT analysis of YARA detections
-        </Typography>
-
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-          <Tabs 
-            value={activeTab} 
-            onChange={handleTabChange} 
-            aria-label="log view tabs"
-          >
-            <Tab label="Events" />
-            <Tab label="Table View" />
-          </Tabs>
-        </Box>
-
-        {activeTab === 0 && (
-          <Paper elevation={1} sx={{ p: 2 }}>
-            {logs.length === 0 && !loading ? (
-              <Typography variant="body1" sx={{ textAlign: 'center', py: 4 }}>
-                No Sentinel AI logs found.
-              </Typography>
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {logs.map((log, index) => {
-                  const parsedLog = parseLogMessage(log);
-                  return (
-                    <Paper 
-                      key={index} 
-                      elevation={2} 
-                      sx={{ 
-                        p: 2, 
-                        borderLeft: `4px solid ${getRuleLevelColor(parsedLog.rule.level)}` 
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="subtitle2">
-                          {formatTimestamp(parsedLog.timestamp)}
-                        </Typography>
-                        <Chip
-                          label={getRuleLevelSeverity(parsedLog.rule.level)}
-                          size="small"
-                          sx={{
-                            backgroundColor: getRuleLevelColor(parsedLog.rule.level),
-                            color: 'white'
-                          }}
-                        />
-                      </Box>
-                      <Typography variant="body1" gutterBottom>
-                        {parsedLog.rule.description}
-                      </Typography>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                        <Typography variant="body2" color="textSecondary">
-                          Agent: {parsedLog.agent.name}
-                        </Typography>
-                        <Link
-                          component="button"
-                          onClick={() => handleViewResponse(parsedLog)}
-                          underline="hover"
-                        >
-                          View AI Analysis
-                        </Link>
-                      </Box>
-                    </Paper>
-                  );
-                })}
-              </Box>
-            )}
-          </Paper>
-        )}
-
-        {activeTab === 1 && (
-          <Paper elevation={2} sx={{ mb: 3 }}>
-            <Box sx={{
-              height: 650,
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden'
-            }}>
-              <DataGrid
-                rows={logs.map((log, index) => {
-                  const parsedLog = parseLogMessage(log);
-                  return {
-                    id: index,
-                    timestamp: parsedLog.timestamp,
-                    agentName: parsedLog.agent.name,
-                    ruleLevel: parsedLog.rule.level,
-                    description: parsedLog.rule.description,
-                    fullLog: parsedLog
-                  };
-                })}
-                columns={columns}
-                pageSize={rowsPerPage}
-                rowsPerPageOptions={[10, 25, 50, 100]}
-                onPageSizeChange={handleRowsPerPageChange}
-                pagination
-                paginationMode="server"
-                rowCount={totalLogs}
-                page={page}
-                onPageChange={handlePageChange}
-                disableSelectionOnClick
-                loading={loading}
-                density="standard"
-                sx={{
-                  '& .MuiDataGrid-cell:hover': {
-                    color: 'primary.main',
-                  },
-                  '& .MuiDataGrid-main': {
-                    overflow: 'auto !important'
-                  },
-                  '& .MuiDataGrid-footerContainer': {
-                    borderTop: '1px solid rgba(224, 224, 224, 1)',
-                  },
-                  flex: 1,
-                  boxSizing: 'border-box',
-                }}
-              />
-            </Box>
-          </Paper>
-        )}
-
-        {/* ChatGPT Response Dialog */}
-        <Dialog
-          open={Boolean(selectedLog)}
-          onClose={closeDialog}
-          maxWidth="md"
-          fullWidth
+    <FeatureAccess featureId="sentinel-ai" featureName="Sentinel AI">
+      {loading && !logs.length ? (
+        <Box
+          p={4}
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          minHeight="70vh"
         >
-          <DialogTitle sx={{
-            backgroundColor: theme.palette.mode === 'dark' ? '#1e1e2f' : '#e6f7ff',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <Typography variant="h6">Sentinel AI Analysis</Typography>
-            <IconButton
-              aria-label="close"
-              onClick={closeDialog}
-              size="small"
-            >
-              <CloseIcon />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent sx={{ mt: 2, minHeight: '300px' }}>
-            {!showResponse ? (
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center',
-                height: '200px' 
-              }}>
-                <Lottie options={defaultOptions} height={200} width={200} />
-              </Box>
-            ) : (
-              <Box sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>AI Analysis Results:</Typography>
-                <Box 
-                  sx={{ 
-                    border: '1px solid #e0e0e0', 
-                    borderRadius: 1, 
-                    p: 2, 
-                    backgroundColor: theme.palette.mode === 'dark' ? '#121212' : '#f9f9f9',
-                    my: 2,
-                    fontSize: '0.9rem',
-                    fontFamily: 'monospace'
-                  }}
-                >
-                  <TypewriterEffect 
-                    text={selectedLog?.data?.YARA?.chatgpt_response || 'No AI analysis available'} 
+          <Box sx={{ width: '200px', height: '200px' }}>
+            <Lottie options={defaultOptions} />
+          </Box>
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            Loading Sentinel AI logs...
+          </Typography>
+        </Box>
+      ) : (
+        <Box sx={{ p: 3 }}>
+          <Paper sx={{ p: 2, mb: 3 }}>
+            <Typography variant="h5" gutterBottom>
+              Sentinel AI Logs
+            </Typography>
+            <Typography variant="body2" color="textSecondary" paragraph>
+              Displaying logs with AI analysis of security events
+            </Typography>
+
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+              <Tabs 
+                value={activeTab} 
+                onChange={handleTabChange} 
+                aria-label="log view tabs"
+              >
+                <Tab label="Events" />
+                <Tab label="Table View" />
+              </Tabs>
+            </Box>
+
+            {activeTab === 0 && (
+              <Paper elevation={1} sx={{ p: 2 }}>
+                {logs.length === 0 && !loading ? (
+                  <Typography variant="body1" sx={{ textAlign: 'center', py: 4 }}>
+                    No Sentinel AI logs found.
+                  </Typography>
+                ) : (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {logs.map((log, index) => {
+                      const parsedLog = parseLogMessage(log);
+                      return (
+                        <Paper 
+                          key={index} 
+                          elevation={2} 
+                          sx={{ 
+                            p: 2, 
+                            borderLeft: `4px solid ${getRuleLevelColor(parsedLog.rule.level)}` 
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography variant="subtitle2">
+                              {formatTimestamp(parsedLog.timestamp)}
+                            </Typography>
+                            <Chip
+                              label={getRuleLevelSeverity(parsedLog.rule.level)}
+                              size="small"
+                              sx={{
+                                backgroundColor: getRuleLevelColor(parsedLog.rule.level),
+                                color: 'white'
+                              }}
+                            />
+                          </Box>
+                          <Typography variant="body1" gutterBottom>
+                            {parsedLog.rule.description}
+                          </Typography>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                            <Typography variant="body2" color="textSecondary">
+                              Agent: {parsedLog.agent.name}
+                            </Typography>
+                            <Link
+                              component="button"
+                              onClick={() => handleViewResponse(parsedLog)}
+                              underline="hover"
+                            >
+                              View AI Analysis
+                            </Link>
+                          </Box>
+                        </Paper>
+                      );
+                    })}
+                  </Box>
+                )}
+              </Paper>
+            )}
+
+            {activeTab === 1 && (
+              <Paper elevation={2} sx={{ mb: 3 }}>
+                <Box sx={{
+                  height: 650,
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden'
+                }}>
+                  <DataGrid
+                    rows={logs.map((log, index) => {
+                      const parsedLog = parseLogMessage(log);
+                      return {
+                        id: index,
+                        timestamp: parsedLog.timestamp,
+                        agentName: parsedLog.agent.name,
+                        ruleLevel: parsedLog.rule.level,
+                        description: parsedLog.rule.description,
+                        fullLog: parsedLog
+                      };
+                    })}
+                    columns={columns}
+                    pageSize={rowsPerPage}
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                    onPageSizeChange={handleRowsPerPageChange}
+                    pagination
+                    paginationMode="server"
+                    rowCount={totalLogs}
+                    page={page}
+                    onPageChange={handlePageChange}
+                    disableSelectionOnClick
+                    loading={loading}
+                    density="standard"
+                    sx={{
+                      '& .MuiDataGrid-cell:hover': {
+                        color: 'primary.main',
+                      },
+                      '& .MuiDataGrid-main': {
+                        overflow: 'auto !important'
+                      },
+                      '& .MuiDataGrid-footerContainer': {
+                        borderTop: '1px solid rgba(224, 224, 224, 1)',
+                      },
+                      flex: 1,
+                      boxSizing: 'border-box',
+                    }}
                   />
                 </Box>
-                <Typography variant="subtitle2" gutterBottom>Log Details:</Typography>
-                <StructuredLogView data={selectedLog} />
-              </Box>
+              </Paper>
             )}
-          </DialogContent>
-        </Dialog>
-      </Paper>
-    </Box>
+
+            {/* ChatGPT Response Dialog */}
+            <Dialog
+              open={Boolean(selectedLog)}
+              onClose={closeDialog}
+              maxWidth="md"
+              fullWidth
+            >
+              <DialogTitle sx={{
+                backgroundColor: theme.palette.mode === 'dark' ? '#1e1e2f' : '#e6f7ff',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <Typography variant="h6">Sentinel AI Analysis</Typography>
+                <IconButton
+                  aria-label="close"
+                  onClick={closeDialog}
+                  size="small"
+                >
+                  <CloseIcon />
+                </IconButton>
+              </DialogTitle>
+              <DialogContent sx={{ mt: 2, minHeight: '300px' }}>
+                {!showResponse ? (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center',
+                    height: '200px' 
+                  }}>
+                    <Lottie options={defaultOptions} height={200} width={200} />
+                  </Box>
+                ) : (
+                  <Box sx={{ p: 2 }}>
+                    <Typography variant="h6" gutterBottom>AI Analysis Results:</Typography>
+                    <Box 
+                      sx={{ 
+                        border: '1px solid #e0e0e0', 
+                        borderRadius: 1, 
+                        p: 2, 
+                        backgroundColor: theme.palette.mode === 'dark' ? '#121212' : '#f9f9f9',
+                        my: 2,
+                        fontSize: '0.9rem',
+                        fontFamily: 'monospace'
+                      }}
+                    >
+                      <TypewriterEffect 
+                        text={selectedLog?.data?.YARA?.AI_response || 'No AI analysis available'} 
+                      />
+                    </Box>
+                    <Typography variant="subtitle2" gutterBottom>Log Details:</Typography>
+                    <StructuredLogView data={selectedLog} />
+                  </Box>
+                )}
+              </DialogContent>
+            </Dialog>
+          </Paper>
+        </Box>
+      )}
+    </FeatureAccess>
   );
 };
 

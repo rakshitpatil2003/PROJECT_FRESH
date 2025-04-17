@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../config';  // Import the API URL
-import {Box,Card,CardContent,TextField,Button,Typography,Alert,Tabs,Tab,
+import { API_URL } from '../config';
+import {
+  Box,
+  Card,
+  CardContent,
+  TextField,
+  Button,
+  Typography,
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import { keyframes } from '@emotion/react';
 import logoImage from '../assets/images/vg-logo.png';
 import backgroundImage from '../assets/images/background_2.jpg';
-//import config from '../config';
 
 const fadeIn = keyframes`
   from {
@@ -22,11 +29,11 @@ const fadeIn = keyframes`
 const Login = () => {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
-  const [tabValue, setTabValue] = useState(0);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   // Add global styles to document
-  React.useEffect(() => {
+  useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = `
       html, body {
@@ -46,23 +53,29 @@ const Login = () => {
     };
   }, []);
 
+  // Redirect if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      navigate('/dashboard');
+    }
+  }, [navigate]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
+
+    // Basic validation
+    if (!credentials.username.trim() || !credentials.password.trim()) {
+      setError('Username and password are required');
+      setLoading(false);
+      return;
+    }
 
     const loginUrl = `${API_URL}/api/auth/login`;
-    console.log('Attempting login to:', loginUrl);
-
+    
     try {
-      // Additional validation based on current tab
-      if (tabValue === 0 && !credentials.username.toLowerCase().includes('admin')) {
-        setError('Please use an admin account in the Admin Login tab');
-        return;
-      }
-      if (tabValue === 1 && credentials.username.toLowerCase().includes('admin')) {
-        setError('Admin accounts cannot login in the User Login tab');
-        return;
-      }
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -71,33 +84,26 @@ const Login = () => {
         body: JSON.stringify(credentials)
       });
 
-      console.log('Response status:', response.status);
-
       if (!response.ok) {
-        throw new Error('Login failed');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Login failed');
       }
+      
       const data = await response.json();
-      console.log('Response data:', data);
+      
       if (data.token) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('userInfo', JSON.stringify(data.user));
-        console.log('Token stored:', data.token);
-        console.log('User info stored:', data.user);
         navigate('/dashboard');
       } else {
         setError(data.message || 'Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Server connection failed. Please verify the server is running.');
+      setError(error.message || 'Server connection failed. Please verify the server is running.');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-    // Reset credentials when switching tabs
-    setCredentials({ username: '', password: '' });
-    setError('');
   };
 
   return (
@@ -143,17 +149,6 @@ const Login = () => {
             />
           </Box>
 
-          {/* Tabs for Login */}
-          <Tabs
-            value={tabValue}
-            onChange={handleTabChange}
-            centered
-            sx={{ mb: 3 }}
-          >
-            <Tab label="Admin Login" />
-            <Tab label="User Login" />
-          </Tabs>
-
           {error && (
             <Alert severity="error" sx={{ mb: 3 }}>
               {error}
@@ -169,7 +164,7 @@ const Login = () => {
               color: '#333',
             }}
           >
-            {tabValue === 0 ? 'Admin Login' : 'User Login'}
+            Login
           </Typography>
 
           <form onSubmit={handleLogin}>
@@ -182,6 +177,7 @@ const Login = () => {
                 setCredentials({ ...credentials, username: e.target.value })
               }
               sx={{ mb: 3 }}
+              disabled={loading}
             />
 
             <TextField
@@ -194,6 +190,7 @@ const Login = () => {
                 setCredentials({ ...credentials, password: e.target.value })
               }
               sx={{ mb: 3 }}
+              disabled={loading}
             />
 
             <Button
@@ -207,8 +204,9 @@ const Login = () => {
                 fontSize: '16px',
                 fontWeight: 'bold',
               }}
+              disabled={loading}
             >
-              Login
+              {loading ? <CircularProgress size={24} color="inherit" /> : 'Login'}
             </Button>
           </form>
         </CardContent>

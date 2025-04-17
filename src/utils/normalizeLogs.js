@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {Typography,Box,Paper,Chip,Divider,Grid,IconButton,Tooltip,Tab,Tabs,styled,useTheme
+import {
+  Box, Typography, Paper, Chip, Divider, Grid, IconButton, Tooltip, Tab, Tabs, styled, useTheme,
+  Snackbar, Alert, Button, Dialog, DialogTitle, DialogContent, DialogActions,
+  FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 //import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -10,7 +13,7 @@ import EventIcon from '@mui/icons-material/Event';
 import CodeIcon from '@mui/icons-material/Code';
 import LockIcon from '@mui/icons-material/Lock';
 import ShieldIcon from '@mui/icons-material/Shield';
-import { Snackbar, Alert, Button } from '@mui/material';
+//import { Snackbar, Alert, Button } from '@mui/material';
 import { API_URL } from '../config';
 import axios from 'axios';
 
@@ -83,6 +86,7 @@ export const parseLogMessage = (logEntry) => {
         sha1_before: messageData?.syscheck?.sha1_before || logEntry?.syscheck?.sha1_before || logEntry?.rawLog?.syscheck?.sha1_before || 'N/A',
         mtime_after: messageData?.syscheck?.mtime_after || logEntry?.syscheck?.mtime_after || logEntry?.rawLog?.syscheck?.mtime_after || 'N/A',
         mtime_before: messageData?.syscheck?.mtime_before || logEntry?.syscheck?.mtime_before || logEntry?.rawLog?.syscheck?.mtime_before || 'N/A',
+        diff: messageData?.syscheck?.diff || logEntry?.syscheck?.diff || logEntry?.rawLog?.syscheck?.diff || 'N/A',
       },
       location: messageData?.location || logEntry?.location || logEntry?.rawLog?.location || 'N/A',
       network: {
@@ -170,9 +174,10 @@ export const parseLogMessage = (logEntry) => {
       event: { type: 'N/A', interface: 'N/A' },
       vulnerability: {
         cve: 'N/A',
-        package: { name: 'N/A', version: 'N/A', architecture: 'N/A', condition: 'N/A' },severity: 'N/A',published: 'N/A',updated: 'N/A',title: 'N/A',cvss: { cvss3: { base_score: 'N/A' } },reference: 'N/A',rationale: 'N/A',status: 'N/A'
+        package: { name: 'N/A', version: 'N/A', architecture: 'N/A', condition: 'N/A' }, severity: 'N/A', published: 'N/A', updated: 'N/A', title: 'N/A', cvss: { cvss3: { base_score: 'N/A' } }, reference: 'N/A', rationale: 'N/A', status: 'N/A'
       },
-      traffic: {action: 'N/A',srcCountry: 'N/A',dstCountry: 'N/A',appcat: 'N/A',app: 'N/A',appid: 'N/A',appRisk: 'N/A',direction: 'N/A',service: 'N/A',devName: 'N/A',policyId: 'N/A',msg: 'N/A',eventType: 'N/A',subType: 'N/A'
+      traffic: {
+        action: 'N/A', srcCountry: 'N/A', dstCountry: 'N/A', appcat: 'N/A', app: 'N/A', appid: 'N/A', appRisk: 'N/A', direction: 'N/A', service: 'N/A', devName: 'N/A', policyId: 'N/A', msg: 'N/A', eventType: 'N/A', subType: 'N/A'
       },
       data: {},
       rawData: logEntry
@@ -180,11 +185,120 @@ export const parseLogMessage = (logEntry) => {
   }
 };
 
+const findTextDifferences = (oldText, newText) => {
+  // If texts are identical, no differences
+  if (oldText === newText) return { oldHighlighted: oldText, newHighlighted: newText };
+
+  // Simple character-by-character comparison to find differences
+  const minLength = Math.min(oldText.length, newText.length);
+  let firstDiff = minLength;
+
+  // Find first different character
+  for (let i = 0; i < minLength; i++) {
+    if (oldText[i] !== newText[i]) {
+      firstDiff = i;
+      break;
+    }
+  }
+
+  // Find last different character, starting from the end
+  let lastDiffOld = oldText.length - 1;
+  let lastDiffNew = newText.length - 1;
+  const maxCommonEnd = Math.min(oldText.length - firstDiff, newText.length - firstDiff);
+
+  for (let i = 0; i < maxCommonEnd; i++) {
+    if (oldText[oldText.length - 1 - i] !== newText[newText.length - 1 - i]) {
+      lastDiffOld = oldText.length - 1 - i;
+      lastDiffNew = newText.length - 1 - i;
+      break;
+    }
+  }
+
+  // Create highlighted versions with <span> tags
+  const oldHighlighted =
+    oldText.substring(0, firstDiff) +
+    `<span style="background-color: #ffcdd2; font-weight: bold;">${oldText.substring(firstDiff, lastDiffOld + 1)}</span>` +
+    oldText.substring(lastDiffOld + 1);
+
+  const newHighlighted =
+    newText.substring(0, firstDiff) +
+    `<span style="background-color: #c8e6c9; font-weight: bold;">${newText.substring(firstDiff, lastDiffNew + 1)}</span>` +
+    newText.substring(lastDiffNew + 1);
+
+  return { oldHighlighted, newHighlighted };
+};
+
+// Update the parseDiff function to highlight text changes
+const parseDiff = (diffString) => {
+  if (!diffString) return null;
+
+  // Initialize result objects
+  const result = {
+    oldText: [],
+    newText: [],
+    highlightedOld: [],
+    highlightedNew: []
+  };
+
+  // Split by lines
+  const lines = diffString.split('\n');
+
+  // Process each line
+  let processingOld = true; // Start by processing old text
+
+  for (const line of lines) {
+    // Skip empty lines
+    if (!line.trim()) continue;
+
+    // Check for separator line
+    if (line.trim() === '---') {
+      processingOld = false; // Switch to processing new text
+      continue;
+    }
+
+    // Process old text (lines starting with <)
+    if (processingOld && line.startsWith('<')) {
+      result.oldText.push(line.substring(2)); // Remove "< " prefix
+    }
+    // Process new text (lines starting with >)
+    else if (!processingOld && line.startsWith('>')) {
+      result.newText.push(line.substring(2)); // Remove "> " prefix
+    }
+  }
+
+  // Find the shortest array length to compare line by line
+  const minLines = Math.min(result.oldText.length, result.newText.length);
+
+  // Compare each line and highlight differences
+  for (let i = 0; i < minLines; i++) {
+    const { oldHighlighted, newHighlighted } = findTextDifferences(result.oldText[i], result.newText[i]);
+    result.highlightedOld[i] = oldHighlighted;
+    result.highlightedNew[i] = newHighlighted;
+  }
+
+  // Add any remaining lines
+  for (let i = minLines; i < result.oldText.length; i++) {
+    result.highlightedOld[i] = `<span style="background-color: #ffcdd2; font-weight: bold;">${result.oldText[i]}</span>`;
+  }
+
+  for (let i = minLines; i < result.newText.length; i++) {
+    result.highlightedNew[i] = `<span style="background-color: #c8e6c9; font-weight: bold;">${result.newText[i]}</span>`;
+  }
+
+  return result;
+};
+
 // Enhanced StructuredLogView component
 export const StructuredLogView = ({ data }) => {
   const [tabValue, setTabValue] = useState(0);
   const theme = useTheme();
   const [copySuccess, setCopySuccess] = useState(false);
+  const [loadingTicket, setLoadingTicket] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignForm, setAssignForm] = useState({
+    assignedToId: ''
+  });
 
   const textAreaRef = useRef(null);
   const [ticketSnackbar, setTicketSnackbar] = useState({
@@ -193,6 +307,27 @@ export const StructuredLogView = ({ data }) => {
     severity: 'success'
   });
 
+  // Fetch users for assignment dropdown
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await axios.get(`${API_URL}/api/auth/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        setUsers(response.data || []);
+      } catch (err) {
+        console.error('Failed to fetch users:', err);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  // Handle clipboard access check
   useEffect(() => {
     // Check if we're in a browser environment with clipboard access
     const hasClipboardAccess = typeof navigator !== 'undefined' &&
@@ -208,6 +343,7 @@ export const StructuredLogView = ({ data }) => {
     console.log("execCommand available:", hasExecCommand);
   }, []);
 
+  // Cleanup text area reference
   React.useEffect(() => {
     return () => {
       if (textAreaRef.current) {
@@ -216,25 +352,94 @@ export const StructuredLogView = ({ data }) => {
     };
   }, []);
 
+  // Tab change handler
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
 
-  if (!data) {
-    return (
-      <Box sx={{ p: 4, textAlign: 'center' }}>
-        <Typography variant="h6" color="text.secondary">
-          No log data available
-        </Typography>
-      </Box>
-    );
-  }
+  const extractEssentialLogData = (data) => {
+    if (!data) return null;
 
+    try {
+      return {
+        id: data.id || (data.rawData && data.rawData.id) || null,
+        timestamp: data.timestamp || new Date().toISOString(),
+        agent: {
+          name: data.agent?.name || 'unknown',
+          id: data.agent?.id || 'unknown',
+          ip: data.agent?.ip || 'unknown'
+        },
+        rule: {
+          id: data.rule?.id || 'unknown',
+          level: data.rule?.level || '0',
+          description: data.rule?.description || 'No description'
+        }
+      };
+    } catch (error) {
+      console.error('Error extracting essential log data:', error);
+      return {
+        timestamp: new Date().toISOString(),
+        agent: { name: 'Error', id: 'Error', ip: 'Error' },
+        rule: { id: 'Error', level: '0', description: 'Error extracting log data' }
+      };
+    }
+  };
+
+  const sanitizeObject = (obj) => {
+    // Create a new object to hold the sanitized data
+    const newObj = {};
+
+    // Helper function to detect if a key should be excluded
+    // (For example, avoid "_" prefixed properties or other problem properties)
+    const shouldExcludeKey = (key) => {
+      return key === 'rawLog' || key === 'rawData';
+    };
+
+    // Process each property
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        // Skip problem keys
+        if (shouldExcludeKey(key)) {
+          continue;
+        }
+
+        const value = obj[key];
+
+        // Handle different types of values
+        if (value === null || value === undefined) {
+          newObj[key] = value;
+        }
+        else if (typeof value !== 'object') {
+          // For primitives, just copy
+          newObj[key] = value;
+        }
+        else if (Array.isArray(value)) {
+          // For arrays, sanitize each element
+          newObj[key] = value.map(item =>
+            typeof item === 'object' && item !== null
+              ? sanitizeObject(item)
+              : item
+          );
+        }
+        else {
+          // For objects, recursively sanitize
+          newObj[key] = sanitizeObject(value);
+        }
+      }
+    }
+
+    return newObj;
+  };
+
+  // Generate ticket
+  // In normalizeLogs.js
   const handleGenerateTicket = async () => {
     try {
+      setLoadingTicket(true);
+
       // Get the token from local storage
       const token = localStorage.getItem('token');
-      
+
       if (!token) {
         setTicketSnackbar({
           open: true,
@@ -244,10 +449,43 @@ export const StructuredLogView = ({ data }) => {
         return;
       }
 
+      if (!data) {
+        setTicketSnackbar({
+          open: true,
+          message: 'No log data available to generate ticket',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Create a minimal log data object with just what we need
+      const minimalLogData = {
+        id: data.id || data.rawData?.id || 'unknown',
+        timestamp: data.timestamp || new Date().toISOString(),
+        agent: {
+          name: data.agent?.name || 'unknown',
+          id: data.agent?.id || 'unknown',
+          ip: data.agent?.ip || 'unknown'
+        },
+        rule: {
+          id: data.rule?.id || 'unknown',
+          level: data.rule?.level || '0',
+          description: data.rule?.description || 'No description'
+        }
+      };
+
+      console.log('Sending ticket data:', {
+        minimalLogData,
+        description: 'Ticket generated from log view'
+      });
+
       // Make API call to generate ticket
       const response = await axios.post(
-        `${API_URL}/api/auth/generate-ticket`, 
-        { logData: data },
+        `${API_URL}/api/auth/generate-ticket`,
+        {
+          logData: minimalLogData,
+          description: 'Ticket generated from log view'
+        },
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -259,19 +497,103 @@ export const StructuredLogView = ({ data }) => {
       // Show success snackbar
       setTicketSnackbar({
         open: true,
-        message: `Ticket ${response.data.id} generated successfully!`,
+        message: `Ticket ${response.data.ticket.ticketId} generated successfully!`,
         severity: 'success'
       });
     } catch (error) {
-      // Show error snackbar
+      console.error('Error generating ticket:', error);
+      console.error('Error details:', error.response?.data);
+
+      // Show error snackbar with appropriate message
       setTicketSnackbar({
         open: true,
-        message: error.response?.data?.message || 'Failed to generate ticket',
+        message: error.response?.data?.message || error.response?.data?.details || 'Failed to generate ticket. Please try again.',
         severity: 'error'
       });
+    } finally {
+      setLoadingTicket(false);
     }
   };
-  
+
+  // Open assign dialog
+  const handleOpenAssignDialog = () => {
+    setAssignDialogOpen(true);
+  };
+
+  // Generate and assign ticket
+  const handleAssignTicket = async () => {
+    try {
+      setLoadingTicket(true);
+
+      // Get the token from local storage
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        setTicketSnackbar({
+          open: true,
+          message: 'Please log in to generate a ticket',
+          severity: 'error'
+        });
+        return;
+      }
+
+      if (!data) {
+        setTicketSnackbar({
+          open: true,
+          message: 'No log data available to generate ticket',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Extract only the essential log data
+      const essentialLogData = extractEssentialLogData(data);
+
+      // Prepare the ticket data with assignment
+      const ticketData = {
+        logData: essentialLogData,
+        description: 'Ticket generated and assigned from log view',
+        assignedToId: assignForm.assignedToId
+      };
+
+      // Make API call to generate ticket
+      const response = await axios.post(
+        `${API_URL}/api/auth/generate-ticket`,
+        ticketData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Close dialog
+      setAssignDialogOpen(false);
+
+      // Reset form
+      setAssignForm({ assignedToId: '' });
+
+      // Show success snackbar
+      setTicketSnackbar({
+        open: true,
+        message: `Ticket ${response.data.ticket.ticketId} generated and assigned successfully!`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error generating ticket:', error);
+
+      // Show error snackbar with appropriate message
+      setTicketSnackbar({
+        open: true,
+        message: error.response?.data?.message || error.response?.data?.details || 'Failed to generate and assign ticket',
+        severity: 'error'
+      });
+    } finally {
+      setLoadingTicket(false);
+    }
+  };
+
   // Improved copyToClipboard function
   const copyToClipboard = (text) => {
     try {
@@ -305,8 +627,8 @@ export const StructuredLogView = ({ data }) => {
     }
   };
 
-
-
+  // Add this function to help find differences in text
+  
   // Get severity color based on rule level
   const getSeverityColor = (level) => {
     const numLevel = parseInt(level, 10);
@@ -333,6 +655,8 @@ export const StructuredLogView = ({ data }) => {
 
   // Get compliance frameworks in a grouped format
   const renderComplianceFrameworks = () => {
+    if (!data || !data.rule) return null;
+
     const frameworks = [
       { name: 'HIPAA', items: data.rule.hipaa, color: '#4caf50' },
       { name: 'PCI DSS', items: data.rule.pci_dss, color: '#ff9800' },
@@ -368,9 +692,26 @@ export const StructuredLogView = ({ data }) => {
     );
   };
 
+  // Rest of your rendering functions (renderMitreSection, renderNetworkFlow, etc.)
+  // Include them here...
+
+  // Format timestamp to be more readable
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    } catch (e) {
+      return timestamp;
+    }
+  };
+
   // Render MITRE ATT&CK information
   const renderMitreSection = () => {
-    if (!data.rule.mitre || (!data.rule.mitre.id.length && !data.rule.mitre.tactic.length && !data.rule.mitre.technique.length)) {
+    if (!data || !data.rule || !data.rule.mitre ||
+      (!data.rule.mitre.id.length &&
+        !data.rule.mitre.tactic.length &&
+        !data.rule.mitre.technique.length)) {
       return null;
     }
 
@@ -418,7 +759,7 @@ export const StructuredLogView = ({ data }) => {
 
   // Render network flow details in a structured grid
   const renderNetworkFlow = () => {
-    if (!data.network.flow) return null;
+    if (!data || !data.network || !data.network.flow) return null;
 
     return (
       <Box sx={{ mt: 2 }}>
@@ -461,8 +802,10 @@ export const StructuredLogView = ({ data }) => {
     );
   };
 
+  // Render syscheck details
+  // Replace your existing renderSyscheckDetails function with this updated one
   const renderSyscheckDetails = () => {
-    if (!data.syscheck || (!data.syscheck.path && !data.syscheck.event)) return null;
+    if (!data || !data.syscheck || (!data.syscheck.path && !data.syscheck.event)) return null;
 
     const eventColorMap = {
       added: '#4caf50',
@@ -470,7 +813,12 @@ export const StructuredLogView = ({ data }) => {
       deleted: '#f44336'
     };
 
-    const eventColor = eventColorMap[data.syscheck.event?.toLowerCase()] || '#9e9e9e';
+    const eventColor = data.syscheck.event ?
+      eventColorMap[data.syscheck.event.toLowerCase()] || '#9e9e9e' :
+      '#9e9e9e';
+
+    // Parse diff if it exists
+    const diffData = data.syscheck.diff ? parseDiff(data.syscheck.diff) : null;
 
     return (
       <Box sx={{ mb: 3 }}>
@@ -512,56 +860,124 @@ export const StructuredLogView = ({ data }) => {
             </Grid>
           )}
 
-          {data.syscheck.size_after && (
+          {data.syscheck.size_before && data.syscheck.size_after && (
             <Grid item xs={12} md={6}>
               <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary">Size After</Typography>
-                <Typography variant="body1">{data.syscheck.size_after}</Typography>
+                <Typography variant="caption" color="text.secondary">Size Change</Typography>
+                <Typography variant="body1">
+                  {data.syscheck.size_before} → {data.syscheck.size_after}
+                </Typography>
               </Paper>
             </Grid>
           )}
 
-          {data.syscheck.md5_after && (
+          {data.syscheck.md5_before && data.syscheck.md5_after && (
             <Grid item xs={12}>
               <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary">MD5 After</Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{data.syscheck.md5_after}</Typography>
+                <Typography variant="caption" color="text.secondary">MD5 Change</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    <span style={{ color: '#f44336' }}>Old: </span>{data.syscheck.md5_before}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    <span style={{ color: '#4caf50' }}>New: </span>{data.syscheck.md5_after}
+                  </Typography>
+                </Box>
               </Paper>
             </Grid>
           )}
 
-          {data.syscheck.sha1_after && (
+          {/* Diff Content Display */}
+          {/* Updated Diff Content Display */}
+          {diffData && (
             <Grid item xs={12}>
               <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary">SHA1 After</Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{data.syscheck.sha1_after}</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'medium', mb: 2 }}>
+                  Content Changes
+                </Typography>
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {/* Previous Content */}
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#d32f2f', fontWeight: 'medium', mb: 1 }}>
+                      Previous Content:
+                    </Typography>
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        bgcolor: '#ffebee',
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        borderLeft: '4px solid #ef5350'
+                      }}
+                    >
+                      {diffData.highlightedOld.map((line, index) => (
+                        <Box
+                          key={index}
+                          component="div"
+                          dangerouslySetInnerHTML={{ __html: line }}
+                          sx={{
+                            lineHeight: 1.5,
+                            '&:not(:last-child)': {
+                              mb: 1
+                            }
+                          }}
+                        />
+                      ))}
+                    </Paper>
+                  </Box>
+
+                  {/* New Content */}
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#388e3c', fontWeight: 'medium', mb: 1 }}>
+                      New Content:
+                    </Typography>
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        bgcolor: '#e8f5e9',
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        borderLeft: '4px solid #66bb6a'
+                      }}
+                    >
+                      {diffData.highlightedNew.map((line, index) => (
+                        <Box
+                          key={index}
+                          component="div"
+                          dangerouslySetInnerHTML={{ __html: line }}
+                          sx={{
+                            lineHeight: 1.5,
+                            '&:not(:last-child)': {
+                              mb: 1
+                            }
+                          }}
+                        />
+                      ))}
+                    </Paper>
+                  </Box>
+                </Box>
               </Paper>
             </Grid>
           )}
 
-          {data.syscheck.mtime_after && (
-            <Grid item xs={12} md={6}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary">Modified Time</Typography>
-                <Typography variant="body1">{data.syscheck.mtime_after}</Typography>
-              </Paper>
-            </Grid>
-          )}
+          {/* Additional syscheck fields can be added here */}
         </Grid>
       </Box>
     );
   };
 
-  // Format timestamp to be more readable
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleString();
-    } catch (e) {
-      return timestamp;
-    }
-  };
+  if (!data) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <Typography variant="h6" color="text.secondary">
+          No log data available
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ maxHeight: '80vh', overflow: 'auto' }}>
@@ -569,23 +985,25 @@ export const StructuredLogView = ({ data }) => {
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={8}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              {data.rule.description}
+              {data.rule?.description || 'No description available'}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               {formatTimestamp(data.timestamp)}
             </Typography>
           </Grid>
           <Grid item xs={12} md={4} sx={{ textAlign: { xs: 'left', md: 'right' } }}>
-            <Chip
-              icon={<WarningIcon />}
-              label={`Level ${data.rule.level} - ${getSeverityText(data.rule.level)}`}
-              sx={{
-                bgcolor: `${getSeverityColor(data.rule.level)}15`,
-                color: getSeverityColor(data.rule.level),
-                fontWeight: 'bold',
-                py: 2
-              }}
-            />
+            {data.rule?.level && (
+              <Chip
+                icon={<WarningIcon />}
+                label={`Level ${data.rule.level} - ${getSeverityText(data.rule.level)}`}
+                sx={{
+                  bgcolor: `${getSeverityColor(data.rule.level)}15`,
+                  color: getSeverityColor(data.rule.level),
+                  fontWeight: 'bold',
+                  py: 2
+                }}
+              />
+            )}
           </Grid>
         </Grid>
       </Paper>
@@ -613,12 +1031,12 @@ export const StructuredLogView = ({ data }) => {
                   </Typography>
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="body2">
-                      <strong>ID:</strong> {data.rule.id}
+                      <strong>ID:</strong> {data.rule?.id || 'N/A'}
                     </Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
-                      <strong>Level:</strong> {data.rule.level} ({getSeverityText(data.rule.level)})
+                      <strong>Level:</strong> {data.rule?.level || '0'} ({getSeverityText(data.rule?.level || '0')})
                     </Typography>
-                    {data.rule.groups && data.rule.groups.length > 0 && (
+                    {data.rule?.groups && data.rule.groups.length > 0 && (
                       <Box sx={{ mt: 2 }}>
                         <Typography variant="body2">
                           <strong>Groups:</strong>
@@ -640,10 +1058,10 @@ export const StructuredLogView = ({ data }) => {
                   </Typography>
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="body2">
-                      <strong>Name:</strong> {data.agent.name}
+                      <strong>Name:</strong> {data.agent?.name || 'N/A'}
                     </Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
-                      <strong>ID:</strong> {data.agent.id}
+                      <strong>ID:</strong> {data.agent?.id || 'N/A'}
                     </Typography>
                   </Box>
                 </Paper>
@@ -666,8 +1084,8 @@ export const StructuredLogView = ({ data }) => {
                   <Typography variant="subtitle2" gutterBottom>Source</Typography>
                   <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
                     <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                      {data.network.srcIp}
-                      {data.network.srcPort !== 'N/A' && `:${data.network.srcPort}`}
+                      {data.network?.srcIp || 'N/A'}
+                      {data.network?.srcPort !== 'N/A' && `:${data.network.srcPort}`}
                     </Typography>
                   </Box>
                 </Grid>
@@ -675,8 +1093,8 @@ export const StructuredLogView = ({ data }) => {
                   <Typography variant="subtitle2" gutterBottom>Destination</Typography>
                   <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
                     <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                      {data.network.destIp}
-                      {data.network.destPort !== 'N/A' && `:${data.network.destPort}`}
+                      {data.network?.destIp || 'N/A'}
+                      {data.network?.destPort !== 'N/A' && `:${data.network.destPort}`}
                     </Typography>
                   </Box>
                 </Grid>
@@ -684,7 +1102,7 @@ export const StructuredLogView = ({ data }) => {
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="subtitle2" gutterBottom>Protocol</Typography>
                   <Chip
-                    label={data.network.protocol}
+                    label={data.network?.protocol || 'N/A'}
                     size="small"
                     sx={{ bgcolor: '#e3f2fd', color: '#1976d2' }}
                   />
@@ -708,13 +1126,13 @@ export const StructuredLogView = ({ data }) => {
                 <Grid item xs={12} md={6}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="caption" color="text.secondary">Event Type</Typography>
-                    <Typography variant="body1">{data.event.type}</Typography>
+                    <Typography variant="body1">{data.event?.type || 'N/A'}</Typography>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="caption" color="text.secondary">Interface</Typography>
-                    <Typography variant="body1">{data.event.interface}</Typography>
+                    <Typography variant="body1">{data.event?.interface || 'N/A'}</Typography>
                   </Paper>
                 </Grid>
                 <Grid item xs={12}>
@@ -770,12 +1188,12 @@ export const StructuredLogView = ({ data }) => {
                     onClick={() => {
                       try {
                         // First try to create a string version of the data
-                        const dataStr = JSON.stringify(data.rawData, null, 2);
+                        const dataStr = JSON.stringify(data.rawData || data, null, 2);
                         copyToClipboard(dataStr);
                       } catch (error) {
                         console.error("Error stringifying data:", error);
                         // If that fails, try a simpler approach
-                        copyToClipboard(Object.keys(data.rawData).join(', '));
+                        copyToClipboard(Object.keys(data.rawData || data).join(', '));
                       }
                     }}
                     sx={{ bgcolor: '#f5f5f5' }}
@@ -795,7 +1213,7 @@ export const StructuredLogView = ({ data }) => {
                   fontSize: '0.875rem'
                 }}
               >
-                {JSON.stringify(data.rawData, null, 2)}
+                {JSON.stringify(data.rawData || data, null, 2)}
                 <Snackbar
                   open={copySuccess}
                   autoHideDuration={3000}
@@ -811,17 +1229,60 @@ export const StructuredLogView = ({ data }) => {
           </Box>
         )}
       </Box>
-      {/* Ticket Generation Button */}
-      <Tooltip title="Generate a support ticket for this log entry">
-        <Button 
-          variant="contained" 
-          color="primary" 
+
+      {/* Ticket Generation Buttons */}
+      <Box sx={{ display: 'flex', mt: 2 }}>
+        <Button
+          variant="contained"
+          color="primary"
           onClick={handleGenerateTicket}
-          sx={{ mt: 2 }}
+          disabled={loadingTicket}
+          sx={{ mr: 1 }}
         >
-          Generate Ticket
+          {loadingTicket ? 'Generating...' : 'Generate Ticket'}
         </Button>
-      </Tooltip>
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={handleOpenAssignDialog}
+          disabled={loadingTicket}
+        >
+          Generate & Assign Ticket
+        </Button>
+      </Box>
+
+      {/* Assignment Dialog */}
+      <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)}>
+        <DialogTitle>Assign Ticket</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 2, minWidth: 240 }}>
+            <InputLabel>Assign To</InputLabel>
+            <Select
+              value={assignForm.assignedToId}
+              onChange={(e) => setAssignForm({ assignedToId: e.target.value })}
+              label="Assign To"
+            >
+              <MenuItem value="">Unassigned</MenuItem>
+              {Array.isArray(users) && users.map(user => (
+                <MenuItem key={user._id} value={user._id}>
+                  {user.fullName || user.username}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleAssignTicket}
+            variant="contained"
+            color="primary"
+            disabled={loadingTicket}
+          >
+            {loadingTicket ? 'Generating...' : 'Generate & Assign'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar for ticket generation feedback */}
       <Snackbar
@@ -830,7 +1291,7 @@ export const StructuredLogView = ({ data }) => {
         onClose={() => setTicketSnackbar(prev => ({ ...prev, open: false }))}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert 
+        <Alert
           onClose={() => setTicketSnackbar(prev => ({ ...prev, open: false }))}
           severity={ticketSnackbar.severity}
           variant="filled"
