@@ -36,8 +36,13 @@ const LogSchema = new mongoose.Schema({
     win_perm_after: { type: Array },
     win_perm_before: { type: Array }
   },
+  ai_ml_logs: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
   location: { type: String },
   data: { type: mongoose.Schema.Types.Mixed },
+  //ai_ml_logs: { type: mongoose.Schema.Types.Mixed },
   rawLog: { type: mongoose.Schema.Types.Mixed }
 }, { timestamps: true });
 

@@ -134,7 +134,7 @@ const fetchLogsFromGraylog = async () => {
         from: from.toISOString(),
         to: to.toISOString(),
         limit: 1000,
-        fields: 'timestamp,source,level,message,src_ip,dest_ip,protocol,rule_level,rule_description,event_type,agent_name,manager_name,id'
+        fields: 'timestamp,source,level,message,src_ip,dest_ip,protocol,rule_level,rule_description,event_type,agent_name,manager_name,id,ai_ml_logs'
       },
       auth: {
         username: process.env.GRAYLOG_USERNAME,
@@ -164,6 +164,8 @@ const fetchLogsFromGraylog = async () => {
       
       const syscheckData = parsedMessage?.syscheck || {};
       const location = parsedMessage?.location || '';
+      //const mlData = parsedMessage?.ai_ml_logs || {};
+      
       
       // Preserve original timestamp from the log
       const timestamp = parsedMessage?.data?.timestamp || 
@@ -268,7 +270,41 @@ const fetchLogsFromGraylog = async () => {
         },
         location: location,
         // Add data field to store the complete data object
+        //ai_ml_logs: parsedMessage?.ai_ml_logs || {},
         data: data,
+        ai_ml_logs: (() => {
+          // Try to extract ai_ml_logs from various locations
+          const mlData = parsedMessage?.ai_ml_logs || 
+                        parsedMessage?.data?.ai_ml_logs || 
+                        msg.message?.ai_ml_logs;
+                        
+          if (mlData) {
+            // If found, return a fully structured object with defaults for missing fields
+            return {
+              timestamp: mlData.timestamp || '',
+              log_analysis: mlData.log_analysis || '',
+              anomaly_detected: mlData.anomaly_detected || 0,
+              anomaly_score: mlData.anomaly_score || 0,
+              original_log_id: mlData.original_log_id || '',
+              original_source: mlData.original_source || '',
+              analysis_timestamp: mlData.analysis_timestamp || '',
+              anomaly_reason: mlData.anomaly_reason || '',
+              trend_info: {
+                is_new_trend: mlData.trend_info?.is_new_trend || false,
+                explanation: mlData.trend_info?.explanation || '',
+                similarity_score: mlData.trend_info?.similarity_score || 0
+              },
+              score_explanation: {
+                model: mlData.score_explanation?.model || '',
+                raw_score: mlData.score_explanation?.raw_score || 0,
+                normalized_score: mlData.score_explanation?.normalized_score || 0,
+                explanation: mlData.score_explanation?.explanation || '',
+                top_contributing_features: mlData.score_explanation?.top_contributing_features || {}
+              }
+            };
+          }
+          return null;
+        })(),
         // Keep storing rawLog as before
         rawLog: parsedMessage || msg.message
       };

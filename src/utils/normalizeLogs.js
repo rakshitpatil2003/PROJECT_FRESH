@@ -145,6 +145,108 @@ export const parseLogMessage = (logEntry) => {
         eventType: dataField?.eventtype || 'N/A',
         subType: dataField?.subtype || 'N/A'
       },
+      // In the parseLogMessage function, inside the return object
+// Add this field, structured the same way as in graylogController.js
+
+ai_ml_logs: (() => {
+  // First try to get ai_ml_logs directly
+  const directMlData = messageData?.ai_ml_logs || logEntry?.ai_ml_logs;
+  if (directMlData) {
+    return {
+      timestamp: directMlData.timestamp || '',
+      log_analysis: directMlData.log_analysis || '',
+      anomaly_detected: directMlData.anomaly_detected || 0,
+      anomaly_score: directMlData.anomaly_score || 0,
+      original_log_id: directMlData.original_log_id || '',
+      original_source: directMlData.original_source || '',
+      analysis_timestamp: directMlData.analysis_timestamp || '',
+      anomaly_reason: directMlData.anomaly_reason || '',
+      trend_info: {
+        is_new_trend: directMlData.trend_info?.is_new_trend || false,
+        explanation: directMlData.trend_info?.explanation || '',
+        similarity_score: directMlData.trend_info?.similarity_score || 0
+      },
+      score_explanation: {
+        model: directMlData.score_explanation?.model || '',
+        raw_score: directMlData.score_explanation?.raw_score || 0,
+        normalized_score: directMlData.score_explanation?.normalized_score || 0,
+        explanation: directMlData.score_explanation?.explanation || '',
+        top_contributing_features: directMlData.score_explanation?.top_contributing_features || {}
+      }
+    };
+  }
+  
+  // Try from rawLog.ai_ml_logs
+  const rawLogMlData = logEntry?.rawLog?.ai_ml_logs;
+  if (rawLogMlData) {
+    return {
+      timestamp: rawLogMlData.timestamp || '',
+      log_analysis: rawLogMlData.log_analysis || '',
+      anomaly_detected: rawLogMlData.anomaly_detected || 0,
+      anomaly_score: rawLogMlData.anomaly_score || 0,
+      original_log_id: rawLogMlData.original_log_id || '',
+      original_source: rawLogMlData.original_source || '',
+      analysis_timestamp: rawLogMlData.analysis_timestamp || '',
+      anomaly_reason: rawLogMlData.anomaly_reason || '',
+      trend_info: {
+        is_new_trend: rawLogMlData.trend_info?.is_new_trend || false,
+        explanation: rawLogMlData.trend_info?.explanation || '',
+        similarity_score: rawLogMlData.trend_info?.similarity_score || 0
+      },
+      score_explanation: {
+        model: rawLogMlData.score_explanation?.model || '',
+        raw_score: rawLogMlData.score_explanation?.raw_score || 0,
+        normalized_score: rawLogMlData.score_explanation?.normalized_score || 0,
+        explanation: rawLogMlData.score_explanation?.explanation || '',
+        top_contributing_features: rawLogMlData.score_explanation?.top_contributing_features || {}
+      }
+    };
+  }
+  
+  // Check in rawLog.message if it's a string that might contain ai_ml_logs
+  if (typeof logEntry?.rawLog?.message === 'string') {
+    const message = logEntry.rawLog.message;
+    const mlMatch = message.match(/"ai_ml_logs":\s*({[^}]+})/);
+    
+    if (mlMatch && mlMatch[1]) {
+      try {
+        // Try parsing with proper JSON formatting
+        const cleanedJson = '{' + mlMatch[1]
+          .replace(/\\"/g, '"')
+          .replace(/(\w+):/g, '"$1":') + '}';
+        
+        const parsedMlData = JSON.parse(cleanedJson);
+        
+        return {
+          timestamp: parsedMlData.timestamp || '',
+          log_analysis: parsedMlData.log_analysis || '',
+          anomaly_detected: parsedMlData.anomaly_detected || 0,
+          anomaly_score: parsedMlData.anomaly_score || 0,
+          original_log_id: parsedMlData.original_log_id || '',
+          original_source: parsedMlData.original_source || '',
+          analysis_timestamp: parsedMlData.analysis_timestamp || '',
+          anomaly_reason: parsedMlData.anomaly_reason || '',
+          trend_info: {
+            is_new_trend: parsedMlData.trend_info?.is_new_trend || false,
+            explanation: parsedMlData.trend_info?.explanation || '',
+            similarity_score: parsedMlData.trend_info?.similarity_score || 0
+          },
+          score_explanation: {
+            model: parsedMlData.score_explanation?.model || '',
+            raw_score: parsedMlData.score_explanation?.raw_score || 0,
+            normalized_score: parsedMlData.score_explanation?.normalized_score || 0,
+            explanation: parsedMlData.score_explanation?.explanation || '',
+            top_contributing_features: parsedMlData.score_explanation?.top_contributing_features || {}
+          }
+        };
+      } catch (e) {
+        console.error('Error parsing ai_ml_logs from message string:', e);
+      }
+    }
+  }
+  
+  return null;
+})(),
       // Store the complete data field
       data: dataField,
       rawData: messageData

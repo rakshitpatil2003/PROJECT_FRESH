@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box, Typography, Paper, CircularProgress, Link, Dialog, DialogTitle, DialogContent, IconButton, Chip, Grid, Tab, Tabs, Skeleton
+  Box, Typography, Paper, CircularProgress, Link, Dialog, DialogTitle, DialogContent, IconButton,
+  Chip, Grid, Tab, Tabs, Skeleton, TextField, InputAdornment, FormControl, InputLabel, Select, MenuItem,
+  Button
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import SearchIcon from '@mui/icons-material/Search';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import DateRangeIcon from '@mui/icons-material/DateRange';
 import axios from 'axios';
 import { parseLogMessage } from '../utils/normalizeLogs';
 import { StructuredLogView } from '../utils/normalizeLogs';
@@ -53,6 +58,15 @@ const COLOR_PALETTE = [
   '#795548'    // Brown
 ];
 
+// Time range options
+const TimeRangeOptions = [
+  { value: '12h', label: 'Last 12 Hours' },
+  { value: '24h', label: 'Last 24 Hours' },
+  { value: '3d', label: 'Last 3 Days' },
+  { value: '7d', label: 'Last 7 Days' },
+  { value: '30d', label: 'Last 30 Days' }
+];
+
 const MajorLogs = () => {
   const [logs, setLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,22 +76,33 @@ const MajorLogs = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
+  const [timeRange, setTimeRange] = useState('7d');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const theme = useTheme();
   const [fullscreenChart, setFullscreenChart] = useState(null);
   const [fullscreenTitle, setFullscreenTitle] = useState('');
 
-  const fetchMajorLogs = useCallback(async (search) => {
+  const fetchMajorLogs = useCallback(async (search, range) => {
     try {
       setLoading(true);
       setError(null);
+
+      console.log(`Fetching major logs with search: "${search}" and time range: ${range}`);
 
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication token not found');
       }
 
+      // Build query params
+      let queryParams = [];
+      if (search) queryParams.push(`search=${encodeURIComponent(search)}`);
+      if (range) queryParams.push(`timeRange=${encodeURIComponent(range)}`);
+      
+      const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+
       const response = await axios.get(
-        `${API_URL}/api/logs/major${search ? `?search=${encodeURIComponent(search)}` : ''}`,
+        `${API_URL}/api/logs/major${queryString}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -103,6 +128,7 @@ const MajorLogs = () => {
         new Date(b.timestamp) - new Date(a.timestamp)
       );
 
+      console.log(`Fetched ${sortedLogs.length} major logs for time range: ${range}`);
       setLogs(sortedLogs);
 
     } catch (error) {
@@ -125,6 +151,16 @@ const MajorLogs = () => {
   const openFullscreenChart = (option, title) => {
     setFullscreenChart(option);
     setFullscreenTitle(title);
+  };
+
+  // Handle refresh button click
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  // Handle time range change
+  const handleTimeRangeChange = (event) => {
+    setTimeRange(event.target.value);
   };
 
   const columns = [
@@ -776,8 +812,6 @@ const MajorLogs = () => {
     return '#1976d2'; // Blue (default)
   };
 
-
-
   const formatTimestamp = (timestamp) => {
     try {
       return new Date(timestamp).toLocaleString('en-US', {
@@ -795,35 +829,12 @@ const MajorLogs = () => {
   };
 
   useEffect(() => {
-    // Debug logging
-    console.log("Fetching logs with search term:", searchTerm);
-    
-    const fetchDebug = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get(
-          `${API_URL}/api/logs/major`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            }
-          }
-        );
-        console.log("API Response for major logs:", response.data);
-        console.log("First log level:", response.data[0]?.rule?.level);
-      } catch (error) {
-        console.error("API Error:", error.response?.data || error.message);
-      }
+    const fetchLogs = async () => {
+      await fetchMajorLogs(searchTerm, timeRange);
     };
     
-    fetchDebug();
-    
-    const debounceTimer = setTimeout(() => {
-      fetchMajorLogs(searchTerm);
-    }, 500);
-  
-    return () => clearTimeout(debounceTimer);
-  }, [searchTerm, fetchMajorLogs]);
+    fetchLogs();
+  }, [fetchMajorLogs, searchTerm, timeRange, refreshTrigger]);
 
   if (loading && !logs.length) {
     return (
@@ -852,6 +863,62 @@ const MajorLogs = () => {
           Showing logs with rule level ≥ 12
         </Typography>
       </Typography>
+
+      {/* Controls Panel */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        {/* Time Range Selector */}
+        <Grid item xs={12} sm={6} md={3}>
+          <FormControl fullWidth variant="outlined" size="small">
+            <InputLabel id="time-range-label">Time Range</InputLabel>
+            <Select
+              labelId="time-range-label"
+              value={timeRange}
+              onChange={handleTimeRangeChange}
+              label="Time Range"
+              startAdornment={<DateRangeIcon sx={{ mr: 1, color: 'action.active' }} />}
+            >
+              {TimeRangeOptions.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        {/* Search Box */}
+        <Grid item xs={12} sm={7} md={8}>
+          <TextField
+            fullWidth
+            size="small"
+            variant="outlined"
+            placeholder="Search logs by agent, description, or IP address..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Grid>
+
+        {/* Refresh Button */}
+        <Grid item xs={12} sm={2} md={1}>
+          <Button
+            fullWidth
+            variant="contained"
+            color="primary"
+            onClick={handleRefresh}
+            sx={{ height: '40px' }}
+            disabled={loading}
+          >
+            <RefreshIcon />
+          </Button>
+        </Grid>
+      </Grid>
 
       <Tabs
         value={activeTab}
@@ -1040,8 +1107,7 @@ const MajorLogs = () => {
         </Grid>
       )}
 
-      {/* Rest of the component remains the same as in the previous implementation */}
-      {/* (Include the Events Tab and Log Details Dialog) */}
+      {/* Events Tab */}
       {activeTab === 1 && (
         <Paper elevation={2} sx={{ mb: 3 }}>
           <Box sx={{
@@ -1123,6 +1189,7 @@ const MajorLogs = () => {
           <StructuredLogView data={selectedLog} />
         </DialogContent>
       </Dialog>
+
       {/* Fullscreen Chart Dialog */}
       <Dialog
         open={Boolean(fullscreenChart)}
