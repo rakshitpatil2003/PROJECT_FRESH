@@ -43,8 +43,10 @@ const LogSchema = new mongoose.Schema({
   location: { type: String },
   data: { type: mongoose.Schema.Types.Mixed },
   //ai_ml_logs: { type: mongoose.Schema.Types.Mixed },
-  rawLog: { type: mongoose.Schema.Types.Mixed }
-}, { timestamps: true });
+  rawLog: { type: mongoose.Schema.Types.Mixed },
+  createdAt_orig: { type: Date },
+  updatedAt_orig: { type: Date }
+}, { timestamps: true , strict: false});
 
 // Keep only the most frequently used indexes
 LogSchema.index({ timestamp: -1 });

@@ -60,25 +60,40 @@ async function moveLogsToNewCollection(sourceModel, targetModel, filter, operati
   
   let batch = [];
   let doc;
+  let errorCount = 0;
   
   try {
     while ((doc = await cursor.next()) !== null) {
       // Prepare document for the new collection
       const docObj = doc.toObject();
-      delete docObj._id; // Remove MongoDB specific fields
       
       batch.push(docObj);
       
       // Process batch if it reaches the batch size
       if (batch.length >= batchSize) {
-        const results = await processBatch(batch, sourceModel, targetModel);
-        successCount += results.success;
+        try {
+          const results = await processBatch(batch, sourceModel, targetModel);
+          successCount += results.success;
+          
+          // Log more details for debugging
+          console.log(`Batch processing: ${results.success}/${batch.length} documents moved successfully`);
+          
+          if (results.success === 0 && batch.length > 0) {
+            errorCount++;
+            // Log a sample document on failure
+            console.log('Sample document structure that failed:', JSON.stringify(batch[0], null, 2).substring(0, 500) + '...');
+          }
+        } catch (batchError) {
+          console.error(`Batch error: ${batchError.message}`);
+          errorCount++;
+        }
+        
         batch = [];
       }
       
       processedCount++;
-      if (processedCount % 10000 === 0) {
-        console.log(`Processed ${processedCount}/${totalCount} logs...`);
+      if (processedCount % 1000 === 0) {
+        console.log(`Processed ${processedCount}/${totalCount} logs, success so far: ${successCount}, errors: ${errorCount}`);
       }
     }
     
@@ -88,7 +103,7 @@ async function moveLogsToNewCollection(sourceModel, targetModel, filter, operati
       successCount += results.success;
     }
     
-    console.log(`Moved ${successCount}/${totalCount} logs from ${operation}`);
+    console.log(`Moved ${successCount}/${totalCount} logs from ${operation}, with ${errorCount} batch errors`);
   } catch (error) {
     console.error(`Error moving logs from ${operation}:`, error);
     throw error;
@@ -99,8 +114,30 @@ async function processBatch(batch, sourceModel, targetModel) {
   let success = 0;
   
   try {
+    // Prepare documents by removing Mongoose-specific fields
+    const processedDocs = batch.map(doc => {
+      const cleanDoc = {...doc};
+      
+      // Remove _id and Mongoose metadata fields
+      delete cleanDoc._id;
+      delete cleanDoc.__v;
+      
+      // Handle timestamps correctly - preserve the original values
+      // but don't let Mongoose try to manage them during insert
+      const createdAt = cleanDoc.createdAt;
+      const updatedAt = cleanDoc.updatedAt;
+      delete cleanDoc.createdAt;
+      delete cleanDoc.updatedAt;
+      
+      // Add them back as regular fields, not managed by Mongoose
+      if (createdAt) cleanDoc.createdAt_orig = new Date(createdAt);
+      if (updatedAt) cleanDoc.updatedAt_orig = new Date(updatedAt);
+      
+      return cleanDoc;
+    });
+    
     // Insert to target collection
-    const operations = batch.map(doc => ({
+    const operations = processedDocs.map(doc => ({
       updateOne: {
         filter: { uniqueIdentifier: doc.uniqueIdentifier },
         update: { $setOnInsert: doc },
@@ -111,7 +148,7 @@ async function processBatch(batch, sourceModel, targetModel) {
     const result = await targetModel.bulkWrite(operations, { ordered: false });
     
     // Get unique identifiers of successfully inserted documents
-    const successfulIdentifiers = batch
+    const successfulIdentifiers = processedDocs
       .filter((_, index) => result.upsertedIds[index] || result.modifiedCount > 0)
       .map(doc => doc.uniqueIdentifier);
     
