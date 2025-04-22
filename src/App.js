@@ -5,7 +5,7 @@ import Sidebar from './components/sidebar';
 import Dashboard from './pages/Dashboard';
 import LogDetails from './pages/LogDetails';
 import AdvancedAnalytics from './pages/AdvancedAnalytics';
-import PerformanceDashboard from './pages/PerformanceDashboard';
+//import PerformanceDashboard from './pages/PerformanceDashboard';
 import SecurityScore from './pages/SecurityScore';
 import Login from './components/Login';
 import MajorLogs from './pages/MajorLogs';
@@ -196,14 +196,14 @@ const App = () => {
               </ProtectedLayout>
             }
           />
-          <Route
+          {/* <Route
             path="/performance-dashboard"
             element={
               <ProtectedLayout toggleTheme={toggleTheme} isDarkMode={mode === 'dark'}>
                 <PerformanceDashboard />
               </ProtectedLayout>
             }
-          />
+          /> */}
           <Route
             path="/security-score"
             element={
