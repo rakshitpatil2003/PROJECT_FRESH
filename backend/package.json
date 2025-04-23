@@ -30,6 +30,7 @@
     "dotenv": "^16.4.7",
     "echarts-gl": "^2.0.9",
     "express": "^4.21.2",
+    "framer-motion": "^12.7.4",
     "jsonwebtoken": "^9.0.2",
     "jwt-decode": "^4.0.0",
     "lodash": "^4.17.21",

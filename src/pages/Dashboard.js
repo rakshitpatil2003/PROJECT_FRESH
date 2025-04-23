@@ -315,7 +315,7 @@ const Dashboard = () => {
             }}
           >
             <Typography variant="h4" component="h1" fontWeight="bold" color="#316fad">
-              Security Dashboard
+              Executive Dashboard
             </Typography>
           </Paper>
           

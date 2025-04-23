@@ -106,15 +106,15 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
   };
 
   const menuItems = [
-    { text: 'Security Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+    { text: 'Executive Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Forensic Analysis', icon: <AssessmentIcon />, path: '/logs' },
     { text: 'Advanced Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
-    { text: 'Major Logs', icon: <ErrorIcon />, path: '/major-logs' },
-    { text: 'Session Logs', icon: <SupervisorAccountIcon />, path: '/session-logs' },
-    { text: 'FIM Logs', icon: <SupervisorAccountIcon />, path: '/fim' },
-    { text: 'SOAR Playbook', icon: <SecurityIcon />, path: '/soar-playbook' },
-    { text: 'Malware Detection', icon: <SecurityIcon />, path: '/malware' },
-    { text: 'Configuration Detection', icon: <SecurityIcon />, path: '/configuration' },
+    { text: 'Critical Alerts', icon: <ErrorIcon />, path: '/major-logs' },
+    { text: 'Session Events', icon: <SupervisorAccountIcon />, path: '/session-logs' },
+    { text: 'File Integrity & DLP', icon: <SupervisorAccountIcon />, path: '/fim' },
+    { text: 'SOAR', icon: <SecurityIcon />, path: '/soar-playbook' },
+    { text: 'Malware & RansomeWare', icon: <SecurityIcon />, path: '/malware' },
+    { text: 'Security Configuration Assessment', icon: <SecurityIcon />, path: '/configuration' },
     { text: 'Sentinel AI', icon: <SmartToyIcon />, path: '/sentinel-ai' },
   ];
 
@@ -173,15 +173,15 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
   }, []);
 
   const securityPolicyItems = [
-    { text: 'HIPAA', path: '/hipaa-dashboard' },
-    { text: 'GDPR', path: '/gdpr-dashboard' },
-    { text: 'NIST', path: '/nist-dashboard' },
-    { text: 'PCI DSS', path: '/pcidss-dashboard' },
-    { text: 'TSC', path: '/tsc-dashboard' },
+    { text: 'MITRE ATT&CK', icon: <RadarIcon />, path: '/mitre-attack' },
+    { text: 'HIPAA', icon: <VerifiedUserIcon />, path: '/hipaa-dashboard' },
+    { text: 'GDPR', icon: <VerifiedUserIcon />, path: '/gdpr-dashboard' },
+    { text: 'NIST', icon: <VerifiedUserIcon />, path: '/nist-dashboard' },
+    { text: 'PCI DSS', icon: <VerifiedUserIcon />, path: '/pcidss-dashboard' },
+    { text: 'TSC', icon: <VerifiedUserIcon />, path: '/tsc-dashboard' },
   ];
 
   const threatIntelItems = [
-    { text: 'MITRE ATT&CK', icon: <RadarIcon />, path: '/mitre-attack' },
     { text: 'Threat Hunting', icon: <SearchIcon />, path: '/threat-hunting' },
     { text: 'Vulnerability Detection', icon: <BugReportIcon />, path: '/vulnerability' },
   ];
@@ -275,7 +275,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           <Box
             sx={{
               position: 'absolute',
-              left: '22%', // Position it at 1/3 of the width
+              left: '92%', // Position it at 1/3 of the width
               transform: 'translateX(-50%)', // Center it on that point
               display: 'flex',
               alignItems: 'center'
@@ -305,7 +305,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           </Box>
 
           {/* Theme toggle positioned at the right */}
-          <Box sx={{ marginLeft: 'auto' }}>
+          <Box sx={{ marginLeft: 'auto',left: '100%' }}>
             <IconButton onClick={toggleTheme} color="inherit">
               {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
             </IconButton>
@@ -424,7 +424,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
               <ListItemIcon sx={{ minWidth: 40 }}>
                 <PolicyIcon />
               </ListItemIcon>
-              <ListItemText primary="Security Policy" />
+              <ListItemText primary="Compliance Reports" />  {/*previous name "Security Policy"*/}
               {securityPolicyOpen ? <ExpandLess /> : <ExpandMore />}
             </ListItem>
 

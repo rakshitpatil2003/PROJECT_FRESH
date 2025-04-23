@@ -1335,9 +1335,10 @@ router.get('/major', async (req, res) => {
 });
 
 // Session endpoint with time range support
+// Backend route for session logs (update this in your routes/Logs.js file)
 router.get('/session', async (req, res) => {
   try {
-    const { search = '', timeRange = '7d' } = req.query;
+    const { search = '', timeRange = '24h' } = req.query;
     console.log(`Fetching session logs with search: "${search}" and time range: ${timeRange}`);
 
     // Create a cache key that includes both search and time range parameters
@@ -1349,7 +1350,7 @@ router.get('/session', async (req, res) => {
       const { startDate } = getDateRangeForQuery(timeRange);
 
       // Build search query for all compliance standards
-      let searchQuery = {
+      let query = {
         $or: [
           // Check for compliance standards in rawLog message
           { "rawLog.message": { $regex: /hipaa|gdpr|pci_dss|nist_800_53/i } },
@@ -1363,41 +1364,42 @@ router.get('/session', async (req, res) => {
         timestamp: { $gte: startDate }
       };
 
-      // Add text search if provided
+      // Add search criteria if provided
       if (search) {
-        searchQuery = {
-          $and: [
-            searchQuery,
-            {
-              $or: [
-                { "agent.name": { $regex: search, $options: 'i' } },
-                { "rule.description": { $regex: search, $options: 'i' } },
-                { "rawLog.message": { $regex: search, $options: 'i' } }
-              ]
-            }
+        query.$and = [{ 
+          $or: [
+            { 'agent.name': { $regex: search, $options: 'i' } },
+            { 'rule.description': { $regex: search, $options: 'i' } },
+            { 'rawLog.message': { $regex: search, $options: 'i' } }
           ]
-        };
+        }];
       }
 
       // Determine which collections to query based on time range
       const { models } = getModelsForTimeRange(timeRange);
 
-      // Query across multiple collections
-      const { data: logs } = await queryMultipleCollections(searchQuery, {
-        models,
-        sort: { timestamp: -1 }
-      });
+      // Query all relevant collections in parallel
+      const queryPromises = models.map(model => 
+        model.find(query).sort({ timestamp: -1 }).lean()
+      );
+      
+      const collectionsData = await Promise.all(queryPromises);
+      
+      // Combine and sort results
+      const combinedLogs = collectionsData
+        .flat()
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-      console.log(`Found ${logs.length} compliance-related logs for time range: ${timeRange}`);
-
-      return logs;
+      console.log(`Found ${combinedLogs.length} compliance logs across collections for time range: ${timeRange}`);
+      
+      return combinedLogs;
     });
 
     res.json(sessionLogs);
   } catch (error) {
-    console.error('Error in /session endpoint:', error);
+    console.error('Error fetching session logs:', error);
     res.status(500).json({
-      message: 'Error fetching compliance logs',
+      message: 'Error fetching session logs',
       error: error.message
     });
   }
@@ -1552,10 +1554,10 @@ router.get('/sentinel-ai', async (req, res) => {
     let query;
     
     if (logType === 'ai') {
-      // Query for logs with AI_response in YARA
+      // Updated query - look for AI_response directly in the raw message
       query = {
         "rawLog.message": {
-          $regex: /"data":\s*{[^}]*"YARA":\s*{[^}]*"AI_response":\s*"[^"]+"/
+          $regex: /"AI_response":\s*"[^"]+"/
         }
       };
     } else if (logType === 'ml') {
@@ -1583,6 +1585,7 @@ router.get('/sentinel-ai', async (req, res) => {
       let extractedData = {};
       
       if (logType === 'ai') {
+        // Direct extraction of AI_response from the raw message
         const aiMatch = message.match(/"AI_response":\s*"([^"]+)"/);
         extractedData.aiResponse = aiMatch ? aiMatch[1] : 'No AI response found';
       } else if (logType === 'ml') {

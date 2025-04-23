@@ -33,6 +33,25 @@ const SentinelAI = () => {
   const [totalLogs, setTotalLogs] = useState(0);
   const theme = useTheme();
 
+  // Add this debugging function to better extract and debug AI responses
+  const getAIResponse = (log) => {
+    console.log('Trying to extract AI response from log:', log);
+    
+    // Try all possible locations where AI_response might be
+    const fromExtracted = log?.extracted?.aiResponse;
+    const directField = log?.AI_response;
+    const fromYARA = log?.data?.YARA?.AI_response;
+    
+    console.log('AI response candidates:', {
+      fromExtracted,
+      directField, 
+      fromYARA
+    });
+    
+    // Return the first non-empty value
+    return fromExtracted || directField || fromYARA || 'No AI analysis available';
+  };
+
   // Animation options
   const defaultOptions = {
     loop: true,
@@ -56,6 +75,9 @@ const SentinelAI = () => {
       // Determine which type of logs to fetch based on activeTab
       const logType = activeTab === 0 ? 'ai' : 'ml';
 
+      // Clear logs before fetching to prevent tab mixing
+      setLogs([]);
+
       const response = await axios.get(
         `${API_URL}/api/logs/sentinel-ai?page=${page}&pageSize=${rowsPerPage}&logType=${logType}`,
         {
@@ -69,26 +91,22 @@ const SentinelAI = () => {
       );
 
       if (response.data && response.data.logs) {
-        console.log('Received Sentinel AI logs:', response.data.logs);
-
-        // Debug first ML log
-        if (logType === 'ml' && response.data.logs.length > 0) {
-          const firstLog = response.data.logs[0];
-          console.log('First ML log details:', {
-            hasAiMlLogs: !!firstLog.ai_ml_logs,
-            hasExtractedMlData: !!firstLog.extracted?.mlData,
-            parsedLogHasAiMlLogs: !!(firstLog.parsed && firstLog.parsed.ai_ml_logs),
-            fullLogHasAiMlLogs: !!(firstLog.fullLog && firstLog.fullLog.ai_ml_logs)
-          });
-        }
-        setLogs(response.data.logs);
-        setTotalLogs(response.data.total);
+        console.log(`Received logs:`, response.data.logs);
+        
+        // Clear logs before setting new ones
+        setLogs([]);
+        
+        // Small timeout to ensure UI refreshes
+        setTimeout(() => {
+          setLogs(response.data.logs);
+          setTotalLogs(response.data.total);
+        }, 50);
       } else {
         throw new Error('Invalid response format from server');
       }
     } catch (error) {
-      console.error('Error fetching Sentinel AI logs:', error);
-      setError(error.response?.data?.message || error.message || 'Failed to fetch Sentinel AI logs');
+      console.error(`Error fetching Sentinel ${activeTab === 0 ? 'AI' : 'ML'} logs:`, error);
+      setError(error.response?.data?.message || error.message || 'Failed to fetch logs');
       setLogs([]);
     } finally {
       setLoading(false);
@@ -109,23 +127,35 @@ const SentinelAI = () => {
   };
 
   const handleTabChange = (event, newValue) => {
+    // First clear logs to prevent any visual mixing
+    setLogs([]);
+    // Then update the active tab state
     setActiveTab(newValue);
-    setPage(0); // Reset page when changing tabs
+    // Reset pagination
+    setPage(0);
+    // Loading will be handled by the useEffect responding to these changes
   };
 
   const handleViewResponse = (log, type) => {
+    console.log(`Viewing ${type} response for log:`, log);
+
     // If we're viewing ML data, make sure the ML data is available in the log
     if (type === 'ml') {
       // Check if we need to copy ML data from the extracted field
       if (log.extracted && log.extracted.mlData && !log.ai_ml_logs) {
         log.ai_ml_logs = log.extracted.mlData;
       }
+    } else if (type === 'ai') {
+      // For AI logs, ensure AI response is accessible
+      if (log.extracted && log.extracted.aiResponse && !log.AI_response) {
+        log.AI_response = log.extracted.aiResponse;
+      }
     }
-    
+
     setSelectedLog(log);
     setViewType(type); // 'ai' or 'ml'
     setShowResponse(false);
-    
+
     // Start animation, then show response
     setTimeout(() => {
       setShowResponse(true);
@@ -753,12 +783,13 @@ const SentinelAI = () => {
                           backgroundColor: theme.palette.mode === 'dark' ? '#121212' : '#f9f9f9',
                           my: 2,
                           fontSize: '0.9rem',
-                          fontFamily: 'monospace'
+                          fontFamily: 'monospace',
+                          whiteSpace: 'pre-wrap',
+                          maxHeight: '400px',
+                          overflow: 'auto'
                         }}
                       >
-                        <TypewriterEffect
-                          text={selectedLog?.data?.YARA?.AI_response || 'No AI analysis available'}
-                        />
+                        <TypewriterEffect text={getAIResponse(selectedLog)} />
                       </Box>
                       <Typography variant="subtitle2" gutterBottom>Log Details:</Typography>
                       <StructuredLogView data={selectedLog} />

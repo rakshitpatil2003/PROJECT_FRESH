@@ -116,10 +116,39 @@ async function aggregateMultipleCollections(pipeline, options = {}) {
   }
 }
 
+function getDateRangeForQuery(timeRange) {
+  const now = new Date();
+  
+  let startDate;
+  
+  switch (timeRange) {
+    case '12h':
+      startDate = new Date(now - 12 * 60 * 60 * 1000);
+      break;
+    case '24h':
+      startDate = new Date(now - 24 * 60 * 60 * 1000);
+      break;
+    case '3d':
+      startDate = new Date(now - 3 * 24 * 60 * 60 * 1000);
+      break;
+    case '7d':
+      startDate = new Date(now - 7 * 24 * 60 * 60 * 1000);
+      break;
+    case '30d':
+      startDate = new Date(now - 30 * 24 * 60 * 60 * 1000);
+      break;
+    default:
+      startDate = new Date(now - 24 * 60 * 60 * 1000);
+  }
+  
+  return { startDate, endDate: now };
+}
+
 module.exports = {
   getModelsForTimeRange,
   queryMultipleCollections,
   aggregateMultipleCollections,
+  getDateRangeForQuery,
   LogCurrent,
   LogRecent,
   LogArchive
