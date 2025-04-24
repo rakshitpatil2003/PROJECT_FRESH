@@ -77,7 +77,7 @@ const WorldConnectionMap = () => {
     // Process each log
     logs.forEach(log => {
       const parsedLog = parseLogMessage(log);
-      
+
       // Process source country
       const srcCountry = parsedLog.traffic?.srcCountry || 'Unknown';
       if (srcCountry !== 'N/A' && srcCountry !== 'Unknown') {
@@ -92,8 +92,8 @@ const WorldConnectionMap = () => {
 
       // Process source-destination pairs for visualization
       if (srcCountry !== 'N/A' && srcCountry !== 'Unknown' &&
-          dstCountry !== 'N/A' && dstCountry !== 'Unknown' &&
-          countryCoordinates[srcCountry] && countryCoordinates[dstCountry]) {
+        dstCountry !== 'N/A' && dstCountry !== 'Unknown' &&
+        countryCoordinates[srcCountry] && countryCoordinates[dstCountry]) {
         const pairKey = `${srcCountry}->${dstCountry}`;
         srcDestPairs[pairKey] = (srcDestPairs[pairKey] || 0) + 1;
       }
@@ -106,9 +106,9 @@ const WorldConnectionMap = () => {
       .map(([pair, value]) => {
         const [source, target] = pair.split('->');
         return {
-          source, 
-          target, 
-          value, 
+          source,
+          target,
+          value,
           srcLatitude: countryCoordinates[source]?.latitude || 0,
           srcLongitude: countryCoordinates[source]?.longitude || 0,
           dstLatitude: countryCoordinates[target]?.latitude || 0,
@@ -118,7 +118,7 @@ const WorldConnectionMap = () => {
       // Filter out connections without coordinates
       .filter(conn => {
         return conn.srcLatitude && conn.srcLongitude &&
-               conn.dstLatitude && conn.dstLongitude;
+          conn.dstLatitude && conn.dstLongitude;
       });
 
     setConnectionData(connections);
@@ -127,11 +127,11 @@ const WorldConnectionMap = () => {
   // Fetch threat data from API
   useEffect(() => {
     let isMounted = true;
-    
+
     const fetchThreatData = async () => {
       try {
         setLoading(true);
-        
+
         const token = localStorage.getItem('token');
         if (!token) {
           throw new Error('Authentication token not found');
@@ -150,7 +150,7 @@ const WorldConnectionMap = () => {
         }
 
         const data = await response.json();
-        
+
         // Only update state if component is still mounted
         if (isMounted) {
           // Process logs to create connection data
@@ -170,7 +170,7 @@ const WorldConnectionMap = () => {
 
     fetchThreatData();
     const interval = setInterval(fetchThreatData, 30000); // Update every 30 seconds
-    
+
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -186,12 +186,12 @@ const WorldConnectionMap = () => {
         chart.dispose();
         chart = null;
       }
-      
+
       // Create map instance
       chart = am4core.create("worldMapDiv", am4maps.MapChart);
       configureMap(chart);
     }
-    
+
     // Clean up on unmount
     return () => {
       if (chart) {
@@ -210,12 +210,12 @@ const WorldConnectionMap = () => {
           fullscreenChart.dispose();
           fullscreenChart = null;
         }
-        
+
         fullscreenChart = am4core.create("fullscreenWorldMapDiv", am4maps.MapChart);
         configureMap(fullscreenChart);
       }, 300);
     }
-    
+
     // Clean up on unmount or when exiting fullscreen
     return () => {
       if (fullscreenChart) {
@@ -232,17 +232,15 @@ const WorldConnectionMap = () => {
     chart.homeGeoPoint = { longitude: 10, latitude: 20 };
     chart.geodata = am4geodata_worldLow;
     chart.projection = new am4maps.projections.Miller();
+    chart.background.fill = am4core.color("#000000"); // Black background
 
+    // Create map polygon series
     // Create map polygon series
     const polygonSeries = chart.series.push(new am4maps.MapPolygonSeries());
     polygonSeries.useGeodata = true;
-    polygonSeries.mapPolygons.template.fill = am4core.color(
-      theme.palette.mode === 'dark' ? "#3b3b3b" : "#e2e2e2"
-    );
-    polygonSeries.mapPolygons.template.stroke = am4core.color(
-      theme.palette.mode === 'dark' ? "#555555" : "#ffffff"
-    );
-    polygonSeries.mapPolygons.template.strokeWidth = 0.5;
+    polygonSeries.mapPolygons.template.fill = am4core.color("#000000"); // Black country fill
+    polygonSeries.mapPolygons.template.stroke = am4core.color("#1E88E5"); // Blue borders
+    polygonSeries.mapPolygons.template.strokeWidth = 0.8; // Slightly thicker for visibility
 
     // Configure country hover states
     polygonSeries.mapPolygons.template.tooltipText = "{name}";
@@ -292,7 +290,7 @@ const WorldConnectionMap = () => {
     serverSeries.zIndex = 1000; // This will place server icons above all other elements
     serverSeries.mapImages.template.zIndex = 1000;
     serverTemplate.zIndex = 1000;
-    
+
     // Center the server icon properly
     serverTemplate.horizontalCenter = "middle";
     serverTemplate.verticalCenter = "middle";
@@ -419,7 +417,7 @@ const WorldConnectionMap = () => {
         const line = event.target;
         // Set up the animation for each line
         line.strokeDasharray = 10;
-        
+
         // Create animation
         const animation = line.animate(
           { property: "strokeDashoffset", from: 100, to: 0 },
@@ -528,16 +526,16 @@ const WorldConnectionMap = () => {
 
     // Configure the legend data
     legend.data = [{
-      name: "Outgoing from Server", 
+      name: "Outgoing from Server",
       fill: "#10B981"
     }, {
-      name: "Incoming Threat (<20 events)", 
+      name: "Incoming Threat (<20 events)",
       fill: "#EF4444"
     }, {
-      name: "Normal Incoming (≥20 events)", 
+      name: "Normal Incoming (≥20 events)",
       fill: "#3B82F6"
     }, {
-      name: "External Connection", 
+      name: "External Connection",
       fill: "#F59E0B"
     }];
 
@@ -551,9 +549,9 @@ const WorldConnectionMap = () => {
     legend.parent = chart.chartContainer;
 
     // Set up click event handler for legend items
-    legend.itemContainers.template.events.on("hit", function(ev) {
+    legend.itemContainers.template.events.on("hit", function (ev) {
       const item = ev.target.dataItem.dataContext;
-      
+
       // Toggle the corresponding series visibility
       if (item.name === "Outgoing from Server") {
         outgoingFromReservedSeries.hidden = !outgoingFromReservedSeries.hidden;
@@ -572,8 +570,8 @@ const WorldConnectionMap = () => {
 
   return (
     <>
-      <Card 
-        sx={{ 
+      <Card
+        sx={{
           height: '100%',
           position: 'relative',
           transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
@@ -588,10 +586,10 @@ const WorldConnectionMap = () => {
             <Typography variant="h6" fontWeight="medium">
               Global Network Traffic
             </Typography>
-            <IconButton 
-              onClick={toggleFullscreen} 
+            <IconButton
+              onClick={toggleFullscreen}
               size="small"
-              sx={{ 
+              sx={{
                 bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
                 '&:hover': {
                   bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'
@@ -601,7 +599,7 @@ const WorldConnectionMap = () => {
               <FullscreenIcon fontSize="small" />
             </IconButton>
           </Box>
-          
+
           {loading ? (
             <Box display="flex" justifyContent="center" alignItems="center" height="350px">
               <CircularProgress />
@@ -616,16 +614,16 @@ const WorldConnectionMap = () => {
               <Typography variant="body1">No network traffic data available</Typography>
             </Box>
           ) : (
-            <Box 
+            <Box
               id="worldMapDiv"
-              sx={{ 
-                width: "100%", 
+              sx={{
+                width: "100%",
                 height: "350px",
-                bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)'
+                bgcolor: "#000000" // Black background
               }}
             />
           )}
-          
+
           <Box
             sx={{
               mt: 2,
@@ -657,10 +655,10 @@ const WorldConnectionMap = () => {
         </CardContent>
       </Card>
 
-      <Dialog 
-        open={fullscreen} 
-        onClose={toggleFullscreen} 
-        fullWidth 
+      <Dialog
+        open={fullscreen}
+        onClose={toggleFullscreen}
+        fullWidth
         maxWidth="xl"
         PaperProps={{
           sx: {
@@ -680,13 +678,13 @@ const WorldConnectionMap = () => {
           <Typography variant="h5" align="center" mb={2} mt={1}>
             Global Network Traffic Map
           </Typography>
-          
-          <Box 
+
+          <Box
             id="fullscreenWorldMapDiv"
-            sx={{ 
-              width: "100%", 
+            sx={{
+              width: "100%",
               height: "calc(90vh - 100px)",
-              bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)'
+              bgcolor: "#000000" // Black background
             }}
           />
         </Box>

@@ -5,6 +5,42 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import CloseIcon from '@mui/icons-material/Close';
 import { API_URL } from '../config';
 import * as echarts from 'echarts';
+import 'echarts-liquidfill';
+
+const registerThemes = () => {
+  // Define dark theme
+  echarts.registerTheme('dark', {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    textStyle: {
+      color: 'rgba(255, 255, 255, 0.8)'
+    },
+    tooltip: {
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      textStyle: {
+        color: '#fff'
+      }
+    }
+  });
+
+  // Define light theme
+  echarts.registerTheme('light', {
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    textStyle: {
+      color: '#333'
+    },
+    tooltip: {
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      borderColor: 'rgba(0, 0, 0, 0.1)',
+      textStyle: {
+        color: '#333'
+      }
+    }
+  });
+};
+
+// Call the function
+registerThemes();
 
 // Fullscreen wrapper component for any visualization
 export const FullscreenableChart = ({ title, renderChart, height = '400px' }) => {
@@ -86,86 +122,107 @@ export const FullscreenableChart = ({ title, renderChart, height = '400px' }) =>
 
 // Funnel Chart Component
 export const EventAnalysisFunnel = ({ metricsData }) => {
+  // Helper function to format large numbers with appropriate suffixes
+  const formatNumber = (num) => {
+    if (num >= 1000000000) {
+      return (num / 1000000000).toFixed(2) + 'B';
+    }
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(2) + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+  };
+
   const getFunnelChartOptions = (isFullscreen) => {
-    // For static structure regardless of data values
+    // Create fixed data for the triangle regardless of actual values
+    // This ensures the shape remains consistent
     const data = [
-      { value: metricsData.totalLogs || 100, name: 'Total Activities', itemStyle: { color: '#4CAF50' } },
-      { value: metricsData.normalLogs || 70, name: 'Detected (Rule Level 1-11)', itemStyle: { color: '#2196F3' } },
-      { value: metricsData.majorLogs || 30, name: 'Alerts (Rule Level >12)', itemStyle: { color: '#F44336' } }
+      { 
+        value: 100, 
+        name: 'Events Analyzed', 
+        displayValue: metricsData.totalLogs || 231500000
+      },
+      { 
+        value: 57, 
+        name: 'Detection', 
+        displayValue: metricsData.normalLogs || 1320000
+      },
+      { 
+        value: 14, 
+        name: 'Alerts', 
+        displayValue: metricsData.majorLogs || 216
+      }
     ];
 
     return {
-      title: {
-        text: isFullscreen ? 'Security Event Analysis' : '',
-        left: 'center',
-        textStyle: {
-          fontSize: isFullscreen ? 22 : 16
-        }
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: '{a} <br/>{b} : {c}'
-      },
-      legend: {
-        bottom: isFullscreen ? '5%' : '0%',
-        left: 'center',
-        data: ['Total Activities', 'Detected (Rule Level 1-11)', 'Alerts (Rule Level >12)'],
-        textStyle: {
-          fontSize: isFullscreen ? 14 : 12
-        }
-      },
+      backgroundColor: 'transparent',
       series: [
         {
-          name: 'Event Analysis',
           type: 'funnel',
-          left: '10%',
-          top: isFullscreen ? 80 : 60,
-          bottom: isFullscreen ? 80 : 60,
           width: '80%',
-          minSize: '30%',
+          height: '90%',
+          left: 'center',
+          top: 'center',
+          min: 0,
+          max: 100,
+          minSize: '0%',
           maxSize: '100%',
-          sort: 'descending',
-          gap: 2,
+          sort: 'none',
+          gap: 0,
           label: {
             show: true,
             position: 'inside',
-            formatter: '{b}: {c}',
-            fontSize: isFullscreen ? 16 : 12
+            formatter: function(params) {
+              // Display the actual count, not the fixed value
+              const displayValue = formatNumber(params.data.displayValue);
+              return '{white|' + displayValue + '}\n{white|' + params.name + '}';
+            },
+            rich: {
+              white: {
+                color: '#ffffff',
+                fontSize: isFullscreen ? 16 : 14,
+                fontWeight: 'bold',
+                lineHeight: 25
+              }
+            }
           },
           labelLine: {
-            length: 10,
-            lineStyle: {
-              width: 1,
-              type: 'solid'
-            }
+            show: false
           },
           itemStyle: {
-            borderColor: '#fff',
-            borderWidth: 1,
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowOffsetY: 5,
-            shadowColor: 'rgba(0, 0, 0, 0.2)'
+            borderWidth: 0
           },
-          emphasis: {
-            label: {
-              fontSize: isFullscreen ? 20 : 14,
-              fontWeight: 'bold',
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
+          data: [
+            {
+              ...data[0],
+              itemStyle: {
+                color: '#4CAF50',
+                shadowBlur: 10,
+                shadowColor: 'rgba(0, 0, 0, 0.3)'
+              }
             },
-            itemStyle: {
-              shadowBlur: 20,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            {
+              ...data[1],
+              itemStyle: {
+                color: '#2196F3',
+                shadowBlur: 10,
+                shadowColor: 'rgba(0, 0, 0, 0.3)'
+              }
+            },
+            {
+              ...data[2],
+              itemStyle: {
+                color: '#F44336',
+                shadowBlur: 10,
+                shadowColor: 'rgba(0, 0, 0, 0.3)'
+              }
             }
-          },
-          data: data
+          ]
         }
-      ],
-      animation: true,
-      animationDuration: 1000,
-      animationEasing: 'elasticOut'
+      ]
     };
   };
 
@@ -184,92 +241,180 @@ export const EventAnalysisFunnel = ({ metricsData }) => {
 };
 
 // Security Score Gauge Component
+// Fixed Security Score Gauge Component
+// Liquid-Fill Security Score Gauge Component
+// Final Liquid Security Score Gauge Component
+// Adjusted Liquid Security Score Gauge Component
+// Final Adjusted Security Score Gauge Component
 export const SecurityScoreGauge = ({ securityScore = 0 }) => {
-  // Logic to determine the score category
+  // Logic to determine the score category and color
   const getScoreCategory = (score) => {
-    if (score >= 80) return { category: 'Protected', color: '#118AB2' };
-    if (score >= 60) return { category: 'Moderate', color: '#06D6A0' };
-    if (score >= 40) return { category: 'At Risk', color: '#FFD166' };
-    return { category: 'Vulnerable', color: '#FF6B6B' };
+    if (score >= 80) return { category: 'PROTECTED', color: '#4caf50', secondaryColor: '#2196f3' }; // Green with blue hint
+    if (score >= 60) return { category: 'MODERATE', color: '#2196f3', secondaryColor: '#ff9800' }; // Blue with orange hint
+    if (score >= 40) return { category: 'AT RISK', color: '#ff9800', secondaryColor: '#f44336' }; // Orange with red hint
+    return { category: 'VULNERABLE', color: '#f44336', secondaryColor: '#f44336' }; // Red
   };
 
   const scoreInfo = getScoreCategory(securityScore);
-
+  const normalizedScore = securityScore / 100; // Convert to 0-1 range for liquid fill
+  
   const getSecurityScoreOptions = (isFullscreen) => {
-    const textSize = isFullscreen ? 18 : 14;
-    const detailSize = isFullscreen ? 20 : 16;
+    const fontSize = isFullscreen ? 22 : 16;
+    const valueSize = isFullscreen ? 28 : 20;
+    const categorySize = isFullscreen ? 20 : 16;
     
     return {
-      title: {
-        text: isFullscreen ? 'Security Score Analysis' : '',
-        left: 'center',
-        textStyle: {
-          fontSize: isFullscreen ? 22 : 16
-        }
-      },
-      tooltip: {
-        formatter: '{a} <br/>{b} : {c}%',
-      },
+      backgroundColor: 'transparent',
       series: [
+        // Liquid Fill series
         {
-          name: 'Security Score',
-          type: 'gauge',
-          min: 0,
-          max: 100,
-          splitNumber: 4,
-          radius: isFullscreen ? '80%' : '90%',
-          center: ['50%', '60%'],
-          axisLine: {
-            lineStyle: {
-              width: 10,
-              color: [
-                [0.25, '#FF6B6B'], // Poor (0–25)
-                [0.5, '#FFD166'],  // Fair (26–50)
-                [0.75, '#06D6A0'], // Good (51–75)
-                [1, '#118AB2'],    // Excellent (76–100)
-              ],
+          type: 'liquidFill',
+          radius: '80%', 
+          center: ['50%', '50%'], // Centered in the chart area
+          data: [
+            {
+              value: normalizedScore,
+              itemStyle: {
+                color: scoreInfo.color,
+                opacity: 0.8
+              }
             },
+            {
+              value: normalizedScore * 0.9,
+              itemStyle: {
+                color: scoreInfo.secondaryColor,
+                opacity: 0.2
+              }
+            }
+          ],
+          // Adjust these properties to change wave appearance
+          amplitude: 10, // Wave size
+          waveLength: '80%',
+          phase: 'auto',
+          period: (100 - securityScore) / 30 + 2, // Wave speed based on score (lower score = faster waves)
+          direction: 'right',
+          shape: 'circle',
+          // Background
+          backgroundStyle: {
+            color: 'rgba(0, 0, 0, 0.05)',
+            borderColor: scoreInfo.color,
+            borderWidth: 1
           },
-          axisTick: {
-            length: 12,
-            lineStyle: {
-              color: 'auto',
-            },
-          },
-          splitLine: {
-            length: 20,
-            lineStyle: {
-              color: 'auto',
-            },
-          },
-          pointer: {
-            width: 5,
+          // Outline
+          outline: {
+            show: true,
+            borderDistance: 5,
             itemStyle: {
-              color: 'auto'
+              borderColor: scoreInfo.color,
+              borderWidth: 3,
+              shadowBlur: 5,
+              shadowColor: scoreInfo.color
             }
           },
-          title: {
-            offsetCenter: [0, '80%'],
-            fontSize: textSize,
-            color: scoreInfo.color
+          // Add label inside the liquid with white text
+          label: {
+            show: true,
+            position: ['50%', '50%'],
+            formatter: function(param) {
+              return [
+                '{title|Security Score}',
+                '{value|' + securityScore + '%}'
+              ].join('\n');
+            },
+            fontSize: fontSize,
+            fontWeight: 'bold',
+            color: '#ffffff',
+            insideColor: '#ffffff',
+            textAlign: 'center',
+            textVerticalAlign: 'middle',
+            rich: {
+              title: {
+                color: '#ffffff',
+                fontSize: fontSize,
+                fontWeight: 'bold',
+                textAlign: 'center',
+                lineHeight: fontSize * 1.2
+              },
+              value: {
+                color: '#ffffff',
+                fontSize: valueSize,
+                fontWeight: 'bold',
+                textAlign: 'center',
+                textShadow: '0 0 5px rgba(0, 0, 0, 0.3)'
+              }
+            }
+          },
+          // Emphasizes the border glow based on security level
+          itemStyle: {
+            shadowBlur: 10,
+            shadowColor: scoreInfo.color
+          }
+        },
+        // Add ring with blinking animation
+        {
+          type: 'gauge',
+          radius: '90%',
+          center: ['50%', '50%'], 
+          min: 0,
+          max: 100,
+          axisLine: {
+            lineStyle: {
+              width: 2,
+              color: [[1, scoreInfo.color]]
+            }
+          },
+          axisLabel: {
+            show: false
+          },
+          axisTick: {
+            show: false
+          },
+          splitLine: {
+            show: false
+          },
+          pointer: {
+            show: false
           },
           detail: {
-            formatter: '{value}%',
-            fontSize: detailSize,
-            offsetCenter: [0, '60%'],
-            valueAnimation: true,
-            color: scoreInfo.color
+            show: false
           },
-          data: [{ value: securityScore, name: scoreInfo.category }],
-          animationDuration: 1500
-        },
-      ],
+          data: [{
+            value: 0,
+            name: ''
+          }],
+          // Create a blinking animation
+          animationDuration: 1000,
+          animationDurationUpdate: 1000,
+          animationEasing: 'cubicOut',
+          animationEasingUpdate: 'cubicOut',
+          animationDelay: 0,
+          animationDelayUpdate: 0
+        }
+      ]
     };
   };
 
   return (
     <FullscreenableChart
-      title="Security Score"
+      title={
+        <div style={{ 
+          textAlign: 'center', 
+          marginBottom: '10px', 
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: scoreInfo.color
+        }}>
+          <span>Security Score</span>
+          <div style={{ 
+            marginTop: '8px', 
+            fontSize: '20px', 
+            color: scoreInfo.color,
+            fontWeight: 'bold' 
+          }}>
+            {scoreInfo.category}
+          </div>
+        </div>
+      }
       renderChart={(isFullscreen) => (
         <ReactECharts
           option={getSecurityScoreOptions(isFullscreen)}
@@ -282,6 +427,7 @@ export const SecurityScoreGauge = ({ securityScore = 0 }) => {
 };
 
 // Events Per Second Gauge
+// Improved Events Per Second Gauge
 export const EventsPerSecondGauge = ({ chartData }) => {
   // Calculate events per second based on last 10 bars (100 seconds)
   const calculateEPS = useCallback(() => {
@@ -289,104 +435,162 @@ export const EventsPerSecondGauge = ({ chartData }) => {
       return 0;
     }
     
-    // Total events in last 100 seconds
+    // Total events in last 10 bars
     const totalEvents = chartData.newLogCounts.reduce((sum, count) => sum + count, 0);
     
-    // Calculate events per 10 seconds since each bar represents 10 seconds
-    const eventsPerTenSecs = totalEvents / chartData.newLogCounts.length;
+    // Calculate events per second (total divided by 100 seconds)
+    const eventsPerSec = totalEvents / 100;
     
-    // Return rounded value
-    return Math.round(eventsPerTenSecs * 10) / 10;
+    // Return rounded value with 1 decimal place
+    return Math.round(eventsPerSec * 10) / 10;
   }, [chartData]);
 
   // Memoize the EPS value to prevent unnecessary calculations
   const eps = React.useMemo(() => calculateEPS(), [calculateEPS]);
 
+  // Determine the appropriate scale maximum based on the EPS value
+  const getMaxScale = (epsValue) => {
+    if (epsValue <= 5) return 10;
+    if (epsValue <= 10) return 20;
+    if (epsValue <= 20) return 30;
+    if (epsValue <= 50) return 60;
+    if (epsValue <= 80) return 100;
+    return 150; // For extremely high values
+  };
+
+  // Determine color based on EPS value
+  const getEpsColor = (value) => {
+    if (value < 5) return '#4caf50'; // Green for low traffic
+    if (value < 20) return '#2196f3'; // Blue for moderate traffic
+    if (value < 50) return '#ff9800'; // Orange for high traffic
+    return '#f44336'; // Red for very high traffic
+  };
+
+  const epsColor = getEpsColor(eps);
+  const maxScale = getMaxScale(eps);
+
   const getEPSGaugeOptions = (isFullscreen) => {
-    // Determine color based on EPS value
-    const getColor = (value) => {
-      if (value < 5) return '#4caf50'; // Green
-      if (value < 20) return '#2196f3'; // Blue
-      if (value < 50) return '#ff9800'; // Orange
-      return '#f44336'; // Red
-    };
-
-    const gaugeColor = getColor(eps);
-    const textSize = isFullscreen ? 18 : 14;
+    const fontSize = isFullscreen ? 18 : 14;
     const detailSize = isFullscreen ? 24 : 18;
-
+    
     return {
-      title: {
-        text: isFullscreen ? 'Traffic Volume Monitoring' : '',
-        left: 'center',
-        textStyle: {
-          fontSize: isFullscreen ? 22 : 16
-        }
-      },
+      backgroundColor: 'transparent',
       series: [
+        // Main gauge with gradient
         {
+          name: 'Events Per Second',
           type: 'gauge',
+          radius: isFullscreen ? '75%' : '85%',
+          center: ['50%', '55%'],
+          startAngle: 180,
+          endAngle: 0,
           min: 0,
-          max: 100,
-          splitNumber: 10,
-          radius: isFullscreen ? '80%' : '90%',
-          center: ['50%', '60%'],
+          max: maxScale,
+          splitNumber: 5,
           axisLine: {
             lineStyle: {
-              width: 10,
+              width: 20,
               color: [
-                [0.3, '#4caf50'],  // Green
-                [0.6, '#2196f3'],  // Blue
-                [0.8, '#ff9800'],  // Orange
+                [0.25, '#4caf50'], // Green
+                [0.5, '#2196f3'],  // Blue
+                [0.75, '#ff9800'], // Orange
                 [1, '#f44336']     // Red
               ]
             }
           },
           pointer: {
+            width: 5,
+            length: '60%',
+            offsetCenter: [0, '8%'],
             itemStyle: {
-              color: gaugeColor
-            },
-            width: 5
+              color: epsColor,
+              shadowColor: 'rgba(0, 0, 0, 0.3)',
+              shadowBlur: 8,
+              shadowOffsetX: 2,
+              shadowOffsetY: 2
+            }
           },
           axisTick: {
-            distance: -12,
+            distance: -22,
             length: 8,
             lineStyle: {
-              color: '#999',
-              width: 1
+              color: '#fff',
+              width: 2,
+              shadowBlur: 10,
+              shadowColor: 'rgba(0, 0, 0, 0.3)'
             }
           },
           splitLine: {
-            distance: -20,
-            length: 16,
+            distance: -22,
+            length: 15,
             lineStyle: {
-              color: '#999',
-              width: 2
+              color: '#fff',
+              width: 3,
+              shadowBlur: 10,
+              shadowColor: 'rgba(0, 0, 0, 0.3)'
             }
           },
           axisLabel: {
-            distance: -32,
+            distance: -15,
             color: '#999',
-            fontSize: isFullscreen ? 14 : 10
+            fontSize: 12
           },
           title: {
-            offsetCenter: [0, '80%'],
-            fontSize: textSize,
-            color: gaugeColor
+            offsetCenter: [0, '65%'],
+            fontSize: fontSize,
+            fontWeight: 'bold',
+            color: epsColor
           },
           detail: {
-            valueAnimation: true,
-            formatter: '{value} eps',
-            color: gaugeColor,
+            offsetCenter: [0, '90%'],
             fontSize: detailSize,
-            offsetCenter: [0, '60%']
+            fontWeight: 'bold',
+            color: epsColor,
+            formatter: '{value} eps'
           },
           data: [{
             value: eps,
-            name: 'Events Per Second'
+            name: epsColor === '#4caf50' ? 'Low Traffic' : 
+                  epsColor === '#2196f3' ? 'Moderate Traffic' : 
+                  epsColor === '#ff9800' ? 'High Traffic' : 'Heavy Traffic'
           }],
+          animation: true,
           animationDuration: 1500,
-          animationEasing: 'elasticOut'
+          animationEasing: 'bounceOut'
+        },
+        // Add outer decorative ring
+        {
+          name: 'Outer Ring',
+          type: 'gauge',
+          radius: '95%',
+          center: ['50%', '55%'],
+          startAngle: 180,
+          endAngle: 0,
+          min: 0,
+          max: maxScale,
+          splitNumber: 0,
+          axisLine: {
+            lineStyle: {
+              width: 5,
+              color: [[1, 'rgba(255,255,255,0.1)']]
+            }
+          },
+          axisLabel: {
+            show: false
+          },
+          axisTick: {
+            show: false
+          },
+          splitLine: {
+            show: false
+          },
+          detail: {
+            show: false
+          },
+          data: [{
+            value: 0,
+            name: ''
+          }]
         }
       ]
     };

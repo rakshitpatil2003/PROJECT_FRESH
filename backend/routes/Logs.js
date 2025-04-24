@@ -11,6 +11,8 @@ const {
   LogArchive
 } = require('./LogsHelper');
 
+
+//const { LogCurrent, LogRecent, LogArchive } = require('../models/Log');
 // Updated Redis client implementation for your Logs.js
 
 const { createClient } = require('redis');
@@ -255,53 +257,64 @@ async function queryTimeBasedCollections(query, options = {}) {
 
 // Metrics endpoint with Redis caching and fallback
 // Metrics endpoint
-router.get('/metrics', async (req, res) => {
+router.get('/metrics', auth, async (req, res) => {
   try {
-    const { timeRange = '7d' } = req.query;
-    const cacheKey = `metrics_${timeRange}`;
-    const cacheTime = 60; // Cache for 60 seconds
+    // Get counts from all three collections in parallel
+    const [currentMetrics, recentMetrics, archiveMetrics] = await Promise.all([
+      getCollectionMetrics(LogCurrent),
+      getCollectionMetrics(LogRecent),
+      getCollectionMetrics(LogArchive)
+    ]);
     
-    const metrics = await withCache(cacheKey, cacheTime, async () => {
-      // Determine date range and collections based on time range
-      const { startDate } = getDateRangeForQuery(timeRange);
-      const { models } = getModelsForTimeRange(timeRange);
-
-      const results = await Promise.all(models.map(async (Collection) => {
-        const counts = await Collection.aggregate([
-          // Only include logs from the specified time range
-          { $match: { timestamp: { $gte: startDate } } },
-          {
-            $addFields: {
-              numericLevel: { $toInt: "$rule.level" }
-            }
-          },
-          {
-            $group: {
-              _id: null,
-              total: { $sum: 1 },
-              major: { $sum: { $cond: [{ $gte: ["$numericLevel", 12] }, 1, 0] } }
-            }
-          }
-        ]);
-        return counts[0] || { total: 0, major: 0 };
-      }));
-      
-      // Combine results
-      const combinedResults = {
-        totalLogs: results.reduce((sum, r) => sum + r.total, 0),
-        majorLogs: results.reduce((sum, r) => sum + r.major, 0)
-      };
-      combinedResults.normalLogs = combinedResults.totalLogs - combinedResults.majorLogs;
-      
-      return combinedResults;
+    // Combine the metrics
+    const totalLogs = currentMetrics.totalLogs + recentMetrics.totalLogs + archiveMetrics.totalLogs;
+    const majorLogs = currentMetrics.majorLogs + recentMetrics.majorLogs + archiveMetrics.majorLogs;
+    const normalLogs = currentMetrics.normalLogs + recentMetrics.normalLogs + archiveMetrics.normalLogs;
+    
+    res.json({
+      totalLogs,
+      majorLogs,
+      normalLogs
     });
-    
-    res.json(metrics);
   } catch (error) {
-    console.error('Error fetching metrics:', error);
-    res.status(500).json({ message: 'Error fetching metrics' });
+    console.error('Error getting metrics:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Helper function to get metrics from a single collection
+async function getCollectionMetrics(model) {
+  try {
+    const totalLogs = await model.countDocuments();
+    
+    // Count logs with rule level >= 12 (major/critical logs)
+    // Using $expr and $convert to handle cases where rule.level might be stored as a string
+    const majorLogs = await model.countDocuments({
+      $expr: {
+        $gte: [
+          { $convert: { input: "$rule.level", to: "int", onError: 0, onNull: 0 } },
+          12
+        ]
+      }
+    });
+    
+    // All other logs are normal
+    const normalLogs = totalLogs - majorLogs;
+    
+    return {
+      totalLogs,
+      majorLogs,
+      normalLogs
+    };
+  } catch (error) {
+    console.error(`Error getting metrics from ${model.collection.name}:`, error);
+    return {
+      totalLogs: 0,
+      majorLogs: 0,
+      normalLogs: 0
+    };
+  }
+}
 
 // Recent logs endpoint
 router.get('/recent', async (req, res) => {
@@ -1838,7 +1851,7 @@ router.get('/vulnerability', async (req, res) => {
       $or: [
         { "rule.groups": "vulnerability-detector" },
         { "data.vulnerability": { $exists: true } },
-        { "rawLog.message": { $regex: /cvss|cve|assigner/i } }
+        { "rawLog.message": { $regex: /"vulnerability"/i } }
       ]
     };
     
