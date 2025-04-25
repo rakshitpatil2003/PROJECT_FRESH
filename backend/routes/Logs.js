@@ -1561,7 +1561,7 @@ router.get('/configuration', async (req, res) => {
 router.get('/sentinel-ai', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 0;
-    const pageSize = parseInt(req.query.pageSize) || 10;
+    const pageSize = parseInt(req.query.pageSize) || 1000; // Increased default from 10 to 1000
     const logType = req.query.logType || 'ai'; // 'ai' or 'ml'
     
     let query;
