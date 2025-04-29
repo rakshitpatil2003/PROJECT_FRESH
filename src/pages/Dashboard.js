@@ -26,6 +26,8 @@ import {
   AlertTrendsChart
 } from '../components/PerformanceVisualizations';
 import WorldConnectionMap from '../components/WorldConnectionMap';
+import Lottie from 'lottie-react';
+import majorLogsAnimation from '../assets/majorlogs.json';
 
 const Dashboard = () => {
   const theme = useTheme();
@@ -279,7 +281,9 @@ const Dashboard = () => {
           height: '100vh'
         }}
       >
-        <CircularProgress size={60} thickness={4} sx={{ mb: 2 }} />
+        <Box sx={{ width: 200, height: 200, mb: 2 }}>
+          <Lottie animationData={majorLogsAnimation} loop={true} />
+        </Box>
         <Typography variant="h6" sx={{ mb: 1 }}>Loading Dashboard</Typography>
         <Typography variant="body2" color="text.secondary">
           Initializing security analytics...
@@ -291,7 +295,11 @@ const Dashboard = () => {
   // Render content with skeleton placeholders when loading
   const renderContent = (isLoading, content) => {
     return isLoading ? (
-      <Skeleton variant="rectangular" height="100%" animation="wave" />
+      <Box sx={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Box sx={{ width: 100, height: 100 }}>
+          <Lottie animationData={majorLogsAnimation} loop={true} />
+        </Box>
+      </Box>
     ) : content;
   };
 

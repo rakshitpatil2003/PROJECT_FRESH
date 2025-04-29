@@ -31,6 +31,8 @@ import {
 import { CanvasRenderer } from 'echarts/renderers';
 import { DataGrid } from '@mui/x-data-grid';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import Lottie from 'lottie-react';
+import majorLogsAnimation from '../assets/majorlogs.json';
 
 // Register ECharts components
 echarts.use([
@@ -161,6 +163,30 @@ const MajorLogs = () => {
   // Handle time range change
   const handleTimeRangeChange = (event) => {
     setTimeRange(event.target.value);
+  };
+
+  const CustomLoadingOverlay = () => {
+    return (
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          right: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'rgba(255, 255, 255, 0.7)',
+        }}
+      >
+        <Box sx={{ width: 150, height: 150 }}>
+          <Lottie animationData={majorLogsAnimation} loop={true} />
+        </Box>
+        <Typography sx={{ mt: 2 }}>Loading logs...</Typography>
+      </Box>
+    );
   };
 
   const columns = [
@@ -846,7 +872,9 @@ const MajorLogs = () => {
         justifyContent="center"
         minHeight="50vh"
       >
-        <CircularProgress size={40} />
+        <Box sx={{ width: 200, height: 200 }}>
+          <Lottie animationData={majorLogsAnimation} loop={true} />
+        </Box>
         <Typography variant="body1" sx={{ mt: 2 }}>
           Loading major logs...
         </Typography>
@@ -1138,6 +1166,9 @@ const MajorLogs = () => {
               disableSelectionOnClick
               loading={loading}
               density="standard"
+              components={{
+                LoadingOverlay: CustomLoadingOverlay
+              }}
               initialState={{
                 pagination: {
                   pageSize: 50,
