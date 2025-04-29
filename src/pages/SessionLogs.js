@@ -1,28 +1,27 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Alert, TextField, InputAdornment, CircularProgress, Link, Dialog, DialogTitle, DialogContent,
-  IconButton, Chip, Pagination, FormControl, InputLabel, Select, MenuItem, Grid, Card, CardContent,
-  Badge, Divider, useMediaQuery, Skeleton, Tooltip, ButtonGroup, Button
+  Box, Typography, Paper, CircularProgress, Link, Dialog, DialogTitle, DialogContent, IconButton,
+  Chip, Grid, Tab, Tabs, Skeleton, TextField, InputAdornment, FormControl, InputLabel, Select, MenuItem,
+  Button, Alert, Card, CardContent
 } from '@mui/material';
-import { Search as SearchIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import TimelineIcon from '@mui/icons-material/Timeline';
-import ComplianceIcon from '@mui/icons-material/VerifiedUser';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import DateRangeIcon from '@mui/icons-material/DateRange';
+import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import DateRangeIcon from '@mui/icons-material/DateRange';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import axios from 'axios';
-import { parseLogMessage, StructuredLogView } from '../utils/normalizeLogs';
+import { parseLogMessage } from '../utils/normalizeLogs';
+import { StructuredLogView } from '../utils/normalizeLogs';
 import { API_URL } from '../config';
 import { useTheme } from '@mui/material/styles';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import { DataGrid } from '@mui/x-data-grid';
 
 // ECharts Imports
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts/core';
 import {
+  LineChart,
   PieChart,
   BarChart
 } from 'echarts/charts';
@@ -36,6 +35,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 
 // Register ECharts components
 echarts.use([
+  LineChart,
   PieChart,
   BarChart,
   GridComponent,
@@ -45,14 +45,21 @@ echarts.use([
   CanvasRenderer
 ]);
 
-// Custom color palette
+// Custom color palette with more vibrant and distinct colors
 const COLOR_PALETTE = [
-  '#3366FF', '#FF6B6B', '#4ECDC4', '#FFA726', '#9C27B0', 
-  '#2196F3', '#4CAF50', '#FF5722', '#607D8B', '#795548',
-  '#9575CD', '#F06292', '#4DD0E1', '#FFB74D', '#AED581',
-  '#E57373', '#64B5F6', '#81C784', '#FFD54F', '#A1887F'
+  '#3366FF',   // Deep Blue
+  '#FF6B6B',   // Vibrant Red
+  '#4ECDC4',   // Teal
+  '#FFA726',   // Bright Orange
+  '#9C27B0',   // Purple
+  '#2196F3',   // Bright Blue
+  '#4CAF50',   // Green
+  '#FF5722',   // Deep Orange
+  '#607D8B',   // Blue Gray
+  '#795548'    // Brown
 ];
 
+// Time range options
 const TimeRangeOptions = [
   { value: '12h', label: 'Last 12 Hours' },
   { value: '24h', label: 'Last 24 Hours' },
@@ -63,53 +70,32 @@ const TimeRangeOptions = [
 
 const SessionLogs = () => {
   const [logs, setLogs] = useState([]);
-  const [filteredLogs, setFilteredLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedLog, setSelectedLog] = useState(null);
-  const [timeRange, setTimeRange] = useState('7d');
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [totalPages, setTotalPages] = useState(0);
-  const [displayedLogs, setDisplayedLogs] = useState([]);
+  const [activeTab, setActiveTab] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
+  const [timeRange, setTimeRange] = useState('24h');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [selectedComplianceFilter, setSelectedComplianceFilter] = useState('all');
-  
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  const [fullscreenChart, setFullscreenChart] = useState(null);
+  const [fullscreenTitle, setFullscreenTitle] = useState('');
 
-  // Function to get rule level color
-  const getRuleLevelColor = (level) => {
-    const numLevel = parseInt(level);
-    if (numLevel >= 12) return "error";
-    if (numLevel >= 8) return "warning";
-    if (numLevel >= 4) return "info";
-    return "success";
-  };
-
-  // Function to get rule level severity text
-  const getRuleLevelSeverity = (level) => {
-    const numLevel = parseInt(level);
-    if (numLevel >= 12) return "Critical";
-    if (numLevel >= 8) return "High";
-    if (numLevel >= 4) return "Medium";
-    return "Low";
-  };
-
-  // Fetch session logs with time range parameter
   const fetchSessionLogs = useCallback(async (search, range) => {
     try {
       setLoading(true);
       setError(null);
+
+      console.log(`Fetching session logs with search: "${search}" and time range: ${range}`);
 
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication token not found');
       }
 
-      // Build query params including time range
+      // Build query params
       let queryParams = [];
       if (search) queryParams.push(`search=${encodeURIComponent(search)}`);
       if (range) queryParams.push(`timeRange=${encodeURIComponent(range)}`);
@@ -121,323 +107,268 @@ const SessionLogs = () => {
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          withCredentials: true
         }
       );
 
-      console.log(`Fetched ${response.data.length} session logs with time range: ${range}`);
+      if (!Array.isArray(response.data)) {
+        throw new Error('Invalid response format from server');
+      }
 
-      // Parse each log with parseLogMessage
-      const parsedLogs = response.data
-        .map(log => ({
-          ...log,
-          parsed: parseLogMessage(log)
-        }))
-        .filter(log => log.parsed !== null);
+      // Sort by timestamp in DESCENDING order (latest first)
+      const sortedLogs = response.data.sort((a, b) =>
+        new Date(b.timestamp) - new Date(a.timestamp)
+      );
 
-      setLogs(parsedLogs);
-      setFilteredLogs(parsedLogs);
-      setTotalPages(Math.ceil(parsedLogs.length / rowsPerPage));
-      setPage(1); // Reset to first page when new data is loaded
+      console.log(`Fetched ${sortedLogs.length} session logs for time range: ${range}`);
+      setLogs(sortedLogs);
+
     } catch (error) {
       console.error('Error fetching session logs:', error);
       setError(error.response?.data?.message || error.message || 'Failed to fetch session logs');
       setLogs([]);
-      setFilteredLogs([]);
-      setTotalPages(0);
     } finally {
       setLoading(false);
     }
-  }, [rowsPerPage]);
+  }, []);
 
-  // Generate visualization data from logs
-  const visualizationData = useMemo(() => {
-    if (!logs.length) return {};
-
-    // Count logs by description
-    const descriptionCounts = {};
-    // Count logs by compliance type
-    const complianceCounts = {
-      HIPAA: 0,
-      GDPR: 0,
-      NIST: 0,
-      PCI_DSS: 0,
-      TSC: 0,
-      GPG13: 0
-    };
-    // Count logs by rule level
-    const ruleLevelCounts = {};
-
-    logs.forEach(log => {
-      const parsedLog = log.parsed;
-      if (!parsedLog) return;
-
-      // Count by description
-      const description = parsedLog.rule?.description || 'Unknown';
-      descriptionCounts[description] = (descriptionCounts[description] || 0) + 1;
-
-      // Count by compliance type
-      const rule = parsedLog.rule || {};
-      if (rule.hipaa?.length) complianceCounts.HIPAA += 1;
-      if (rule.gdpr?.length) complianceCounts.GDPR += 1;
-      if (rule.nist_800_53?.length) complianceCounts.NIST += 1;
-      if (rule.pci_dss?.length) complianceCounts.PCI_DSS += 1;
-      if (rule.tsc?.length) complianceCounts.TSC += 1;
-      if (rule.gpg13?.length) complianceCounts.GPG13 += 1;
-
-      // Count by rule level
-      const level = rule.level || 'Unknown';
-      ruleLevelCounts[level] = (ruleLevelCounts[level] || 0) + 1;
-    });
-
-    // Sort description counts and get top occurrences
-    const topDescriptions = Object.entries(descriptionCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 15)
-      .map(([name, value], index) => ({
-        name: name.length > 40 ? name.substring(0, 40) + '...' : name,
-        value,
-        fullName: name,
-        itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
-      }));
-
-    return {
-      descriptionCounts,
-      topDescriptions,
-      complianceCounts,
-      ruleLevelCounts,
-      totalLogs: logs.length
-    };
-  }, [logs]);
-
-  // Client-side filtering with compliance type filter
-  useEffect(() => {
-    let filtered = logs;
-
-    // Apply compliance filter if not 'all'
-    if (selectedComplianceFilter !== 'all') {
-      filtered = logs.filter(log => {
-        const rule = log.parsed?.rule || {};
-        switch (selectedComplianceFilter) {
-          case 'HIPAA': return rule.hipaa?.length > 0;
-          case 'GDPR': return rule.gdpr?.length > 0;
-          case 'NIST': return rule.nist_800_53?.length > 0;
-          case 'PCI_DSS': return rule.pci_dss?.length > 0;
-          case 'TSC': return rule.tsc?.length > 0;
-          case 'GPG13': return rule.gpg13?.length > 0;
-          default: return true;
-        }
-      });
-    }
-
-    // Apply search term filter
-    if (searchTerm.trim() !== '') {
-      const lowerSearchTerm = searchTerm.toLowerCase();
-      filtered = filtered.filter(log => {
-        const parsedLog = log.parsed;
-        if (!parsedLog) return false;
-        
-        // Search in raw log message if available
-        if (parsedLog.rawData?.message?.toLowerCase().includes(lowerSearchTerm)) return true;
-        
-        // Search in agent name
-        if (parsedLog.agent?.name?.toLowerCase().includes(lowerSearchTerm)) return true;
-        
-        // Search in rule description
-        if (parsedLog.rule?.description?.toLowerCase().includes(lowerSearchTerm)) return true;
-        
-        // Search in compliance standards
-        const complianceTypes = [
-          parsedLog.rule?.hipaa?.join(' ') || '',
-          parsedLog.rule?.gdpr?.join(' ') || '',
-          parsedLog.rule?.nist_800_53?.join(' ') || '',
-          parsedLog.rule?.pci_dss?.join(' ') || '',
-          parsedLog.rule?.tsc?.join(' ') || '',
-          parsedLog.rule?.gpg13?.join(' ') || ''
-        ].join(' ').toLowerCase();
-        
-        if (complianceTypes.includes(lowerSearchTerm)) return true;
-        
-        return false;
-      });
-    }
-    
-    setFilteredLogs(filtered);
-    setTotalPages(Math.ceil(filtered.length / rowsPerPage));
-    setPage(1); // Reset to first page when filter changes
-  }, [searchTerm, logs, rowsPerPage, selectedComplianceFilter]);
-
-  // Update displayed logs when page, rowsPerPage or filteredLogs change
-  useEffect(() => {
-    const startIndex = (page - 1) * rowsPerPage;
-    const endIndex = startIndex + rowsPerPage;
-    setDisplayedLogs(filteredLogs.slice(startIndex, endIndex));
-  }, [page, rowsPerPage, filteredLogs]);
-
-  // Fetch initial data
-  useEffect(() => {
-    fetchSessionLogs(searchTerm, timeRange);
-  }, [fetchSessionLogs, timeRange, refreshTrigger]);
-
-  // Format timestamp
-  const formatTimestamp = (timestamp) => {
-    try {
-      if (typeof timestamp === 'number') {
-        return new Date(timestamp * 1000).toLocaleString();
-      }
-      return new Date(timestamp).toLocaleString();
-    } catch (error) {
-      console.error('Error formatting timestamp:', error);
-      return 'Invalid Date';
-    }
+  const getRuleLevelSeverity = (level) => {
+    const numLevel = parseInt(level);
+    if (numLevel >= 12) return 'Critical';
+    if (numLevel >= 8) return 'High';
+    if (numLevel >= 4) return 'Medium';
+    return 'Low';
   };
 
-  // View log details handler
-  const handleViewDetails = (log) => {
-    const parsedLog = parseLogMessage(log);
-    setSelectedLog(parsedLog);
+  const getRuleLevelColor = (level) => {
+    const numLevel = parseInt(level);
+    if (numLevel >= 12) return '#d32f2f'; // Red
+    if (numLevel >= 8) return '#f57c00'; // Orange
+    if (numLevel >= 4) return '#0288d1'; // Blue
+    return '#2e7d32'; // Green
   };
 
-  // Pagination handlers
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+  const openFullscreenChart = (option, title) => {
+    setFullscreenChart(option);
+    setFullscreenTitle(title);
   };
 
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(1);
-  };
-
-  // Time range change handler
-  const handleTimeRangeChange = (event) => {
-    setTimeRange(event.target.value);
-  };
-
-  // Refresh data handler
+  // Handle refresh button click
   const handleRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
   };
 
-  // Chart options for description distribution
-  const getDescriptionChartOption = () => ({
-    title: {
-      text: 'Top Log Descriptions',
-      left: 'center',
-      textStyle: {
-        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
-      }
-    },
-    tooltip: {
-      trigger: 'item',
-      formatter: function(params) {
-        return `<strong>${params.data.fullName}</strong><br/>Count: ${params.data.value} (${(params.percent).toFixed(1)}%)`;
-      }
-    },
-    legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'center',
-      type: 'scroll',
-      textStyle: {
-        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
-      }
-    },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      avoidLabelOverlap: true,
-      label: {
-        show: false
-      },
-      emphasis: {
-        label: {
-          show: true,
-          formatter: '{b}',
-          fontSize: 14
-        }
-      },
-      data: visualizationData.topDescriptions || []
-    }],
-    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
-  });
+  // Handle time range change
+  const handleTimeRangeChange = (event) => {
+    setTimeRange(event.target.value);
+  };
 
-  // Chart options for compliance distribution
-  const getComplianceChartOption = () => {
-    const complianceData = Object.entries(visualizationData.complianceCounts || {})
+  const columns = [
+    {
+      field: 'timestamp',
+      headerName: 'Timestamp',
+      flex: 1.5,
+      renderCell: (params) => formatTimestamp(params.value)
+    },
+    {
+      field: 'agentName',
+      headerName: 'Agent Name',
+      flex: 1
+    },
+    {
+      field: 'ruleLevel',
+      headerName: 'Rule Level',
+      flex: 0.7,
+      renderCell: (params) => (
+        <Typography sx={{ color: getRuleLevelColor(params.value), fontWeight: 'bold' }}>
+          {params.value}
+        </Typography>
+      )
+    },
+    {
+      field: 'severity',
+      headerName: 'Severity',
+      flex: 1,
+      renderCell: (params) => (
+        <Chip
+          label={getRuleLevelSeverity(params.row.ruleLevel)}
+          sx={{
+            backgroundColor: getRuleLevelColor(params.row.ruleLevel),
+            color: 'white',
+            fontWeight: 'bold'
+          }}
+          size="small"
+        />
+      )
+    },
+    {
+      field: 'description',
+      headerName: 'Description',
+      flex: 2
+    },
+    {
+      field: 'compliance',
+      headerName: 'Compliance',
+      flex: 1.5,
+      renderCell: (params) => (
+        <Box display="flex" gap={0.5} flexWrap="wrap">
+          {params.value.map((type) => (
+            <Chip
+              key={type}
+              label={type}
+              size="small"
+              color="primary"
+              variant="outlined"
+              sx={{ fontSize: '0.7rem' }}
+            />
+          ))}
+        </Box>
+      )
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      flex: 0.8,
+      sortable: false,
+      renderCell: (params) => (
+        <Link
+          component="button"
+          onClick={() => setSelectedLog(params.row.fullLog)}
+        >
+          View Details
+        </Link>
+      )
+    }
+  ];
+
+  // Memoized data processing for visualizations
+  const visualizationData = useMemo(() => {
+    if (!logs.length) return {};
+
+    // Timeline Data - sorted in ascending order (oldest first)
+    const timelineData = logs.reduce((acc, log) => {
+      const parsedLog = parseLogMessage(log);
+      if (!parsedLog) return acc;
+      
+      const date = new Date(parsedLog.timestamp).toLocaleDateString();
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Sort timeline keys in ascending order (oldest to newest)
+    const sortedTimelineKeys = Object.keys(timelineData).sort((a, b) => {
+      return new Date(a) - new Date(b);
+    });
+    const orderedTimelineData = {};
+    sortedTimelineKeys.forEach(key => {
+      orderedTimelineData[key] = timelineData[key];
+    });
+
+    // Agent Distribution
+    const agentDistribution = logs.reduce((acc, log) => {
+      const parsedLog = parseLogMessage(log);
+      if (!parsedLog) return acc;
+      
+      const agent = parsedLog.agent?.name || 'Unknown';
+      acc[agent] = (acc[agent] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Rule Level Distribution
+    const ruleLevelDistribution = logs.reduce((acc, log) => {
+      const parsedLog = parseLogMessage(log);
+      if (!parsedLog) return acc;
+      
+      const level = parsedLog.rule?.level?.toString() || 'Unknown';
+      acc[level] = (acc[level] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Compliance Distribution
+    const complianceDistribution = logs.reduce((acc, log) => {
+      const parsedLog = parseLogMessage(log);
+      if (!parsedLog) return acc;
+      
+      const rule = parsedLog.rule || {};
+      
+      if (rule.hipaa?.length) acc['HIPAA'] = (acc['HIPAA'] || 0) + 1;
+      if (rule.gdpr?.length) acc['GDPR'] = (acc['GDPR'] || 0) + 1;
+      if (rule.nist_800_53?.length) acc['NIST'] = (acc['NIST'] || 0) + 1;
+      if (rule.pci_dss?.length) acc['PCI_DSS'] = (acc['PCI_DSS'] || 0) + 1;
+      if (rule.tsc?.length) acc['TSC'] = (acc['TSC'] || 0) + 1;
+      if (rule.gpg13?.length) acc['GPG13'] = (acc['GPG13'] || 0) + 1;
+      
+      return acc;
+    }, {});
+
+    // Severity Distribution
+    const severityDistribution = logs.reduce((acc, log) => {
+      const parsedLog = parseLogMessage(log);
+      if (!parsedLog) return acc;
+      
+      const severity = getRuleLevelSeverity(parsedLog.rule?.level);
+      acc[severity] = (acc[severity] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Description distribution (top descriptions)
+    const descriptionDistribution = logs.reduce((acc, log) => {
+      const parsedLog = parseLogMessage(log);
+      if (!parsedLog) return acc;
+      
+      const description = parsedLog.rule?.description || 'Unknown';
+      acc[description] = (acc[description] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Format top descriptions for grid display
+    const topDescriptions = Object.entries(descriptionDistribution)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 9)
       .map(([name, value], index) => ({
         name,
         value,
-        itemStyle: { color: COLOR_PALETTE[(index + 5) % COLOR_PALETTE.length] }
-      }))
-      .filter(item => item.value > 0);
+        color: COLOR_PALETTE[index % COLOR_PALETTE.length]
+      }));
 
     return {
-      title: {
-        text: 'Compliance Framework Distribution',
-        left: 'center',
-        textStyle: {
-          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
-        }
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: '{b}: {c} logs'
-      },
-      series: [{
-        type: 'pie',
-        radius: '70%',
-        center: ['50%', '55%'],
-        data: complianceData,
-        emphasis: {
-          itemStyle: {
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowColor: 'rgba(0, 0, 0, 0.5)'
-          }
-        }
-      }],
-      backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+      timelineData: orderedTimelineData,
+      agentDistribution,
+      ruleLevelDistribution,
+      complianceDistribution,
+      severityDistribution,
+      descriptionDistribution,
+      topDescriptions,
+      totalLogs: logs.length
     };
-  };
+  }, [logs]);
 
-  // Chart options for rule level distribution
-  const getRuleLevelChartOption = () => {
-    const levels = Object.keys(visualizationData.ruleLevelCounts || {}).sort((a, b) => parseInt(a) - parseInt(b));
-    const values = levels.map(level => visualizationData.ruleLevelCounts[level]);
-
-    const colorMapping = levels.map(level => {
-      const numLevel = parseInt(level);
-      if (numLevel >= 12) return '#d32f2f'; // error
-      if (numLevel >= 8) return '#ed6c02'; // warning
-      if (numLevel >= 4) return '#0288d1'; // info
-      return '#2e7d32'; // success
-    });
+  // Update the getTimelineChartOption to ensure proper ordering
+  const getTimelineChartOption = (data) => {
+    const dates = Object.keys(data);
+    const values = Object.values(data);
 
     return {
       title: {
-        text: 'Rule Level Distribution',
+        text: 'Compliance Alerts Timeline',
         left: 'center',
         textStyle: {
           color: theme.palette.mode === 'dark' ? '#fff' : '#000'
         }
       },
-      tooltip: {
-        trigger: 'axis',
-        formatter: function(params) {
-          const level = params[0].name;
-          const count = params[0].value;
-          const severity = getRuleLevelSeverity(level);
-          return `<div>Level ${level} (${severity})</div><div>Count: ${count}</div>`;
-        }
-      },
+      tooltip: { trigger: 'axis' },
       xAxis: {
         type: 'category',
-        data: levels,
+        data: dates,
         axisLabel: {
           color: theme.palette.mode === 'dark' ? '#fff' : '#000',
-          rotate: 0
-        }
+          rotate: 45
+        },
+        // This ensures the axis shows in the order we provided (oldest to newest)
+        inverse: false
       },
       yAxis: {
         type: 'value',
@@ -446,38 +377,162 @@ const SessionLogs = () => {
         }
       },
       series: [{
-        data: values.map((value, index) => ({
-          value,
-          itemStyle: { color: colorMapping[index] }
-        })),
-        type: 'bar'
+        data: values,
+        type: 'line',
+        smooth: true,
+        itemStyle: { color: COLOR_PALETTE[1] }
       }],
       backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
     };
   };
 
-  // Create description boxes (cards) for visualizing top descriptions
-  const renderDescriptionBoxes = () => {
+  const getPieChartOption = (data, title) => ({
+    title: {
+      text: title,
+      left: 'center',
+      textStyle: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie',
+      radius: '60%',
+      data: Object.entries(data)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)  // Top 10 entries
+        .map(([name, value], index) => ({
+          name,
+          value,
+          itemStyle: { color: COLOR_PALETTE[index % COLOR_PALETTE.length] }
+        })),
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      }
+    }],
+    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+  });
+
+  const getBarChartOption = (data, title) => ({
+    title: {
+      text: title,
+      left: 'center',
+      textStyle: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: Object.keys(data),
+      axisLabel: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+        rotate: 45
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+      }
+    },
+    series: [{
+      data: Object.values(data),
+      type: 'bar',
+      itemStyle: {
+        color: (params) => COLOR_PALETTE[params.dataIndex % COLOR_PALETTE.length]
+      }
+    }],
+    backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+  });
+
+  // Add horizontal bar chart option
+  const getHorizontalBarChartOption = (data, title) => {
+    // Sort data by value (descending) and take top 10
+    const sortedEntries = Object.entries(data)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const categories = sortedEntries.map(([name]) => name);
+    const values = sortedEntries.map(([_, value]) => value);
+
+    return {
+      title: {
+        text: title,
+        left: 'center',
+        textStyle: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'shadow'
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000'
+        }
+      },
+      yAxis: {
+        type: 'category',
+        data: categories,
+        axisLabel: {
+          color: theme.palette.mode === 'dark' ? '#fff' : '#000',
+          interval: 0
+        }
+      },
+      series: [{
+        name: title,
+        type: 'bar',
+        data: values,
+        itemStyle: {
+          color: (params) => COLOR_PALETTE[params.dataIndex % COLOR_PALETTE.length]
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c}'
+        }
+      }],
+      backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#fff'
+    };
+  };
+
+  // Render the top descriptions grid
+  const renderTopDescriptions = () => {
     if (!visualizationData.topDescriptions) return null;
 
     return (
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        {visualizationData.topDescriptions.slice(0, 9).map((item, index) => (
+        {visualizationData.topDescriptions.map((item, index) => (
           <Grid item xs={12} sm={6} md={4} key={index}>
             <Card 
               variant="outlined"
               sx={{
                 height: '100%',
-                borderLeft: `4px solid ${item.itemStyle.color}`,
+                borderLeft: `4px solid ${item.color}`,
                 transition: 'all 0.2s',
                 '&:hover': {
-                  boxShadow: 3,
-                  transform: 'translateY(-2px)'
+                  boxShadow: 6,
+                  transform: 'translateY(-4px)'
                 }
               }}
             >
               <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                <Box display="flex" flexDirection="column" height="100%">
                   <Typography 
                     variant="h6" 
                     component="div" 
@@ -489,34 +544,26 @@ const SessionLogs = () => {
                       textOverflow: 'ellipsis',
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical'
+                      WebkitBoxOrient: 'vertical',
+                      flexGrow: 1
                     }}
                   >
-                    {item.fullName}
+                    {item.name}
                   </Typography>
-                  <Badge 
-                    badgeContent={item.value} 
-                    color="primary"
+                  
+                  {/* Show actual count number prominently */}
+                  <Typography 
+                    variant="h3" 
+                    align="center"
                     sx={{ 
-                      '& .MuiBadge-badge': {
-                        backgroundColor: item.itemStyle.color,
-                        color: '#fff',
-                        fontWeight: 'bold',
-                        fontSize: '0.85rem'
-                      }
+                      color: item.color,
+                      fontWeight: 'bold',
+                      mt: 2
                     }}
-                  />
-                </Box>
-                <Tooltip title="Filter by this description">
-                  <Button 
-                    size="small" 
-                    variant="text" 
-                    onClick={() => setSearchTerm(item.fullName)}
-                    sx={{ mt: 1, color: item.itemStyle.color }}
                   >
-                    Filter
-                  </Button>
-                </Tooltip>
+                    {item.value}
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
@@ -525,9 +572,62 @@ const SessionLogs = () => {
     );
   };
 
+  const formatTimestamp = (timestamp) => {
+    try {
+      return new Date(timestamp).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting timestamp:', error);
+      return 'Invalid Date';
+    }
+  };
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      await fetchSessionLogs(searchTerm, timeRange);
+    };
+    
+    fetchLogs();
+  }, [fetchSessionLogs, searchTerm, timeRange, refreshTrigger]);
+
+  // Prepare data for DataGrid
+  const rows = useMemo(() => {
+    return logs.map((log, index) => {
+      const parsedLog = parseLogMessage(log);
+      if (!parsedLog) return null;
+      
+      const rule = parsedLog.rule || {};
+      const agent = parsedLog.agent || {};
+      
+      const complianceTypes = [
+        rule.hipaa?.length && 'HIPAA',
+        rule.gdpr?.length && 'GDPR',
+        rule.nist_800_53?.length && 'NIST',
+        rule.pci_dss?.length && 'PCI_DSS',
+        rule.tsc?.length && 'TSC',
+        rule.gpg13?.length && 'GPG13'
+      ].filter(Boolean);
+      
+      return {
+        id: index,
+        timestamp: parsedLog.timestamp,
+        agentName: agent.name || 'Unknown',
+        ruleLevel: rule.level || '0',
+        description: rule.description || 'Unknown',
+        compliance: complianceTypes,
+        fullLog: parsedLog
+      };
+    }).filter(Boolean);
+  }, [logs]);
+
   return (
-    <Box p={4}>
-      {/* Header */}
+    <Box p={4} sx={{ pt: { xs: 8, sm: 8, md: 6 } }}>
       <Typography variant="h4" gutterBottom sx={{ color: '#2196f3', mb: 3 }}>
         Compliance Monitoring
         <Typography variant="subtitle1" sx={{ color: 'text.secondary', mt: 1 }}>
@@ -557,30 +657,8 @@ const SessionLogs = () => {
           </FormControl>
         </Grid>
 
-        {/* Compliance Filter */}
-        <Grid item xs={12} sm={6} md={3}>
-          <FormControl fullWidth variant="outlined" size="small">
-            <InputLabel id="compliance-filter-label">Compliance</InputLabel>
-            <Select
-              labelId="compliance-filter-label"
-              value={selectedComplianceFilter}
-              onChange={(e) => setSelectedComplianceFilter(e.target.value)}
-              label="Compliance"
-              startAdornment={<ComplianceIcon sx={{ mr: 1, color: 'action.active' }} />}
-            >
-              <MenuItem value="all">All Frameworks</MenuItem>
-              <MenuItem value="HIPAA">HIPAA</MenuItem>
-              <MenuItem value="GDPR">GDPR</MenuItem>
-              <MenuItem value="NIST">NIST 800-53</MenuItem>
-              <MenuItem value="PCI_DSS">PCI DSS</MenuItem>
-              <MenuItem value="TSC">TSC</MenuItem>
-              <MenuItem value="GPG13">GPG13</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-
         {/* Search Box */}
-        <Grid item xs={12} sm={10} md={5}>
+        <Grid item xs={12} sm={7} md={8}>
           <TextField
             fullWidth
             size="small"
@@ -613,227 +691,214 @@ const SessionLogs = () => {
         </Grid>
       </Grid>
 
-      {/* Error Alert */}
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
 
-      {/* Status Summary */}
-      <Alert
-        icon={<ComplianceIcon />}
-        severity="info"
+      <Tabs
+        value={activeTab}
+        onChange={(e, newValue) => setActiveTab(newValue)}
         sx={{ mb: 3 }}
       >
-        {loading ? (
-          <Box display="flex" alignItems="center">
-            <CircularProgress size={20} sx={{ mr: 1 }} /> Loading compliance logs...
-          </Box>
-        ) : (
-          `${filteredLogs.length} compliance-related logs found for selected time range`
-        )}
-      </Alert>
+        <Tab label="Dashboard" />
+        <Tab label="Events" />
+      </Tabs>
 
-      {/* Description Boxes - Visualization of top descriptions */}
-      <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-        <AssessmentIcon sx={{ mr: 1 }} /> Common Compliance Events
-      </Typography>
-      {loading ? (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          {[...Array(6)].map((_, index) => (
-            <Grid item xs={12} sm={6} md={4} key={index}>
-              <Skeleton variant="rectangular" height={100} />
+      {activeTab === 0 && (
+        <>
+          {/* Top Descriptions Grid */}
+          <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+            <AssessmentIcon sx={{ mr: 1 }} /> Common Compliance Events
+          </Typography>
+          
+          {loading ? (
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              {[...Array(9)].map((_, index) => (
+                <Grid item xs={12} sm={6} md={4} key={index}>
+                  <Skeleton variant="rectangular" height={140} sx={{ borderRadius: 1 }} />
+                </Grid>
+              ))}
             </Grid>
-          ))}
-        </Grid>
-      ) : (
-        renderDescriptionBoxes()
+          ) : (
+            renderTopDescriptions()
+          )}
+          
+          <Grid container spacing={3}>
+            {/* Timeline Chart */}
+            <Grid item xs={12} md={6}>
+              {loading ? (
+                <Skeleton variant="rectangular" height={300} />
+              ) : (
+                <Box position="relative">
+                  <ReactECharts
+                    option={getTimelineChartOption(visualizationData.timelineData || {})}
+                    style={{ height: 300 }}
+                  />
+                  <IconButton
+                    onClick={() => openFullscreenChart(getTimelineChartOption(visualizationData.timelineData || {}), 'Compliance Alerts Timeline')}
+                    sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                    size="small"
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </Box>
+              )}
+            </Grid>
+
+            {/* Rule Level Distribution - Horizontal bar */}
+            <Grid item xs={12} md={6}>
+              {loading ? (
+                <Skeleton variant="rectangular" height={300} />
+              ) : (
+                <Box position="relative">
+                  <ReactECharts
+                    option={getHorizontalBarChartOption(visualizationData.ruleLevelDistribution || {}, 'Rule Level Distribution')}
+                    style={{ height: 300 }}
+                  />
+                  <IconButton
+                    onClick={() => openFullscreenChart(getHorizontalBarChartOption(visualizationData.ruleLevelDistribution || {}, 'Rule Level Distribution'), 'Rule Level Distribution')}
+                    sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                    size="small"
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </Box>
+              )}
+            </Grid>
+
+            {/* Agent Distribution */}
+            <Grid item xs={12} md={6}>
+              {loading ? (
+                <Skeleton variant="rectangular" height={300} />
+              ) : (
+                <Box position="relative">
+                  <ReactECharts
+                    option={getBarChartOption(visualizationData.agentDistribution || {}, 'Agent Distribution')}
+                    style={{ height: 300 }}
+                  />
+                  <IconButton
+                    onClick={() => openFullscreenChart(getBarChartOption(visualizationData.agentDistribution || {}, 'Agent Distribution'), 'Agent Distribution')}
+                    sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                    size="small"
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </Box>
+              )}
+            </Grid>
+
+            {/* Compliance Framework Distribution */}
+            <Grid item xs={12} md={6}>
+              {loading ? (
+                <Skeleton variant="rectangular" height={300} />
+              ) : (
+                <Box position="relative">
+                  <ReactECharts
+                    option={getPieChartOption(visualizationData.complianceDistribution || {}, 'Compliance Framework Distribution')}
+                    style={{ height: 300 }}
+                  />
+                  <IconButton
+                    onClick={() => openFullscreenChart(getPieChartOption(visualizationData.complianceDistribution || {}, 'Compliance Framework Distribution'), 'Compliance Framework Distribution')}
+                    sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                    size="small"
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </Box>
+              )}
+            </Grid>
+
+            {/* Severity Distribution */}
+            <Grid item xs={12} md={6}>
+              {loading ? (
+                <Skeleton variant="rectangular" height={300} />
+              ) : (
+                <Box position="relative">
+                  <ReactECharts
+                    option={getPieChartOption(visualizationData.severityDistribution || {}, 'Severity Distribution')}
+                    style={{ height: 300 }}
+                  />
+                  <IconButton
+                    onClick={() => openFullscreenChart(getPieChartOption(visualizationData.severityDistribution || {}, 'Severity Distribution'), 'Severity Distribution')}
+                    sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                    size="small"
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </Box>
+              )}
+            </Grid>
+
+            {/* Top Descriptions Chart */}
+            <Grid item xs={12} md={6}>
+              {loading ? (
+                <Skeleton variant="rectangular" height={300} />
+              ) : (
+                <Box position="relative">
+                  <ReactECharts
+                    option={getHorizontalBarChartOption(visualizationData.descriptionDistribution || {}, 'Top Compliance Descriptions')}
+                    style={{ height: 350 }}
+                  />
+                  <IconButton
+                    onClick={() => openFullscreenChart(getHorizontalBarChartOption(visualizationData.descriptionDistribution || {}, 'Top Compliance Descriptions'), 'Top Compliance Descriptions')}
+                    sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(255,255,255,0.7)' }}
+                    size="small"
+                  >
+                    <FullscreenIcon />
+                  </IconButton>
+                </Box>
+              )}
+            </Grid>
+          </Grid>
+        </>
       )}
 
-      {/* Charts Section */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Description Distribution Chart */}
-        <Grid item xs={12} md={6}>
-          {loading ? (
-            <Skeleton variant="rectangular" height={300} />
-          ) : (
-            <Paper elevation={0} variant="outlined" sx={{ p: 2 }}>
-              <ReactECharts
-                option={getDescriptionChartOption()}
-                style={{ height: '300px', width: '100%' }}
-                opts={{ renderer: 'canvas' }}
-              />
-            </Paper>
-          )}
-        </Grid>
-
-        {/* Rule Level Chart */}
-        <Grid item xs={12} md={6}>
-          {loading ? (
-            <Skeleton variant="rectangular" height={300} />
-          ) : (
-            <Paper elevation={0} variant="outlined" sx={{ p: 2 }}>
-              <ReactECharts
-                option={getRuleLevelChartOption()}
-                style={{ height: '300px', width: '100%' }}
-                opts={{ renderer: 'canvas' }}
-              />
-            </Paper>
-          )}
-        </Grid>
-      </Grid>
-
-      {/* Logs Table Section */}
-      <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-        <TimelineIcon sx={{ mr: 1 }} /> Compliance Log Events
-      </Typography>
-
-      <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 'calc(100vh - 600px)', minHeight: '300px' }}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Timestamp</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Agent Name</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Rule Level</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Description</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Compliance</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5' }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              // Show loading skeletons for the table
-              [...Array(rowsPerPage)].map((_, index) => (
-                <TableRow key={`skeleton-${index}`}>
-                  <TableCell><Skeleton /></TableCell>
-                  <TableCell><Skeleton /></TableCell>
-                  <TableCell><Skeleton width={60} /></TableCell>
-                  <TableCell><Skeleton /></TableCell>
-                  <TableCell><Skeleton width={120} /></TableCell>
-                  <TableCell><Skeleton width={80} /></TableCell>
-                </TableRow>
-              ))
-            ) : displayedLogs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center">
-                  <Box py={3}>
-                    <Typography variant="body1" color="text.secondary">
-                      No logs match the current filters
-                    </Typography>
-                    <Button 
-                      variant="text" 
-                      color="primary" 
-                      onClick={() => {
-                        setSearchTerm('');
-                        setSelectedComplianceFilter('all');
-                      }}
-                      sx={{ mt: 1 }}
-                    >
-                      Clear Filters
-                    </Button>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ) : (
-              displayedLogs.map((log, idx) => {
-                const parsedLog = log.parsed;
-                const rule = parsedLog.rule || {};
-
-                const complianceTypes = [
-                  rule.hipaa?.length && 'HIPAA',
-                  rule.gdpr?.length && 'GDPR',
-                  rule.nist_800_53?.length && 'NIST',
-                  rule.pci_dss?.length && 'PCI DSS',
-                  rule.tsc?.length && 'TSC',
-                  rule.gpg13?.length && 'GPG13'
-                ].filter(Boolean);
-
-                return (
-                  <TableRow key={idx} hover>
-                    <TableCell>{formatTimestamp(parsedLog.timestamp)}</TableCell>
-                    <TableCell>
-                      <Tooltip title={rule.description}>
-                        <Typography
-                          sx={{
-                            maxWidth: '300px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {rule.description}
-                        </Typography>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>
-                      <Box display="flex" gap={0.5} flexWrap="wrap">
-                        {complianceTypes.map((type) => (
-                          <Chip
-                            key={type}
-                            label={type}
-                            size="small"
-                            color="primary"
-                            variant="outlined"
-                            sx={{ fontSize: '0.7rem' }}
-                          />
-                        ))}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="small"
-                        startIcon={<VisibilityIcon />}
-                        onClick={() => handleViewDetails(log)}
-                        variant="text"
-                        color="primary"
-                      >
-                        View
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      {/* Pagination Controls */}
-      <Grid container spacing={2} alignItems="center" sx={{ mt: 2 }}>
-        <Grid item xs={12} sm={6} md={4}>
-          <FormControl variant="outlined" size="small" fullWidth>
-            <InputLabel id="rows-per-page-label">Rows per page</InputLabel>
-            <Select
-              labelId="rows-per-page-label"
-              value={rowsPerPage}
-              onChange={handleChangeRowsPerPage}
-              label="Rows per page"
-              disabled={loading}
-            >
-              <MenuItem value={10}>10</MenuItem>
-              <MenuItem value={25}>25</MenuItem>
-              <MenuItem value={50}>50</MenuItem>
-              <MenuItem value={100}>100</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} sm={6} md={8} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          {loading ? (
-            <Skeleton variant="rectangular" width={300} height={36} />
-          ) : (
-            <Pagination 
-              count={totalPages} 
-              page={page} 
-              onChange={handleChangePage} 
-              color="primary"
-              showFirstButton
-              showLastButton
-              siblingCount={isMobile ? 0 : 1}
+      {/* Events Tab */}
+      {activeTab === 1 && (
+        <Paper elevation={2} sx={{ mb: 3 }}>
+          <Box sx={{
+            height: 650,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}>
+            <DataGrid
+              rows={rows}
+              columns={columns}
+              pageSize={rowsPerPage}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+              onPageSizeChange={(newPageSize) => setRowsPerPage(newPageSize)}
+              pagination
+              disableSelectionOnClick
+              loading={loading}
+              density="standard"
+              initialState={{
+                pagination: {
+                  pageSize: 50,
+                },
+              }}
+              sx={{
+                '& .MuiDataGrid-cell:hover': {
+                  color: 'primary.main',
+                },
+                '& .MuiDataGrid-main': {
+                  // Ensures grid content scrolls but headers remain fixed
+                  overflow: 'auto !important'
+                },
+                // Make sure footer with pagination stays at bottom
+                '& .MuiDataGrid-footerContainer': {
+                  borderTop: '1px solid rgba(224, 224, 224, 1)',
+                },
+                flex: 1, // Take up remaining space in container
+                boxSizing: 'border-box',
+              }}
             />
-          )}
-        </Grid>
-      </Grid>
+          </Box>
+        </Paper>
+      )}
 
       {/* Log Details Dialog */}
       <Dialog
@@ -843,7 +908,7 @@ const SessionLogs = () => {
         fullWidth
       >
         <DialogTitle sx={{
-          backgroundColor: '#f5f5f5',
+          backgroundColor: theme.palette.mode === 'dark' ? '#353536' : '#f5f5f5',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
@@ -857,8 +922,40 @@ const SessionLogs = () => {
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ mt: 2 }}>
           <StructuredLogView data={selectedLog} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Fullscreen Chart Dialog */}
+      <Dialog
+        open={Boolean(fullscreenChart)}
+        onClose={() => setFullscreenChart(null)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="h6">{fullscreenTitle}</Typography>
+          <IconButton
+            aria-label="close"
+            onClick={() => setFullscreenChart(null)}
+            size="small"
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ height: '80vh', pt: 2 }}>
+          {fullscreenChart && (
+            <ReactECharts
+              option={fullscreenChart}
+              style={{ height: '100%', width: '100%' }}
+              theme={theme.palette.mode === 'dark' ? 'dark' : ''}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </Box>

@@ -8,6 +8,7 @@ const removeDuplicateLogs = require('./utils/dedupLogs');
 const ensureIndexes = require('./utils/ensureIndexes');
 const maintainTimeBasedCollections = require('./utils/maintainCollections');
 const initDatabase = require('./utils/initDatabase');
+const ticketsRouter = require('./routes/tickets');
 
 if (cluster.isMaster) {
   console.log(`Master ${process.pid} is running`);
@@ -217,13 +218,14 @@ if (cluster.isMaster) {
       app.use('/api/auth', authRoutes);
       app.use('/api/logs', logsRoutes);
       app.use('/api/news', newsticker);
+      app.use('/api/tickets', ticketsRouter);
 
       // Test endpoint
       app.get('/api/test', (req, res) => {
         res.json({
           message: 'API is working',
           worker: process.pid,
-          server: '192.168.1.64',
+          server: '192.168.1.67',
           mongodb: '192.168.1.71'
         });
       });

@@ -11,6 +11,8 @@ const {
   LogArchive
 } = require('./LogsHelper');
 
+
+//const { LogCurrent, LogRecent, LogArchive } = require('../models/Log');
 // Updated Redis client implementation for your Logs.js
 
 const { createClient } = require('redis');
@@ -255,53 +257,64 @@ async function queryTimeBasedCollections(query, options = {}) {
 
 // Metrics endpoint with Redis caching and fallback
 // Metrics endpoint
-router.get('/metrics', async (req, res) => {
+router.get('/metrics', auth, async (req, res) => {
   try {
-    const { timeRange = '7d' } = req.query;
-    const cacheKey = `metrics_${timeRange}`;
-    const cacheTime = 60; // Cache for 60 seconds
+    // Get counts from all three collections in parallel
+    const [currentMetrics, recentMetrics, archiveMetrics] = await Promise.all([
+      getCollectionMetrics(LogCurrent),
+      getCollectionMetrics(LogRecent),
+      getCollectionMetrics(LogArchive)
+    ]);
     
-    const metrics = await withCache(cacheKey, cacheTime, async () => {
-      // Determine date range and collections based on time range
-      const { startDate } = getDateRangeForQuery(timeRange);
-      const { models } = getModelsForTimeRange(timeRange);
-
-      const results = await Promise.all(models.map(async (Collection) => {
-        const counts = await Collection.aggregate([
-          // Only include logs from the specified time range
-          { $match: { timestamp: { $gte: startDate } } },
-          {
-            $addFields: {
-              numericLevel: { $toInt: "$rule.level" }
-            }
-          },
-          {
-            $group: {
-              _id: null,
-              total: { $sum: 1 },
-              major: { $sum: { $cond: [{ $gte: ["$numericLevel", 12] }, 1, 0] } }
-            }
-          }
-        ]);
-        return counts[0] || { total: 0, major: 0 };
-      }));
-      
-      // Combine results
-      const combinedResults = {
-        totalLogs: results.reduce((sum, r) => sum + r.total, 0),
-        majorLogs: results.reduce((sum, r) => sum + r.major, 0)
-      };
-      combinedResults.normalLogs = combinedResults.totalLogs - combinedResults.majorLogs;
-      
-      return combinedResults;
+    // Combine the metrics
+    const totalLogs = currentMetrics.totalLogs + recentMetrics.totalLogs + archiveMetrics.totalLogs;
+    const majorLogs = currentMetrics.majorLogs + recentMetrics.majorLogs + archiveMetrics.majorLogs;
+    const normalLogs = currentMetrics.normalLogs + recentMetrics.normalLogs + archiveMetrics.normalLogs;
+    
+    res.json({
+      totalLogs,
+      majorLogs,
+      normalLogs
     });
-    
-    res.json(metrics);
   } catch (error) {
-    console.error('Error fetching metrics:', error);
-    res.status(500).json({ message: 'Error fetching metrics' });
+    console.error('Error getting metrics:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Helper function to get metrics from a single collection
+async function getCollectionMetrics(model) {
+  try {
+    const totalLogs = await model.countDocuments();
+    
+    // Count logs with rule level >= 12 (major/critical logs)
+    // Using $expr and $convert to handle cases where rule.level might be stored as a string
+    const majorLogs = await model.countDocuments({
+      $expr: {
+        $gte: [
+          { $convert: { input: "$rule.level", to: "int", onError: 0, onNull: 0 } },
+          12
+        ]
+      }
+    });
+    
+    // All other logs are normal
+    const normalLogs = totalLogs - majorLogs;
+    
+    return {
+      totalLogs,
+      majorLogs,
+      normalLogs
+    };
+  } catch (error) {
+    console.error(`Error getting metrics from ${model.collection.name}:`, error);
+    return {
+      totalLogs: 0,
+      majorLogs: 0,
+      normalLogs: 0
+    };
+  }
+}
 
 // Recent logs endpoint
 router.get('/recent', async (req, res) => {
@@ -1335,9 +1348,10 @@ router.get('/major', async (req, res) => {
 });
 
 // Session endpoint with time range support
+// Backend route for session logs (update this in your routes/Logs.js file)
 router.get('/session', async (req, res) => {
   try {
-    const { search = '', timeRange = '7d' } = req.query;
+    const { search = '', timeRange = '24h' } = req.query;
     console.log(`Fetching session logs with search: "${search}" and time range: ${timeRange}`);
 
     // Create a cache key that includes both search and time range parameters
@@ -1349,7 +1363,7 @@ router.get('/session', async (req, res) => {
       const { startDate } = getDateRangeForQuery(timeRange);
 
       // Build search query for all compliance standards
-      let searchQuery = {
+      let query = {
         $or: [
           // Check for compliance standards in rawLog message
           { "rawLog.message": { $regex: /hipaa|gdpr|pci_dss|nist_800_53/i } },
@@ -1363,41 +1377,42 @@ router.get('/session', async (req, res) => {
         timestamp: { $gte: startDate }
       };
 
-      // Add text search if provided
+      // Add search criteria if provided
       if (search) {
-        searchQuery = {
-          $and: [
-            searchQuery,
-            {
-              $or: [
-                { "agent.name": { $regex: search, $options: 'i' } },
-                { "rule.description": { $regex: search, $options: 'i' } },
-                { "rawLog.message": { $regex: search, $options: 'i' } }
-              ]
-            }
+        query.$and = [{ 
+          $or: [
+            { 'agent.name': { $regex: search, $options: 'i' } },
+            { 'rule.description': { $regex: search, $options: 'i' } },
+            { 'rawLog.message': { $regex: search, $options: 'i' } }
           ]
-        };
+        }];
       }
 
       // Determine which collections to query based on time range
       const { models } = getModelsForTimeRange(timeRange);
 
-      // Query across multiple collections
-      const { data: logs } = await queryMultipleCollections(searchQuery, {
-        models,
-        sort: { timestamp: -1 }
-      });
+      // Query all relevant collections in parallel
+      const queryPromises = models.map(model => 
+        model.find(query).sort({ timestamp: -1 }).lean()
+      );
+      
+      const collectionsData = await Promise.all(queryPromises);
+      
+      // Combine and sort results
+      const combinedLogs = collectionsData
+        .flat()
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-      console.log(`Found ${logs.length} compliance-related logs for time range: ${timeRange}`);
-
-      return logs;
+      console.log(`Found ${combinedLogs.length} compliance logs across collections for time range: ${timeRange}`);
+      
+      return combinedLogs;
     });
 
     res.json(sessionLogs);
   } catch (error) {
-    console.error('Error in /session endpoint:', error);
+    console.error('Error fetching session logs:', error);
     res.status(500).json({
-      message: 'Error fetching compliance logs',
+      message: 'Error fetching session logs',
       error: error.message
     });
   }
@@ -1546,16 +1561,16 @@ router.get('/configuration', async (req, res) => {
 router.get('/sentinel-ai', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 0;
-    const pageSize = parseInt(req.query.pageSize) || 10;
+    const pageSize = parseInt(req.query.pageSize) || 1000; // Increased default from 10 to 1000
     const logType = req.query.logType || 'ai'; // 'ai' or 'ml'
     
     let query;
     
     if (logType === 'ai') {
-      // Query for logs with AI_response in YARA
+      // Updated query - look for AI_response directly in the raw message
       query = {
         "rawLog.message": {
-          $regex: /"data":\s*{[^}]*"YARA":\s*{[^}]*"AI_response":\s*"[^"]+"/
+          $regex: /"AI_response":\s*"[^"]+"/
         }
       };
     } else if (logType === 'ml') {
@@ -1583,6 +1598,7 @@ router.get('/sentinel-ai', async (req, res) => {
       let extractedData = {};
       
       if (logType === 'ai') {
+        // Direct extraction of AI_response from the raw message
         const aiMatch = message.match(/"AI_response":\s*"([^"]+)"/);
         extractedData.aiResponse = aiMatch ? aiMatch[1] : 'No AI response found';
       } else if (logType === 'ml') {
@@ -1835,7 +1851,7 @@ router.get('/vulnerability', async (req, res) => {
       $or: [
         { "rule.groups": "vulnerability-detector" },
         { "data.vulnerability": { $exists: true } },
-        { "rawLog.message": { $regex: /cvss|cve|assigner/i } }
+        { "rawLog.message": { $regex: /"vulnerability"/i } }
       ]
     };
     

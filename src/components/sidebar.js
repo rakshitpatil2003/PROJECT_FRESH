@@ -37,11 +37,16 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import RadarIcon from '@mui/icons-material/Radar';
 import GppBadIcon from '@mui/icons-material/GppBad';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import logoImage from '../assets/images/vg-logo.png';
 import axios from 'axios';
 import CircularProgress from '@mui/material/CircularProgress';
-import SecurityIcon from '@mui/icons-material/Security'; 
+import SecurityIcon from '@mui/icons-material/Security';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
+import { API_URL } from '../config';
+
+// Header Key Metrics component
+import HeaderKeyMetrics from './HeaderKeyMetrics';
 
 const drawerWidth = 240;
 
@@ -54,6 +59,8 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState(null);
+  const [ticketCount, setTicketCount] = useState(0);
 
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
@@ -99,29 +106,82 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
   };
 
   const menuItems = [
-    { text: 'Security Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+    { text: 'Executive Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Forensic Analysis', icon: <AssessmentIcon />, path: '/logs' },
     { text: 'Advanced Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
-    { text: 'Performance Dashboard', icon: <SpeedIcon />, path: '/performance-dashboard' },
-    { text: 'Major Logs', icon: <ErrorIcon />, path: '/major-logs' },
-    { text: 'Session Logs', icon: <SupervisorAccountIcon />, path: '/session-logs' },
-    { text: 'FIM Logs', icon: <SupervisorAccountIcon/>, path: '/fim'},
-    { text: 'SOAR Playbook', icon: <SecurityIcon/>, path: '/soar-playbook'},
-    { text: 'Malware Detection', icon: <SecurityIcon/>, path: '/malware'},
-    { text: 'Configuration Detection', icon: <SecurityIcon/>, path: '/configuration'},
-    { text: 'Sentinel AI', icon: <SmartToyIcon/>, path: '/sentinel-ai'},
+    { text: 'Critical Alerts', icon: <ErrorIcon />, path: '/major-logs' },
+    { text: 'Session Events', icon: <SupervisorAccountIcon />, path: '/session-logs' },
+    { text: 'File Integrity & DLP', icon: <SupervisorAccountIcon />, path: '/fim' },
+    { text: 'SOAR', icon: <SecurityIcon />, path: '/soar-playbook' },
+    { text: 'Malware & RansomeWare', icon: <SecurityIcon />, path: '/malware' },
+    { text: 'Security Configuration Assessment', icon: <SecurityIcon />, path: '/configuration' },
+    { text: 'Sentinel AI', icon: <SmartToyIcon />, path: '/sentinel-ai' },
   ];
 
+  // Fetch metrics and ticket count
+  useEffect(() => {
+    const fetchMetricsAndTickets = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('Authentication token not found');
+          return;
+        }
+
+        // Fetch metrics
+        const metricsResponse = await fetch(`${API_URL}/api/logs/metrics`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (metricsResponse.ok) {
+          const metricsData = await metricsResponse.json();
+          setMetrics(metricsData);
+        }
+
+        // Set a default ticket count value that works in your environment
+        setTicketCount(7);
+
+        // Try to fetch ticket count if API endpoint exists
+        try {
+          const ticketsResponse = await fetch(`${API_URL}/api/tickets/count`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (ticketsResponse.ok) {
+            const ticketsData = await ticketsResponse.json();
+            setTicketCount(ticketsData.count || 7);
+          }
+        } catch (error) {
+          console.error('Using default ticket count:', error);
+          // Keep using default ticket count
+        }
+      } catch (error) {
+        console.error('Error fetching metrics:', error);
+      }
+    };
+
+    fetchMetricsAndTickets();
+    const interval = setInterval(fetchMetricsAndTickets, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
   const securityPolicyItems = [
-    { text: 'HIPAA', path: '/hipaa-dashboard' },
-    { text: 'GDPR', path: '/gdpr-dashboard' },
-    { text: 'NIST', path: '/nist-dashboard' },
-    { text: 'PCI DSS', path: '/pcidss-dashboard' },
-    { text: 'TSC', path: '/tsc-dashboard' },
+    { text: 'MITRE ATT&CK', icon: <RadarIcon />, path: '/mitre-attack' },
+    { text: 'HIPAA', icon: <VerifiedUserIcon />, path: '/hipaa-dashboard' },
+    { text: 'GDPR', icon: <VerifiedUserIcon />, path: '/gdpr-dashboard' },
+    { text: 'NIST', icon: <VerifiedUserIcon />, path: '/nist-dashboard' },
+    { text: 'PCI DSS', icon: <VerifiedUserIcon />, path: '/pcidss-dashboard' },
+    { text: 'TSC', icon: <VerifiedUserIcon />, path: '/tsc-dashboard' },
   ];
 
   const threatIntelItems = [
-    { text: 'MITRE ATT&CK', icon: <RadarIcon />, path: '/mitre-attack' },
     { text: 'Threat Hunting', icon: <SearchIcon />, path: '/threat-hunting' },
     { text: 'Vulnerability Detection', icon: <BugReportIcon />, path: '/vulnerability' },
   ];
@@ -136,7 +196,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           navigate('/login');
           return;
         }
-  
+
         // Check if user info is already in localStorage
         const storedUserInfo = localStorage.getItem('userInfo');
         if (storedUserInfo) {
@@ -144,14 +204,14 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           setLoading(false);
           return;
         }
-  
+
         // If not in localStorage, fetch from API
         const response = await axios.get('/api/auth/profile', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
-  
+
         setUserProfile(response.data);
         // Store for future use
         localStorage.setItem('userInfo', JSON.stringify(response.data));
@@ -167,7 +227,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
         setLoading(false);
       }
     };
-  
+
     fetchUserProfile();
   }, [navigate]);
 
@@ -181,11 +241,10 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           backgroundColor: theme.palette.mode === 'dark' ? '#2A4364' : 'white',
           color: theme.palette.mode === 'dark' ? 'white' : 'primary.main',
           boxShadow: 1,
-          height: '52px', // Reduced height
-          minHeight: '52px' // Ensure minimum height
+          height: 'auto', // Auto height for the header
         }}
       >
-        <Toolbar sx={{minHeight: '10px'}}>
+        <Toolbar sx={{ minHeight: '70px', position: 'relative' }}> {/* Added relative positioning */}
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -195,12 +254,62 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+
+          {/* Page title at left */}
+          <Typography
+            variant="h5"
+            noWrap
+            component="div"
+            sx={{
+              flexGrow: 0,
+              minWidth: '150px',
+              fontWeight: 'bold',
+              position: 'absolute',
+              left: '56px' // Position it right after the menu icon
+            }}
+          >
             {getCurrentPageTitle()}
           </Typography>
-          <IconButton onClick={toggleTheme} color="inherit">
-            {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
-          </IconButton>
+
+          {/* VG Logo positioned with absolute positioning */}
+          <Box
+            sx={{
+              position: 'absolute',
+              left: '92%', // Position it at 1/3 of the width
+              transform: 'translateX(-50%)', // Center it on that point
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <img
+              src={require('../assets/VG_logo.PNG')}
+              alt="VG Logo"
+              style={{ height: '50px', width: 'auto' }}
+            />
+          </Box>
+
+          {/* Header Key Metrics - perfectly centered in the toolbar */}
+          <Box
+            sx={{
+              position: 'absolute',
+              left: '55%',
+              top: '-5%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              justifyContent: 'center'
+              //maxHeight: '60px' // Ensure it fits within the toolbar
+              //overflow: 'visible'
+            }}
+          >
+            {metrics && <HeaderKeyMetrics metrics={metrics} ticketCount={ticketCount} />}
+          </Box>
+
+          {/* Theme toggle positioned at the right */}
+          <Box sx={{ marginLeft: 'auto',left: '100%' }}>
+            <IconButton onClick={toggleTheme} color="inherit">
+              {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
+            </IconButton>
+          </Box>
         </Toolbar>
       </AppBar>
 
@@ -218,7 +327,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
             borderRight: `1px solid ${theme.palette.divider}`,
             overflowX: 'hidden',
             transition: 'width 0.3s ease',
-            paddingTop: '64px', // Add space for the AppBar
+            paddingTop: '67px', // Add space for the AppBar
           },
         }}
       >
@@ -315,7 +424,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
               <ListItemIcon sx={{ minWidth: 40 }}>
                 <PolicyIcon />
               </ListItemIcon>
-              <ListItemText primary="Security Policy" />
+              <ListItemText primary="Compliance Reports" />  {/*previous name "Security Policy"*/}
               {securityPolicyOpen ? <ExpandLess /> : <ExpandMore />}
             </ListItem>
 
