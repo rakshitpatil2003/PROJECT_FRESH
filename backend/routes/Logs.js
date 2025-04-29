@@ -1393,7 +1393,7 @@ router.get('/session', async (req, res) => {
 
       // Query all relevant collections in parallel
       const queryPromises = models.map(model => 
-        model.find(query).sort({ timestamp: -1 }).lean()
+        model.find(query).sort({ timestamp: -1 }).limit(5000).lean()
       );
       
       const collectionsData = await Promise.all(queryPromises);
@@ -1401,8 +1401,8 @@ router.get('/session', async (req, res) => {
       // Combine and sort results
       const combinedLogs = collectionsData
         .flat()
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(0, 5000); // Add this line to limit the final result
       console.log(`Found ${combinedLogs.length} compliance logs across collections for time range: ${timeRange}`);
       
       return combinedLogs;
