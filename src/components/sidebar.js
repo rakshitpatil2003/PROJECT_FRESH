@@ -305,7 +305,7 @@ const Sidebar = ({ toggleTheme, isDarkMode }) => {
           </Box>
 
           {/* Theme toggle positioned at the right */}
-          <Box sx={{ marginLeft: 'auto',left: '100%' }}>
+          <Box sx={{ marginLeft: '100%',left: '100%' }}>
             <IconButton onClick={toggleTheme} color="inherit">
               {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
             </IconButton>
