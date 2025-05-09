@@ -1506,7 +1506,7 @@ router.get('/fim', async (req, res) => {
 // Malware Logs endpoint
 router.get('/malware', async (req, res) => {
   try {
-    const { page = 0, pageSize = 10, filters = 'virustotal,yara,rootcheck' } = req.query;
+    const { page = 0, pageSize = 10, filters = 'Virus/Malware,Sentinel AI,rootcheck' } = req.query;
     
     // Parse the filters
     const filterTypes = filters.split(',').filter(Boolean);
@@ -1561,176 +1561,115 @@ router.get('/configuration', async (req, res) => {
 router.get('/sentinel-ai', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 0;
-    const pageSize = parseInt(req.query.pageSize) || 1000; // Increased default from 10 to 1000
-    const logType = req.query.logType || 'ai'; // 'ai' or 'ml'
-    
+    const pageSize = parseInt(req.query.pageSize) || 1000;
+    const logType = req.query.logType || 'ai';
+
     let query;
-    
+
     if (logType === 'ai') {
-      // Updated query - look for AI_response directly in the raw message
       query = {
         "rawLog.message": {
           $regex: /"AI_response":\s*"[^"]+"/
         }
       };
     } else if (logType === 'ml') {
-      // Query for logs with ai_ml_logs
       query = {
-        "rawLog.message": { 
-          $regex: '"ai_ml_logs"\\s*:\\s*\\{' 
+        "rawLog.message": {
+          $regex: '"ai_ml_logs"\\s*:\\s*\\{'
         }
       };
     }
-    
-    // Query across multiple collections
+
     const models = [LogCurrent, LogRecent];
-    
+
     const { data: logs, total } = await queryMultipleCollections(query, {
       models,
       sort: { timestamp: -1 },
       skip: page * pageSize,
       limit: pageSize
     });
-    
-    // Process logs based on type
+
     const processedLogs = logs.map(log => {
       const message = log.rawLog?.message || '';
       let extractedData = {};
-      
+
       if (logType === 'ai') {
-        // Direct extraction of AI_response from the raw message
         const aiMatch = message.match(/"AI_response":\s*"([^"]+)"/);
         extractedData.aiResponse = aiMatch ? aiMatch[1] : 'No AI response found';
       } else if (logType === 'ml') {
         try {
-          // Add detailed logging to help debug
-          console.log('Processing ML log:', {
-            hasAiMlLogs: !!log.ai_ml_logs,
-            hasRawLog: !!log.rawLog,
-            rawLogType: typeof log.rawLog,
-            messageType: typeof log.rawLog?.message
-          });
-          
-          // Check if ai_ml_logs is directly available
+          let mlContent = null;
+
           if (log.ai_ml_logs) {
-            console.log('Found ai_ml_logs field directly:', log.ai_ml_logs);
-            extractedData.mlData = log.ai_ml_logs;
-          }
-          // If not available directly, try to get from parsed object
-          else if (log.parsed && log.parsed.ai_ml_logs) {
-            console.log('Found ai_ml_logs in parsed log:', log.parsed.ai_ml_logs);
-            extractedData.mlData = log.parsed.ai_ml_logs;
-          }
-          // Fallback to regex extraction
-          else {
-            console.log('ai_ml_logs not found directly, trying regex extraction');
-            const message = typeof log.rawLog === 'string' ? log.rawLog : 
-                           (typeof log.rawLog?.message === 'string' ? log.rawLog.message : 
-                            JSON.stringify(log.rawLog));
-            
-            // Look for a regex pattern that would match ai_ml_logs in the message
-            const mlRegex = /"ai_ml_logs"\s*:\s*({[\s\S]*?trend_info[\s\S]*?score_explanation[\s\S]*?})\s*,/;
-            const mlMatch = message.match(mlRegex);
-            
-            if (mlMatch && mlMatch[1]) {
-              // Don't try to parse the complex JSON - instead extract individual fields directly with regex
-              console.log('Found ai_ml_logs block, extracting fields directly');
-              
-              // Extract each field with separate regex
-              const timestamp = message.match(/"ai_ml_logs"[\s\S]*?"timestamp"\s*:\s*"([^"]+)"/);
-              const logAnalysis = message.match(/"ai_ml_logs"[\s\S]*?"log_analysis"\s*:\s*"([^"]+)"/);
-              const anomalyDetected = message.match(/"ai_ml_logs"[\s\S]*?"anomaly_detected"\s*:\s*(\d+)/);
-              const anomalyScore = message.match(/"ai_ml_logs"[\s\S]*?"anomaly_score"\s*:\s*(\d+)/);
-              const originalLogId = message.match(/"ai_ml_logs"[\s\S]*?"original_log_id"\s*:\s*"([^"]+)"/);
-              const originalSource = message.match(/"ai_ml_logs"[\s\S]*?"original_source"\s*:\s*"([^"]+)"/);
-              const analysisTimestamp = message.match(/"ai_ml_logs"[\s\S]*?"analysis_timestamp"\s*:\s*"([^"]+)"/);
-              const anomalyReason = message.match(/"ai_ml_logs"[\s\S]*?"anomaly_reason"\s*:\s*"([^"]*)"/);
-              
-              // Extract trend_info fields
-              const isNewTrend = message.match(/"trend_info"[\s\S]*?"is_new_trend"\s*:\s*(true|false)/);
-              const explanation = message.match(/"trend_info"[\s\S]*?"explanation"\s*:\s*"([^"]*)"/);
-              const similarityScore = message.match(/"trend_info"[\s\S]*?"similarity_score"\s*:\s*(\d+)/);
-              
-              // Extract score_explanation fields
-              const model = message.match(/"score_explanation"[\s\S]*?"model"\s*:\s*"([^"]*)"/);
-              const rawScore = message.match(/"score_explanation"[\s\S]*?"raw_score"\s*:\s*([\d.-]+)/);
-              const normalizedScore = message.match(/"score_explanation"[\s\S]*?"normalized_score"\s*:\s*(\d+)/);
-              const scoreExplanation = message.match(/"score_explanation"[\s\S]*?"explanation"\s*:\s*"([^"]*)"/);
-              
-              // Build a structured object from the extracted fields
-              extractedData.mlData = {
-                timestamp: timestamp ? timestamp[1] : '',
-                log_analysis: logAnalysis ? logAnalysis[1] : '',
-                anomaly_detected: anomalyDetected ? parseInt(anomalyDetected[1]) : 0,
-                anomaly_score: anomalyScore ? parseInt(anomalyScore[1]) : 0,
-                original_log_id: originalLogId ? originalLogId[1] : '',
-                original_source: originalSource ? originalSource[1] : '',
-                analysis_timestamp: analysisTimestamp ? analysisTimestamp[1] : '',
-                anomaly_reason: anomalyReason ? anomalyReason[1] : '',
-                trend_info: {
-                  is_new_trend: isNewTrend ? isNewTrend[1] === 'true' : false,
-                  explanation: explanation ? explanation[1] : '',
-                  similarity_score: similarityScore ? parseInt(similarityScore[1]) : 0
-                },
-                score_explanation: {
-                  model: model ? model[1] : '',
-                  raw_score: rawScore ? parseFloat(rawScore[1]) : 0,
-                  normalized_score: normalizedScore ? parseInt(normalizedScore[1]) : 0,
-                  explanation: scoreExplanation ? scoreExplanation[1] : '',
-                  top_contributing_features: {} // We'll handle this separately
-                }
-              };
-              
-              // Extract top_contributing_features if present
-              const featuresMatch = message.match(/"top_contributing_features"\s*:\s*({[^}]+})/);
-              if (featuresMatch && featuresMatch[1]) {
-                try {
-                  // Try to extract individual feature values using regex
-                  const featuresText = featuresMatch[1];
-                  const featureMatches = featuresText.matchAll(/"([^"]+)"\s*:\s*([\d.-]+)/g);
-                  
-                  if (featureMatches) {
-                    const features = {};
-                    for (const match of featureMatches) {
-                      features[match[1]] = parseFloat(match[2]);
-                    }
-                    extractedData.mlData.score_explanation.top_contributing_features = features;
-                  }
-                } catch (e) {
-                  console.error('Error extracting top_contributing_features:', e);
-                }
-              }
-              
-              console.log('Successfully extracted ML data fields:', extractedData.mlData);
-            } else {
-              console.log('No ai_ml_logs pattern found in message');
-              extractedData.mlData = { 
-                anomaly_score: 0, 
-                anomaly_reason: 'ML data not found in log' 
-              };
+            mlContent = log.ai_ml_logs;
+          } else if (log.parsed?.ai_ml_logs) {
+            mlContent = log.parsed.ai_ml_logs;
+          } else {
+            const match = message.match(/"ai_ml_logs"\s*:\s*({[\s\S]*?})\s*(,|\})/);
+            if (match && match[1]) {
+              mlContent = JSON.parse(match[1]);
             }
+          }
+
+          if (mlContent) {
+            extractedData.mlData = {
+              timestamp: mlContent.timestamp || '',
+              log_analysis: mlContent.log_analysis || '',
+              anomaly_detected: mlContent.anomaly_detected || 0,
+              anomaly_score: mlContent.anomaly_score || 0,
+              original_log_id: mlContent.original_log_id || '',
+              original_source: mlContent.original_source || '',
+              analysis_timestamp: mlContent.analysis_timestamp || '',
+              anomaly_reason: mlContent.anomaly_reason || '',
+              correlation: {
+                source: mlContent.correlation?.source || '',
+                intermediate: mlContent.correlation?.intermediate || [],
+                destination: mlContent.correlation?.destination || null,
+                path: mlContent.correlation?.path || [],
+                description: mlContent.correlation?.description || ''
+              },
+              log_summary: mlContent.log_summary || '',
+              categories: {
+                score_category: mlContent.categories?.score_category || '',
+                severity_category: mlContent.categories?.severity_category || '',
+                combined_risk: mlContent.categories?.combined_risk || ''
+              },
+              hybrid_score: mlContent.hybrid_score || 0,
+              cluster_info: {
+                cluster_id: mlContent.cluster_info?.cluster_id || null,
+                is_outlier: mlContent.cluster_info?.is_outlier || false,
+                is_in_small_cluster: mlContent.cluster_info?.is_in_small_cluster || false
+              },
+              score_explanation: mlContent.score_explanation || ''
+            };
+          } else {
+            extractedData.mlData = {
+              anomaly_score: 0,
+              anomaly_reason: 'ML data not found in log'
+            };
           }
         } catch (error) {
           console.error('Error in ML log processing:', error);
-          extractedData.mlData = { 
-            anomaly_score: 0, 
-            anomaly_reason: 'Error processing ML data' 
+          extractedData.mlData = {
+            anomaly_score: 0,
+            anomaly_reason: 'Error processing ML data'
           };
         }
       }
-      
+
       return {
         ...log,
         extracted: extractedData
       };
     });
-    
+
     return res.json({ logs: processedLogs, total, page, pageSize });
   } catch (error) {
     console.error('Error fetching Sentinel AI logs:', error);
     return res.status(500).json({ error: 'Failed to fetch Sentinel AI logs' });
   }
 });
+
 
 // MITRE endpoint
 router.get('/mitre', async (req, res) => {

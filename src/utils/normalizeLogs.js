@@ -166,16 +166,10 @@ ai_ml_logs: (() => {
         explanation: directMlData.trend_info?.explanation || '',
         similarity_score: directMlData.trend_info?.similarity_score || 0
       },
-      score_explanation: {
-        model: directMlData.score_explanation?.model || '',
-        raw_score: directMlData.score_explanation?.raw_score || 0,
-        normalized_score: directMlData.score_explanation?.normalized_score || 0,
-        explanation: directMlData.score_explanation?.explanation || '',
-        top_contributing_features: directMlData.score_explanation?.top_contributing_features || {}
-      }
+      score_explanation: directMlData.score_explanation || ''
     };
   }
-  
+
   // Try from rawLog.ai_ml_logs
   const rawLogMlData = logEntry?.rawLog?.ai_ml_logs;
   if (rawLogMlData) {
@@ -193,30 +187,18 @@ ai_ml_logs: (() => {
         explanation: rawLogMlData.trend_info?.explanation || '',
         similarity_score: rawLogMlData.trend_info?.similarity_score || 0
       },
-      score_explanation: {
-        model: rawLogMlData.score_explanation?.model || '',
-        raw_score: rawLogMlData.score_explanation?.raw_score || 0,
-        normalized_score: rawLogMlData.score_explanation?.normalized_score || 0,
-        explanation: rawLogMlData.score_explanation?.explanation || '',
-        top_contributing_features: rawLogMlData.score_explanation?.top_contributing_features || {}
-      }
+      score_explanation: rawLogMlData.score_explanation || ''
     };
   }
-  
-  // Check in rawLog.message if it's a string that might contain ai_ml_logs
+
+  // Try to extract from rawLog.message as a string
   if (typeof logEntry?.rawLog?.message === 'string') {
     const message = logEntry.rawLog.message;
-    const mlMatch = message.match(/"ai_ml_logs":\s*({[^}]+})/);
-    
-    if (mlMatch && mlMatch[1]) {
-      try {
-        // Try parsing with proper JSON formatting
-        const cleanedJson = '{' + mlMatch[1]
-          .replace(/\\"/g, '"')
-          .replace(/(\w+):/g, '"$1":') + '}';
-        
-        const parsedMlData = JSON.parse(cleanedJson);
-        
+    try {
+      const aiMlMatch = message.match(/"ai_ml_logs"\s*:\s*(\{.*?\})(,|\s*[\]}])/s);
+      if (aiMlMatch && aiMlMatch[1]) {
+        const parsedMlData = JSON.parse(aiMlMatch[1]);
+
         return {
           timestamp: parsedMlData.timestamp || '',
           log_analysis: parsedMlData.log_analysis || '',
@@ -231,20 +213,14 @@ ai_ml_logs: (() => {
             explanation: parsedMlData.trend_info?.explanation || '',
             similarity_score: parsedMlData.trend_info?.similarity_score || 0
           },
-          score_explanation: {
-            model: parsedMlData.score_explanation?.model || '',
-            raw_score: parsedMlData.score_explanation?.raw_score || 0,
-            normalized_score: parsedMlData.score_explanation?.normalized_score || 0,
-            explanation: parsedMlData.score_explanation?.explanation || '',
-            top_contributing_features: parsedMlData.score_explanation?.top_contributing_features || {}
-          }
+          score_explanation: parsedMlData.score_explanation || ''
         };
-      } catch (e) {
-        console.error('Error parsing ai_ml_logs from message string:', e);
       }
+    } catch (e) {
+      console.error('Failed to parse ai_ml_logs from rawLog.message:', e);
     }
   }
-  
+
   return null;
 })(),
       // Store the complete data field
