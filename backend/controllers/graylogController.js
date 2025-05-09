@@ -134,7 +134,7 @@ const fetchLogsFromGraylog = async () => {
         from: from.toISOString(),
         to: to.toISOString(),
         limit: 1000,
-        fields: 'timestamp,source,level,message,src_ip,dest_ip,protocol,rule_level,rule_description,event_type,agent_name,manager_name,id,ai_ml_logs'
+        fields: 'timestamp,source,level,message,src_ip,dest_ip,protocol,rule_level,rule_description,event_type,agent_name,manager_name,id'
       },
       auth: {
         username: process.env.GRAYLOG_USERNAME,
@@ -277,7 +277,7 @@ const fetchLogsFromGraylog = async () => {
           const mlData = parsedMessage?.ai_ml_logs || 
                         parsedMessage?.data?.ai_ml_logs || 
                         msg.message?.ai_ml_logs;
-                        
+        
           if (mlData) {
             // If found, return a fully structured object with defaults for missing fields
             return {
@@ -294,13 +294,7 @@ const fetchLogsFromGraylog = async () => {
                 explanation: mlData.trend_info?.explanation || '',
                 similarity_score: mlData.trend_info?.similarity_score || 0
               },
-              score_explanation: {
-                model: mlData.score_explanation?.model || '',
-                raw_score: mlData.score_explanation?.raw_score || 0,
-                normalized_score: mlData.score_explanation?.normalized_score || 0,
-                explanation: mlData.score_explanation?.explanation || '',
-                top_contributing_features: mlData.score_explanation?.top_contributing_features || {}
-              }
+              score_explanation: mlData.score_explanation || ''
             };
           }
           return null;
